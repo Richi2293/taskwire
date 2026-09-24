@@ -43,6 +43,7 @@ Facts checked against the live API:
 - Date-only due dates come back at 04:00 local time. The day is the one that was sent.
 - Filtering by a closed status returns closed tasks even without `--include-closed`.
 - `PUT /comment/{id}` accepts a body without `assignee`, although the docs mark it as required: updating a comment with no assignee works. The comment keeps its id, author, creation date and position, and multiline text with accents and backticks is stored as sent.
+- `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` are also sent on successful responses (checked on `GET /user` and `GET /team`), although the docs mention them only for rate limit errors. `X-RateLimit-Remaining` goes down by one with each request.
 
 ## Notes for agents
 
