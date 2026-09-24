@@ -117,3 +117,111 @@ test('tasks exits 3 when no workspace contains the folder space', async () => {
   });
   assert.equal(run.code, 3);
 });
+
+test('tasks stops at the page limit and warns on stderr', async () => {
+  const full = (call: FakeCall) => {
+    const n = Number(call.url.searchParams.get('page'));
+    return { body: { tasks: Array.from({ length: 100 }, (_, i) => rawTask({ id: `p${n}-${i}` })), last_page: false } };
+  };
+  const run = await runCli(['tasks'], { routes: { 'GET /team/1/task': full } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as unknown[]).length, 5000);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    warning: 'Stopped after 5000 tasks, there may be more',
+    hint: 'Narrow the query with --list, --status or --tag',
+  });
+});
+
+const NO_TASKS = { body: { tasks: [], last_page: true } };
+
+test('tasks --list with an unknown status and no result is a usage error with the valid statuses', async () => {
+  const run = await runCli(['tasks', '--list', LIST_ID, '--status', 'in progres'], { routes: {
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    [`GET /list/${LIST_ID}/task`]: NO_TASKS,
+  } });
+  assert.equal(run.code, 2);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    error: 'Status "in progres" does not exist in this project\'s lists',
+    hint: 'Valid statuses: to do, in progress, complete',
+  });
+});
+
+test('tasks with an unknown status checks every list of the folder', async () => {
+  const run = await runCli(['tasks', '--status', 'doing'], { routes: {
+    'GET /team/1/task': NO_TASKS,
+    [`GET /folder/${FOLDER_ID}/list`]: { body: { lists: [{ id: LIST_ID }, { id: '801' }] } },
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    'GET /list/801': { body: rawList({ id: '801', statuses: [{ status: 'to do' }, { status: 'review' }] }) },
+  } });
+  assert.equal(run.code, 2);
+  assert.equal(JSON.parse(run.stderr).hint, 'Valid statuses: to do, in progress, complete, review');
+});
+
+test('tasks with a valid status and no result returns an empty list', async () => {
+  const run = await runCli(['tasks', '--status', 'Review'], { routes: {
+    'GET /team/1/task': NO_TASKS,
+    [`GET /folder/${FOLDER_ID}/list`]: { body: { lists: [{ id: LIST_ID }, { id: '801' }] } },
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    'GET /list/801': { body: rawList({ id: '801', statuses: [{ status: 'review' }] }) },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), []);
+});
+
+test('tasks with a status and some result does not load the lists', async () => {
+  const run = await runCli(['tasks', '--status', 'to do'], { routes: {
+    'GET /team/1/task': { body: { tasks: [rawTask()], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.length, 1);
+});
+
+function rawComments(from: number, count: number) {
+  // Newest first, like ClickUp: ids and dates go down along the page.
+  return Array.from({ length: count }, (_, i) => ({
+    id: String(from - i),
+    comment_text: `c${from - i}`,
+    user: { id: 7, username: 'jane' },
+    date: String((from - i) * 1000),
+  }));
+}
+
+test('task get reads older comment pages from the oldest comment of the previous page', async () => {
+  const pages = (call: FakeCall) => {
+    const startId = call.url.searchParams.get('start_id');
+    if (startId === null) return { body: { comments: rawComments(60, 25) } };
+    if (startId === '36') return { body: { comments: rawComments(35, 25) } };
+    return { body: { comments: rawComments(10, 10) } };
+  };
+  const run = await runCli(['task', 'get', 't1'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/t1/comment': pages,
+  } });
+  assert.equal(run.code, 0);
+  const commentCalls = run.calls.filter((c) => c.path === '/task/t1/comment');
+  assert.equal(commentCalls.length, 3);
+  assert.equal(commentCalls[1].url.searchParams.get('start'), '36000');
+  assert.equal(commentCalls[2].url.searchParams.get('start_id'), '11');
+  const detail = run.json() as { comments: { text: string }[] };
+  assert.equal(detail.comments.length, 60);
+  assert.equal(detail.comments[59].text, 'c1');
+});
+
+test('task get stops at the comment page limit and warns on stderr', async () => {
+  let next = 100_000;
+  const endless = () => {
+    const comments = rawComments(next, 25);
+    next -= 25;
+    return { body: { comments } };
+  };
+  const run = await runCli(['task', 'get', 't1'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/t1/comment': endless,
+  } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as { comments: unknown[] }).comments.length, 500);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    warning: 'Stopped after 500 comments, older ones are missing',
+    hint: 'Open the task in ClickUp to read the full history',
+  });
+});

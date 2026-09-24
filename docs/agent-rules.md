@@ -16,4 +16,5 @@ This project's tasks live in an external task system, managed through the `taskw
 - Never put secrets, tokens, passwords or end-customer personal data in tasks or comments.
 - At the end of the session, tell the user what changed in the task system, with the task links.
 - Exit codes: 1 task system or network error (retry later), 2 wrong command usage (fix the command), 3 configuration problem (ask the user).
+- A `warning` line on stderr means the command worked but was slowed down or returned partial results: follow its hint.
 ```

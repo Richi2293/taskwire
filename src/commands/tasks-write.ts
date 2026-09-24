@@ -3,7 +3,7 @@ import type { CommandInput } from '../args.ts';
 import { flag, onePositional, optString, optStrings, reqString } from '../args.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
 import { localMidnightMs } from '../dates.ts';
-import { usageError } from '../errors.ts';
+import { EXIT, TaskwireError, usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder, normalizeTaskId } from '../guard.ts';
 import { toTask } from '../shape.ts';
 import type { TaskSummary } from '../shape.ts';
@@ -112,11 +112,43 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
     body.assignees = { add, rem };
   }
 
-  if (Object.keys(body).length > 0) await ctx.client.request('PUT', path, { body });
-  for (const tag of addTags) await ctx.client.request('POST', `${path}/tag/${encodeURIComponent(tag)}`);
-  for (const tag of removeTags) await ctx.client.request('DELETE', `${path}/tag/${encodeURIComponent(tag)}`);
+  const steps: UpdateStep[] = [];
+  if (Object.keys(body).length > 0) {
+    steps.push({ label: 'fields', apply: () => ctx.client.request('PUT', path, { body }) });
+  }
+  for (const tag of addTags) {
+    steps.push({ label: `add tag "${tag}"`, apply: () => ctx.client.request('POST', `${path}/tag/${encodeURIComponent(tag)}`) });
+  }
+  for (const tag of removeTags) {
+    steps.push({ label: `remove tag "${tag}"`, apply: () => ctx.client.request('DELETE', `${path}/tag/${encodeURIComponent(tag)}`) });
+  }
+  await applySteps(task.id, steps);
 
   return toTask(await loadTaskInFolder(ctx.client, task.id, folderId));
+}
+
+interface UpdateStep {
+  label: string;
+  apply: () => Promise<unknown>;
+}
+
+// ClickUp changes tags one call at a time, so a failure after the first call leaves the task partly updated.
+async function applySteps(taskId: string, steps: UpdateStep[]): Promise<void> {
+  for (const [index, step] of steps.entries()) {
+    try {
+      await step.apply();
+    } catch (error) {
+      if (index === 0) throw error;
+      const reason = error instanceof Error ? error.message : String(error);
+      const exitCode = error instanceof TaskwireError ? error.exitCode : EXIT.api;
+      const labels = (list: UpdateStep[]) => list.map((s) => s.label).join(', ');
+      throw new TaskwireError(
+        `Task ${taskId} was partly updated: ${step.label} failed with ${reason}`,
+        exitCode,
+        `Applied: ${labels(steps.slice(0, index))}. Not applied: ${labels(steps.slice(index))}`,
+      );
+    }
+  }
 }
 
 export async function deleteTask(ctx: Context, input: CommandInput): Promise<{ deleted: string; name: string }> {

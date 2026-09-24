@@ -52,7 +52,7 @@ Paste the block in [docs/agent-rules.md](docs/agent-rules.md) into the project's
 
 ## Commands
 
-Run `taskwire --help`. Output is compact JSON on stdout, errors are JSON on stderr; add `--pretty` for a human readable view.
+Run `taskwire --help`. Output is compact JSON on stdout, errors and warnings are JSON lines on stderr; add `--pretty` for a human readable view.
 
 Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and `due` in the output is shown in that zone with its offset (`2026-10-01T00:00:00+02:00`). Set `TZ` to use another zone. Other timestamps are UTC.
 

@@ -28,6 +28,7 @@ test('sends the token, JSON body and parses the JSON response', async () => {
     },
     sleep: async () => {},
     now: () => 0,
+    warn: () => {},
   });
   const result = await client.request<{ id: string }>('POST', '/list/1/task', { body: { name: 'A' } });
   assert.deepEqual(result, { id: 'abc' });
@@ -57,10 +58,11 @@ test('on 429 waits until reset and retries once', async () => {
     { status: 429, headers: { 'X-RateLimit-Reset': String(1_000_000 / 1000 + 5) } },
     { body: { ok: true } },
   );
-  const { client, calls, sleeps } = testClient({ 'GET /user': route });
+  const { client, calls, sleeps, warnings } = testClient({ 'GET /user': route });
   assert.deepEqual(await client.request('GET', '/user'), { ok: true });
   assert.equal(calls.length, 2);
   assert.deepEqual(sleeps, [5000]);
+  assert.deepEqual(warnings, ['ClickUp rate limit reached, waiting 5 seconds']);
 });
 
 test('on 429 with a wait longer than 60 seconds fails without retrying', async () => {
@@ -89,7 +91,16 @@ test('a network failure becomes an api error', async () => {
     },
     sleep: async () => {},
     now: () => 0,
+    warn: () => {},
   });
   await assert.rejects(client.request('GET', '/user'), (e: unknown) =>
     e instanceof TaskwireError && e.exitCode === 1 && e.message.includes('fetch failed'));
+});
+
+test('on 429 without a reset header waits 60 seconds and says so', async () => {
+  const route = sequence({ status: 429 }, { body: { user: { id: 1 } } });
+  const { client, sleeps, warnings } = testClient({ 'GET /user': route });
+  await client.request('GET', '/user');
+  assert.deepEqual(sleeps, [60_000]);
+  assert.deepEqual(warnings, ['ClickUp rate limit reached, waiting 60 seconds']);
 });

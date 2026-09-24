@@ -18,6 +18,12 @@ export function printError(err: Writer, error: TaskwireError, secrets: string[])
   err.write(`${JSON.stringify(payload)}\n`);
 }
 
+export function printWarning(err: Writer, message: string, hint: string | undefined, secrets: string[]): void {
+  const payload: { warning: string; hint?: string } = { warning: redact(message, secrets) };
+  if (hint) payload.hint = redact(hint, secrets);
+  err.write(`${JSON.stringify(payload)}\n`);
+}
+
 function formatPretty(value: unknown): string {
   if (Array.isArray(value) && value.length > 0 && value.every(isFlatRecord)) {
     return formatTable(value);

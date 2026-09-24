@@ -1,4 +1,4 @@
-import type { Client } from '../client.ts';
+import type { Client, Warn } from '../client.ts';
 import type { RawList, RawUser } from '../clickup-types.ts';
 import type { ProjectConfig } from '../config.ts';
 import { configError, usageError } from '../errors.ts';
@@ -7,6 +7,7 @@ export interface Context {
   client: Client;
   config: ProjectConfig | null;
   cwd: string;
+  warn: Warn;
 }
 
 const userIdCache = new WeakMap<Context, number>();

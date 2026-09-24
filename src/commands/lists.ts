@@ -7,11 +7,16 @@ import { projectConfig } from './context.ts';
 import type { Context } from './context.ts';
 
 export async function listLists(ctx: Context): Promise<ListOut[]> {
+  return (await loadFolderLists(ctx)).map(toList);
+}
+
+// The lists of the project's folder, each loaded on its own to get its statuses.
+export async function loadFolderLists(ctx: Context): Promise<RawList[]> {
   const { folderId } = projectConfig(ctx);
   const { lists } = await ctx.client.request<{ lists: RawList[] }>('GET', `/folder/${folderId}/list`);
-  const detailed: ListOut[] = [];
+  const detailed: RawList[] = [];
   for (const list of lists) {
-    detailed.push(toList(await ctx.client.request<RawList>('GET', `/list/${list.id}`)));
+    detailed.push(await ctx.client.request<RawList>('GET', `/list/${list.id}`));
   }
   return detailed;
 }

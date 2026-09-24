@@ -2,6 +2,8 @@ import { apiError } from './errors.ts';
 
 export type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+// Reports a non-fatal problem to the user without changing the command result.
+export type Warn = (message: string, hint?: string) => void;
 export type QueryValue = string | number | boolean | Array<string | number>;
 
 export interface RequestOptions {
@@ -18,6 +20,7 @@ export interface ClientDeps {
   fetch: FetchFn;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
+  warn: Warn;
   baseUrl?: string;
 }
 
@@ -63,6 +66,7 @@ export function createClient(deps: ClientDeps): Client {
         if (waitMs > MAX_RATE_LIMIT_WAIT_MS) {
           throw apiError('ClickUp rate limit reached', `Retry in ${Math.ceil(waitMs / 1000)} seconds`);
         }
+        deps.warn(`ClickUp rate limit reached, waiting ${Math.ceil(waitMs / 1000)} seconds`);
         await deps.sleep(waitMs);
         response = await send(method, url, options.body);
         if (response.status === 429) {

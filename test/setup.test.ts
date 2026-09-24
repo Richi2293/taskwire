@@ -51,6 +51,7 @@ test('init finds the workspace of the folder among several', async () => {
   } });
   assert.equal(run.code, 0);
   assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).workspaceId, '3');
+  assert.equal((run.json() as { workspaceId: string }).workspaceId, '3');
 });
 
 test('init refuses to overwrite an existing config without --force', async () => {
