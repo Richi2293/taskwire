@@ -14,6 +14,7 @@ import type { Context } from './commands/context.ts';
 import { folders, init, whoami } from './commands/setup.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
+import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
 
 export interface CommandSpec {
   options: ParseArgsOptionsConfig;
@@ -98,6 +99,43 @@ export const COMMANDS: Record<string, CommandSpec> = {
     run: (ctx, input) => listTasks(ctx, input),
   },
   'task get': { options: {}, needsConfig: true, run: (ctx, input) => getTask(ctx, input) },
+  'task create': {
+    options: {
+      name: { type: 'string' },
+      list: { type: 'string' },
+      description: { type: 'string' },
+      'description-file': { type: 'string' },
+      status: { type: 'string' },
+      priority: { type: 'string' },
+      tag: { type: 'string', multiple: true },
+      assignee: { type: 'string', multiple: true },
+      due: { type: 'string' },
+      parent: { type: 'string' },
+    },
+    needsConfig: true,
+    run: (ctx, input) => createTask(ctx, input),
+  },
+  'task update': {
+    options: {
+      name: { type: 'string' },
+      description: { type: 'string' },
+      'description-file': { type: 'string' },
+      status: { type: 'string' },
+      priority: { type: 'string' },
+      due: { type: 'string' },
+      'add-tag': { type: 'string', multiple: true },
+      'remove-tag': { type: 'string', multiple: true },
+      'add-assignee': { type: 'string', multiple: true },
+      'remove-assignee': { type: 'string', multiple: true },
+    },
+    needsConfig: true,
+    run: (ctx, input) => updateTask(ctx, input),
+  },
+  'task delete': {
+    options: { yes: { type: 'boolean' } },
+    needsConfig: true,
+    run: (ctx, input) => deleteTask(ctx, input),
+  },
 };
 
 function resolveCommand(argv: string[]): { spec: CommandSpec; rest: string[] } | null {
