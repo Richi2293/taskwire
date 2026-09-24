@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FOLDER_ID, LIST_ID, rawList, runCli } from './helpers.ts';
@@ -48,4 +48,23 @@ test('init rejects a non numeric folder id before calling ClickUp', async () => 
   const run = await runCli(['init', '--folder', 'abc'], { config: null });
   assert.equal(run.code, 2);
   assert.equal(run.calls.length, 0);
+});
+
+test('an invalid .taskwire.json does not block init --force from repairing it', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-broken-'));
+  writeFileSync(join(cwd, '.taskwire.json'), '{"folderId": 900}');
+  const run = await runCli(['init', '--folder', FOLDER_ID, '--force'], { cwd, routes: {
+    [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website' } },
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).folderId, FOLDER_ID);
+});
+
+test('an invalid .taskwire.json does not block whoami', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-broken-'));
+  writeFileSync(join(cwd, '.taskwire.json'), '{nope');
+  const run = await runCli(['whoami'], { cwd, routes: {
+    'GET /user': { body: { user: { id: 7, username: 'jane', email: 'jane@example.com' } } },
+  } });
+  assert.equal(run.code, 0);
 });

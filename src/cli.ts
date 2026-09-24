@@ -205,7 +205,8 @@ export async function main(deps: CliDeps): Promise<number> {
       return EXIT.ok;
     }
     const input = parseInput(resolved.spec, resolved.rest);
-    const found = findConfig(deps.cwd);
+    // Setup commands never read the config, so a broken file cannot block the commands that repair it.
+    const found = resolved.spec.needsConfig ? findConfig(deps.cwd) : null;
     if (resolved.spec.needsConfig && found === null) {
       throw configError(
         `No ${CONFIG_FILE} found in ${deps.cwd} or its parents`,
