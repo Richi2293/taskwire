@@ -61,4 +61,6 @@ export interface RawComment {
   comment_text: string;
   user: RawUser;
   date: string;
+  assignee?: RawUser | null;
+  resolved?: boolean;
 }

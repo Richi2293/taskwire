@@ -12,6 +12,7 @@ This project's tasks live in an external task system, managed through the `taskw
 - Before starting a piece of work, look for a related task: `taskwire tasks` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>`.
 - Before creating or editing tasks, comments or checklists, run `taskwire conventions` and follow it: `language` is the language to write in, `instructions` are the project's writing rules. Existing tasks keep their text unless the user asks to rewrite them.
 - You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), and add checklists or dependencies.
+- Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it.
 - Delete a task only when the user explicitly asks. Otherwise move it to a closed status. `taskwire task delete` requires `--yes`.
 - Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
 - Never put secrets, tokens, passwords or end-customer personal data in tasks or comments.

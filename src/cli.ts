@@ -15,7 +15,7 @@ import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
-import { addComment } from './commands/comments.ts';
+import { addComment, updateComment } from './commands/comments.ts';
 import { addChecklist, checkChecklistItem } from './commands/checklists.ts';
 import { changeDependency } from './commands/dependencies.ts';
 
@@ -64,6 +64,7 @@ Tasks:
 
 Comments, checklists, dependencies:
   taskwire comment add <task-id> (--text <text> | --file <path>)
+  taskwire comment update <comment-id> --task <task-id> (--text <text> | --file <path>)
   taskwire checklist add <task-id> --name <name> [--item <text>]...
   taskwire checklist check <item-id> --task <task-id> [--uncheck]
   taskwire dependency add <task-id> --blocked-by <task-id>
@@ -154,6 +155,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 1,
     needsConfig: true,
     run: (ctx, input) => addComment(ctx, input),
+  },
+  'comment update': {
+    options: { task: { type: 'string' }, text: { type: 'string' }, file: { type: 'string' } },
+    positionals: 1,
+    needsConfig: true,
+    run: (ctx, input) => updateComment(ctx, input),
   },
   'checklist add': {
     options: { name: { type: 'string' }, item: { type: 'string', multiple: true } },

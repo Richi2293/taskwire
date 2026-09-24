@@ -1,19 +1,18 @@
 import type { CommandInput } from '../args.ts';
 import { flag, onePositional, optString, optStrings } from '../args.ts';
 import type { QueryValue } from '../client.ts';
-import type { RawComment, RawList, RawTask } from '../clickup-types.ts';
+import type { RawList, RawTask } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
+import { loadComments } from './comments.ts';
 import { projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
 import { loadFolderLists } from './lists.ts';
 import type { Context } from './context.ts';
 
 export const MAX_PAGES = 50;
 const PAGE_SIZE = 100;
-export const MAX_COMMENT_PAGES = 20;
-const COMMENT_PAGE_SIZE = 25;
 
 export async function listTasks(ctx: Context, input: CommandInput): Promise<TaskSummary[]> {
   const { folderId } = projectConfig(ctx);
@@ -67,22 +66,4 @@ export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDe
   const { folderId } = projectConfig(ctx);
   const task = await loadTaskInFolder(ctx.client, onePositional(input, 'task id'), folderId);
   return toTaskDetail(task, await loadComments(ctx, task.id));
-}
-
-// ClickUp returns comments newest first, 25 at a time; older pages start from the oldest comment seen.
-async function loadComments(ctx: Context, taskId: string): Promise<RawComment[]> {
-  const path = `/task/${encodeURIComponent(taskId)}/comment`;
-  const comments: RawComment[] = [];
-  let complete = false;
-  for (let page = 0; page < MAX_COMMENT_PAGES && !complete; page++) {
-    const oldest = comments.at(-1);
-    const query = oldest === undefined ? {} : { start: oldest.date, start_id: oldest.id };
-    const response = await ctx.client.request<{ comments: RawComment[] }>('GET', path, { query });
-    comments.push(...response.comments);
-    complete = response.comments.length < COMMENT_PAGE_SIZE;
-  }
-  if (!complete) {
-    ctx.warn(`Stopped after ${comments.length} comments, older ones are missing`, 'Open the task in ClickUp to read the full history');
-  }
-  return comments;
 }

@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs';
 import type { CommandInput } from '../args.ts';
-import { onePositional, optString } from '../args.ts';
+import { onePositional, optString, reqString } from '../args.ts';
+import type { RawComment } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
 import { loadTaskInFolder } from '../guard.ts';
 import { projectConfig } from './context.ts';
 import type { Context } from './context.ts';
+
+export const MAX_COMMENT_PAGES = 20;
+const COMMENT_PAGE_SIZE = 25;
 
 function readCommentText(input: CommandInput): string {
   const text = optString(input.values, 'text');
@@ -18,6 +22,24 @@ function readCommentText(input: CommandInput): string {
   }
 }
 
+// ClickUp returns comments newest first, 25 at a time; older pages start from the oldest comment seen.
+export async function loadComments(ctx: Context, taskId: string): Promise<RawComment[]> {
+  const path = `/task/${encodeURIComponent(taskId)}/comment`;
+  const comments: RawComment[] = [];
+  let complete = false;
+  for (let page = 0; page < MAX_COMMENT_PAGES && !complete; page++) {
+    const oldest = comments.at(-1);
+    const query = oldest === undefined ? {} : { start: oldest.date, start_id: oldest.id };
+    const response = await ctx.client.request<{ comments: RawComment[] }>('GET', path, { query });
+    comments.push(...response.comments);
+    complete = response.comments.length < COMMENT_PAGE_SIZE;
+  }
+  if (!complete) {
+    ctx.warn(`Stopped after ${comments.length} comments, older ones are missing`, 'Open the task in ClickUp to read the full history');
+  }
+  return comments;
+}
+
 export async function addComment(ctx: Context, input: CommandInput): Promise<{ id: string; taskId: string }> {
   const { folderId } = projectConfig(ctx);
   const taskId = onePositional(input, 'task id');
@@ -27,4 +49,24 @@ export async function addComment(ctx: Context, input: CommandInput): Promise<{ i
     body: { comment_text: text, notify_all: false },
   });
   return { id: String(created.id), taskId: task.id };
+}
+
+export async function updateComment(ctx: Context, input: CommandInput): Promise<{ id: string; taskId: string }> {
+  const { folderId } = projectConfig(ctx);
+  const commentId = onePositional(input, 'comment id');
+  const taskId = reqString(input.values, 'task');
+  const text = readCommentText(input);
+  const task = await loadTaskInFolder(ctx.client, taskId, folderId);
+  const comment = (await loadComments(ctx, task.id)).find((candidate) => candidate.id === commentId);
+  if (comment === undefined) {
+    throw usageError(`Comment ${commentId} is not in task ${task.id}`, `Run "taskwire task get ${task.id}" to see the comment ids`);
+  }
+  // ClickUp requires assignee and resolved on every update: send the current values so only the text changes.
+  const body: { comment_text: string; resolved: boolean; assignee?: number } = {
+    comment_text: text,
+    resolved: comment.resolved ?? false,
+  };
+  if (comment.assignee) body.assignee = comment.assignee.id;
+  await ctx.client.request<unknown>('PUT', `/comment/${encodeURIComponent(commentId)}`, { body });
+  return { id: commentId, taskId: task.id };
 }
