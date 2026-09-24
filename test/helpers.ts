@@ -1,3 +1,4 @@
+import type { RawList, RawTask } from '../src/clickup-types.ts';
 import { createClient } from '../src/client.ts';
 import type { Client, FetchFn } from '../src/client.ts';
 
@@ -54,4 +55,40 @@ export function testClient(routes: Record<string, Route>): { client: Client; cal
     now: () => 1_000_000,
   });
   return { client, calls, sleeps };
+}
+
+export const FOLDER_ID = '900';
+export const OTHER_FOLDER_ID = '901';
+export const LIST_ID = '800';
+
+export function rawTask(overrides: Partial<RawTask> = {}): RawTask {
+  return {
+    id: 't1',
+    name: 'Task one',
+    url: 'https://app.clickup.com/t/t1',
+    status: { status: 'to do', type: 'open' },
+    priority: null,
+    tags: [],
+    assignees: [],
+    due_date: null,
+    date_updated: '1767225600000',
+    parent: null,
+    list: { id: LIST_ID, name: 'Backlog' },
+    folder: { id: FOLDER_ID, name: 'Project' },
+    ...overrides,
+  };
+}
+
+export function rawList(overrides: Partial<RawList> = {}): RawList {
+  return {
+    id: LIST_ID,
+    name: 'Backlog',
+    folder: { id: FOLDER_ID, name: 'Project' },
+    statuses: [
+      { status: 'to do', type: 'open' },
+      { status: 'in progress', type: 'custom' },
+      { status: 'complete', type: 'closed' },
+    ],
+    ...overrides,
+  };
 }
