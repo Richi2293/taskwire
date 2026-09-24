@@ -30,6 +30,52 @@ test('comment add needs exactly one of --text or --file', async () => {
   assert.equal((await runCli(['comment', 'add', 't1', '--text', 'a', '--file', 'b'])).code, 2);
 });
 
+const comments = {
+  'GET /task/t1/comment': { body: { comments: [
+    { id: '5', comment_text: 'Old', user: { id: 7, username: 'jane' }, date: '0', assignee: null, resolved: false },
+    { id: '6', comment_text: 'Todo', user: { id: 7, username: 'jane' }, date: '0', assignee: { id: 8, username: 'john' }, resolved: true },
+  ] } },
+};
+
+test('comment update replaces the text and keeps resolved', async () => {
+  const run = await runCli(['comment', 'update', '5', '--task', 't1', '--text', 'New'], { routes: {
+    ...task, ...comments, 'PUT /comment/5': { body: {} },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls[2].body, { comment_text: 'New', resolved: false });
+  assert.deepEqual(run.json(), { id: '5', taskId: 't1' });
+});
+
+test('comment update keeps the current assignee', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'taskwire-comment-'));
+  writeFileSync(join(dir, 'c.md'), 'From file');
+  const run = await runCli(['comment', 'update', '6', '--task', 't1', '--file', join(dir, 'c.md')], { routes: {
+    ...task, ...comments, 'PUT /comment/6': { body: {} },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls[2].body, { comment_text: 'From file', resolved: true, assignee: 8 });
+});
+
+test('comment update with a comment not in the task exits 2', async () => {
+  const run = await runCli(['comment', 'update', '99', '--task', 't1', '--text', 'New'], { routes: { ...task, ...comments } });
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.filter((c) => c.method === 'PUT').length, 0);
+});
+
+test('comment update of a task in another folder exits 3', async () => {
+  const run = await runCli(['comment', 'update', '5', '--task', 't1', '--text', 'New'], { routes: {
+    'GET /task/t1': { body: rawTask({ folder: { id: OTHER_FOLDER_ID, name: 'Other' } }) },
+  } });
+  assert.equal(run.code, 3);
+  assert.equal(run.calls.filter((c) => c.method === 'PUT').length, 0);
+});
+
+test('comment update needs --task and exactly one of --text or --file', async () => {
+  assert.equal((await runCli(['comment', 'update', '5', '--task', 't1'])).code, 2);
+  assert.equal((await runCli(['comment', 'update', '5', '--task', 't1', '--text', 'a', '--file', 'b'])).code, 2);
+  assert.equal((await runCli(['comment', 'update', '5', '--text', 'a'])).code, 2);
+});
+
 test('checklist add creates the checklist and its items', async () => {
   const checklist = { id: 'c1', name: 'Steps', items: [] };
   const run = await runCli(['checklist', 'add', 't1', '--name', 'Steps', '--item', 'One', '--item', 'Two'], { routes: {

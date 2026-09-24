@@ -42,13 +42,19 @@ test('toTaskDetail adds description, subtasks, checklists, dependencies and comm
         { task_id: 'x9', depends_on: 't1' },
       ],
     }),
-    [{ id: '55', comment_text: 'Done', user: { id: 7, username: 'jane' }, date: '1767225600000' }],
+    [
+      { id: '55', comment_text: 'Done', user: { id: 7, username: 'jane' }, date: '1767225600000' },
+      { id: '56', comment_text: 'Check', user: { id: 7, username: 'jane' }, date: '0', resolved: true, assignee: { id: 8, username: 'john' } },
+    ],
   );
   assert.equal(detail.description, '# Hello');
   assert.deepEqual(detail.subtasks.map((s) => s.id), ['s1']);
   assert.deepEqual(detail.checklists, [{ id: 'c1', name: 'Steps', items: [{ id: 'i1', name: 'One', resolved: true }] }]);
   assert.deepEqual(detail.dependencies, { blockedBy: ['b1'], blocking: ['x9'] });
-  assert.deepEqual(detail.comments, [{ id: '55', author: 'jane', date: '2026-01-01T00:00:00.000Z', text: 'Done' }]);
+  assert.deepEqual(detail.comments, [
+    { id: '55', author: 'jane', date: '2026-01-01T00:00:00.000Z', text: 'Done', resolved: false, assignee: null },
+    { id: '56', author: 'jane', date: '1970-01-01T00:00:00.000Z', text: 'Check', resolved: true, assignee: { id: 8, username: 'john' } },
+  ]);
 });
 
 test('toTaskDetail falls back to the plain description and empty collections', () => {

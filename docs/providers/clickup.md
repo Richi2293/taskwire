@@ -31,6 +31,7 @@ taskwire lists                             # lists of the folder and their statu
 - Descriptions are sent as markdown.
 - Task ids copied from the UI with a leading `#` are accepted.
 - `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `taskwire tasks` reads up to 5000 tasks and warns the same way.
+- `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text is plain text, so rich formatting of the old comment is lost.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 
@@ -41,6 +42,7 @@ Facts checked against the live API:
 - Subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; taskwire fills them from the parent.
 - Date-only due dates come back at 04:00 local time. The day is the one that was sent.
 - Filtering by a closed status returns closed tasks even without `--include-closed`.
+- `PUT /comment/{id}` accepts a body without `assignee`, although the docs mark it as required: updating a comment with no assignee works. The comment keeps its id, author, creation date and position, and multiline text with accents and backticks is stored as sent.
 
 ## Notes for agents
 

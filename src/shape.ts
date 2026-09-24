@@ -26,7 +26,14 @@ export interface TaskDetail extends TaskSummary {
   subtasks: TaskSummary[];
   checklists: ChecklistOut[];
   dependencies: { blockedBy: string[]; blocking: string[] };
-  comments: { id: string; author: string | null; date: string | null; text: string }[];
+  comments: {
+    id: string;
+    author: string | null;
+    date: string | null;
+    text: string;
+    resolved: boolean;
+    assignee: { id: number; username: string | null } | null;
+  }[];
 }
 
 export interface ListOut {
@@ -77,6 +84,8 @@ export function toTaskDetail(raw: RawTask, comments: RawComment[]): TaskDetail {
       author: comment.user.username,
       date: msToIso(comment.date),
       text: comment.comment_text,
+      resolved: comment.resolved ?? false,
+      assignee: comment.assignee ? { id: comment.assignee.id, username: comment.assignee.username } : null,
     })),
   };
 }

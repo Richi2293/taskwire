@@ -74,6 +74,8 @@ Paste the block in [docs/agent-rules.md](docs/agent-rules.md) into the project's
 
 Run `taskwire --help`. Output is compact JSON on stdout, errors and warnings are JSON lines on stderr; add `--pretty` for a human readable view.
 
+Comments can be added (`taskwire comment add`) and edited (`taskwire comment update <comment-id> --task <task-id>`), for example to rewrite them after the project's conventions change. Editing changes only the text: the comment must belong to the given task, and taskwire checks that the task is in the project. Comments cannot be deleted.
+
 Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and `due` in the output is shown in that zone with its offset (`2026-10-01T00:00:00+02:00`). Set `TZ` to use another zone. Other timestamps are UTC.
 
 ## Exit codes
