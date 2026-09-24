@@ -42,6 +42,7 @@ Facts checked against the live API:
 - Subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; taskwire fills them from the parent.
 - Date-only due dates come back at 04:00 local time. The day is the one that was sent.
 - Filtering by a closed status returns closed tasks even without `--include-closed`.
+- `PUT /comment/{id}` accepts a body without `assignee`, although the docs mark it as required: updating a comment with no assignee works. The comment keeps its id, author, creation date and position, and multiline text with accents and backticks is stored as sent.
 
 ## Notes for agents
 
