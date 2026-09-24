@@ -15,6 +15,9 @@ import { folders, init, whoami } from './commands/setup.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
+import { addComment } from './commands/comments.ts';
+import { addChecklist, checkChecklistItem } from './commands/checklists.ts';
+import { changeDependency } from './commands/dependencies.ts';
 
 export interface CommandSpec {
   options: ParseArgsOptionsConfig;
@@ -135,6 +138,31 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { yes: { type: 'boolean' } },
     needsConfig: true,
     run: (ctx, input) => deleteTask(ctx, input),
+  },
+  'comment add': {
+    options: { text: { type: 'string' }, file: { type: 'string' } },
+    needsConfig: true,
+    run: (ctx, input) => addComment(ctx, input),
+  },
+  'checklist add': {
+    options: { name: { type: 'string' }, item: { type: 'string', multiple: true } },
+    needsConfig: true,
+    run: (ctx, input) => addChecklist(ctx, input),
+  },
+  'checklist check': {
+    options: { task: { type: 'string' }, uncheck: { type: 'boolean' } },
+    needsConfig: true,
+    run: (ctx, input) => checkChecklistItem(ctx, input),
+  },
+  'dependency add': {
+    options: { 'blocked-by': { type: 'string' } },
+    needsConfig: true,
+    run: changeDependency('add'),
+  },
+  'dependency remove': {
+    options: { 'blocked-by': { type: 'string' } },
+    needsConfig: true,
+    run: changeDependency('remove'),
   },
 };
 
