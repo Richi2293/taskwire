@@ -2,7 +2,7 @@
 
 A zero-dependency TypeScript CLI that lets any AI agent (or a human) read, create, update and manage the tasks of a project. ClickUp (REST API v2) is the only task system supported today; others may be added later.
 
-This file is for agents working **on the taskwire codebase**. It is not the same as `AGENTS.md.snippet`, which is the text other projects paste into their own `AGENTS.md` to learn how to **use** taskwire.
+This file is for agents working **on the taskwire codebase**. It is not the same as `docs/agent-rules.md`, which holds the provider-neutral text other projects paste into their own `AGENTS.md` to learn how to **use** taskwire.
 
 ## Current status (2026-09-24)
 

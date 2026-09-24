@@ -48,7 +48,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init`:
 
 Commit it: it only holds ids, which are useless without the token. `provider` defaults to `clickup` when missing. The other fields depend on the provider (see its page).
 
-Paste `AGENTS.md.snippet` into the project's `AGENTS.md` so every agent follows the same rules.
+Paste the block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md` so every agent follows the same rules.
 
 ## Commands
 

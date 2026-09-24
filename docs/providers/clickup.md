@@ -32,6 +32,10 @@ taskwire lists                             # lists of the folder and their statu
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 
+## Notes for agents
+
+The generic rules in [agent-rules.md](../agent-rules.md) apply. On ClickUp, agents must also avoid features that consume free-plan allowances (custom fields, sprint points, time estimates, attachments); taskwire does not expose them.
+
 ## Free Forever plan
 
 - The REST API allows 100 requests per minute per token, with no daily cap. On a 429 taskwire waits and retries once if the wait is 60 seconds or less.
