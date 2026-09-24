@@ -6,20 +6,15 @@ This file is for agents working **on the taskwire codebase**. It is not the same
 
 ## Current status (2026-09-24)
 
-- Design approved, spec and implementation plan written. No code yet, no commits yet.
-- Private GitHub repo `Richi2293/taskwire` created, remote `origin` set, nothing pushed yet.
-- Spec: `docs/specs/2026-09-24-taskwire-design.md`
-- Plan: `docs/plans/2026-09-24-taskwire.md` (12 tasks, test-first, full code included)
-- Both files are local only: `docs/specs/` and `docs/plans/` are gitignored and must never be committed (no `git add -f`).
+- Version 0.1.0 implemented and pushed to the private repo `Richi2293/taskwire` (`main`). All plan tasks are done and the CLI was verified end to end against the real ClickUp.
+- Spec: `docs/specs/2026-09-24-taskwire-design.md`. Plan: `docs/plans/2026-09-24-taskwire.md`. Both are local only: `docs/specs/` and `docs/plans/` are gitignored and must never be committed (no `git add -f`).
+- Known small gaps, not planned yet: `--help`/`--pretty` are detected anywhere in argv (even as option values); an option with a value before the command name breaks command resolution; extra positionals are ignored; `tasks --status` is not validated against the list; `tasks` stops at 50 pages without warning; `task get` reads only the first page of comments; `task update` is not atomic (fields first, then tags).
 
-## How to continue
+## How to work on it
 
-1. Read the spec, then the plan, fully.
-2. Ask the user to confirm the execution mode (the proposed one is "native": implement the tasks in order in one session, then one independent review of the whole branch).
-3. Execute the plan task by task, in order, ticking the checkboxes in the plan file as you go. Each task ends with its own commit.
-4. Task 12 has outward-facing steps: push only after the user explicitly confirms, and let the user save the token in the Keychain themselves.
-
-If the plan and the code disagree with reality (for example a ClickUp endpoint behaves differently), stop, explain the difference to the user and fix it with a dedicated commit. Do not silently deviate from the spec.
+1. For a new feature or a behavior change, agree on the design with the user first, then work test-first.
+2. If the code disagrees with reality (for example a ClickUp endpoint behaves differently), stop, explain the difference to the user and fix it with a dedicated commit. Do not silently deviate from the spec.
+3. Real ClickUp facts learned during verification: subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; date-only due dates come back at 04:00 local time; filtering by a closed status returns closed tasks even without `include_closed`.
 
 ## Key decisions (do not re-open without the user)
 
