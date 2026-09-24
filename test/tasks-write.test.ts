@@ -120,3 +120,29 @@ test('task delete --yes checks the folder then deletes', async () => {
   assert.equal(run.code, 0);
   assert.deepEqual(run.json(), { deleted: 't1', name: 'Task one' });
 });
+
+test('task update reports what was applied when a tag call fails after the fields', async () => {
+  const run = await runCli(
+    ['task', 'update', 't1', '--name', 'Renamed', '--add-tag', 'backend', '--add-tag', 'urgent', '--remove-tag', 'old'],
+    { routes: {
+      'GET /task/t1': { body: rawTask() },
+      'PUT /task/t1': { body: {} },
+      'POST /task/t1/tag/backend': { body: {} },
+      'POST /task/t1/tag/urgent': { status: 500, body: { err: 'Internal error' } },
+    } },
+  );
+  assert.equal(run.code, 1);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    error: 'Task t1 was partly updated: add tag "urgent" failed with ClickUp API 500: Internal error',
+    hint: 'Applied: fields, add tag "backend". Not applied: add tag "urgent", remove tag "old"',
+  });
+});
+
+test('task update keeps the plain error when nothing was applied', async () => {
+  const run = await runCli(['task', 'update', 't1', '--add-tag', 'backend'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'POST /task/t1/tag/backend': { status: 500, body: { err: 'Internal error' } },
+  } });
+  assert.equal(run.code, 1);
+  assert.equal(JSON.parse(run.stderr).error, 'ClickUp API 500: Internal error');
+});
