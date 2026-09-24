@@ -36,7 +36,7 @@ export async function folders(ctx: Context): Promise<{ id: string; name: string;
 export async function init(
   ctx: Context,
   input: CommandInput,
-): Promise<{ path: string; folderId: string; folderName: string; defaultListId: string | null }> {
+): Promise<{ path: string; workspaceId: string; folderId: string; folderName: string; defaultListId: string | null }> {
   const folderId = reqString(input.values, 'folder');
   if (!/^\d+$/.test(folderId)) throw usageError(`Invalid folder id "${folderId}"`, 'Run "taskwire folders" to see the ids');
   const listId = optString(input.values, 'list');
@@ -46,5 +46,5 @@ export async function init(
   const config: ProjectConfig = { provider: 'clickup', workspaceId, folderId };
   if (listId !== undefined) config.defaultListId = listId;
   const path = writeConfig(ctx.cwd, config, flag(input.values, 'force'));
-  return { path, folderId, folderName: folder.name, defaultListId: listId ?? null };
+  return { path, workspaceId, folderId, folderName: folder.name, defaultListId: listId ?? null };
 }
