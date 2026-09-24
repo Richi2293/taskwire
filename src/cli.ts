@@ -13,6 +13,7 @@ import type { KeychainReader } from './token.ts';
 import type { Context } from './commands/context.ts';
 import { folders, init, whoami } from './commands/setup.ts';
 import { createList, listLists } from './commands/lists.ts';
+import { getTask, listTasks } from './commands/tasks-read.ts';
 
 export interface CommandSpec {
   options: ParseArgsOptionsConfig;
@@ -85,6 +86,18 @@ export const COMMANDS: Record<string, CommandSpec> = {
     needsConfig: true,
     run: (ctx, input) => createList(ctx, input),
   },
+  tasks: {
+    options: {
+      list: { type: 'string' },
+      status: { type: 'string' },
+      tag: { type: 'string', multiple: true },
+      assignee: { type: 'string' },
+      'include-closed': { type: 'boolean' },
+    },
+    needsConfig: true,
+    run: (ctx, input) => listTasks(ctx, input),
+  },
+  'task get': { options: {}, needsConfig: true, run: (ctx, input) => getTask(ctx, input) },
 };
 
 function resolveCommand(argv: string[]): { spec: CommandSpec; rest: string[] } | null {
