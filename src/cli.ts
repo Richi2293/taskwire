@@ -196,15 +196,18 @@ function parseInput(spec: CommandSpec, rest: string[]): CommandInput {
 }
 
 export async function main(deps: CliDeps): Promise<number> {
-  const pretty = deps.argv.includes('--pretty');
   let token: string | undefined;
   try {
     const resolved = resolveCommand(deps.argv);
-    if (resolved === null || deps.argv.includes('--help')) {
+    if (resolved === null) {
       deps.stdout.write(HELP);
       return EXIT.ok;
     }
     const input = parseInput(resolved.spec, resolved.rest);
+    if (flag(input.values, 'help')) {
+      deps.stdout.write(HELP);
+      return EXIT.ok;
+    }
     // Setup commands never read the config, so a broken file cannot block the commands that repair it.
     const found = resolved.spec.needsConfig ? findConfig(deps.cwd) : null;
     if (resolved.spec.needsConfig && found === null) {
@@ -217,7 +220,7 @@ export async function main(deps: CliDeps): Promise<number> {
     const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now });
     const ctx: Context = { client, config: found?.config ?? null, cwd: deps.cwd };
     const result = await resolved.spec.run(ctx, input);
-    printResult(deps.stdout, result, pretty || flag(input.values, 'pretty'));
+    printResult(deps.stdout, result, flag(input.values, 'pretty'));
     return EXIT.ok;
   } catch (error) {
     const known =

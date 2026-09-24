@@ -39,3 +39,10 @@ test('the token never appears in output, even when ClickUp echoes it back', asyn
   assert.equal(run.stderr.includes('pk_test_token'), false);
   assert.equal(run.stdout.includes('pk_test_token'), false);
 });
+
+test('--help taken as the value of an option is a usage error, not help', async () => {
+  const run = await runCli(['tasks', '--tag', '--help']);
+  assert.equal(run.code, 2);
+  assert.equal(run.stdout, '');
+  assert.match(JSON.parse(run.stderr).error, /ambiguous/);
+});
