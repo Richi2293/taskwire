@@ -21,3 +21,14 @@ jobs:
           node-version: '24'
       - run: node --version
       - run: node --test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      # The project has no dependencies: TypeScript is installed only here, to check the types.
+      - run: npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
+      - run: npx tsc -p .
