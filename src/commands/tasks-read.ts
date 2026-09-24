@@ -1,11 +1,13 @@
 import type { CommandInput } from '../args.ts';
 import { flag, onePositional, optString, optStrings } from '../args.ts';
 import type { QueryValue } from '../client.ts';
-import type { RawComment, RawTask } from '../clickup-types.ts';
+import type { RawComment, RawList, RawTask } from '../clickup-types.ts';
+import { usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
 import { projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { loadFolderLists } from './lists.ts';
 import type { Context } from './context.ts';
 
 export const MAX_PAGES = 50;
@@ -25,8 +27,9 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   };
 
   let path: string;
+  let list: RawList | undefined;
   if (listId !== undefined) {
-    await loadListInFolder(ctx.client, listId, folderId);
+    list = await loadListInFolder(ctx.client, listId, folderId);
     path = `/list/${listId}/task`;
   } else {
     path = `/team/${await projectWorkspaceId(ctx)}/task`;
@@ -45,7 +48,17 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   if (!complete) {
     ctx.warn(`Stopped after ${tasks.length} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
   }
+  // ClickUp answers an unknown status with no tasks, so a typo would look like an empty result.
+  if (status !== undefined && tasks.length === 0) {
+    assertStatusExists(list === undefined ? await loadFolderLists(ctx) : [list], status);
+  }
   return tasks.map(toTask);
+}
+
+function assertStatusExists(lists: RawList[], wanted: string): void {
+  const statuses = [...new Set(lists.flatMap((list) => (list.statuses ?? []).map((s) => s.status)))];
+  if (statuses.some((status) => status.toLowerCase() === wanted.trim().toLowerCase())) return;
+  throw usageError(`Status "${wanted}" does not exist in this project's lists`, `Valid statuses: ${statuses.join(', ')}`);
 }
 
 export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDetail> {

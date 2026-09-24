@@ -26,6 +26,7 @@ taskwire lists                             # lists of the folder and their statu
 ## Behavior notes
 
 - Statuses are matched case-insensitively against the target list and sent with the list's exact name.
+- `taskwire tasks --status` with no result checks that the status exists in the project's lists, so a typo is an error instead of an empty list.
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
 - Descriptions are sent as markdown.
 - Task ids copied from the UI with a leading `#` are accepted.

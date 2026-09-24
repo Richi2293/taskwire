@@ -131,3 +131,47 @@ test('tasks stops at the page limit and warns on stderr', async () => {
     hint: 'Narrow the query with --list, --status or --tag',
   });
 });
+
+const NO_TASKS = { body: { tasks: [], last_page: true } };
+
+test('tasks --list with an unknown status and no result is a usage error with the valid statuses', async () => {
+  const run = await runCli(['tasks', '--list', LIST_ID, '--status', 'in progres'], { routes: {
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    [`GET /list/${LIST_ID}/task`]: NO_TASKS,
+  } });
+  assert.equal(run.code, 2);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    error: 'Status "in progres" does not exist in this project\'s lists',
+    hint: 'Valid statuses: to do, in progress, complete',
+  });
+});
+
+test('tasks with an unknown status checks every list of the folder', async () => {
+  const run = await runCli(['tasks', '--status', 'doing'], { routes: {
+    'GET /team/1/task': NO_TASKS,
+    [`GET /folder/${FOLDER_ID}/list`]: { body: { lists: [{ id: LIST_ID }, { id: '801' }] } },
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    'GET /list/801': { body: rawList({ id: '801', statuses: [{ status: 'to do' }, { status: 'review' }] }) },
+  } });
+  assert.equal(run.code, 2);
+  assert.equal(JSON.parse(run.stderr).hint, 'Valid statuses: to do, in progress, complete, review');
+});
+
+test('tasks with a valid status and no result returns an empty list', async () => {
+  const run = await runCli(['tasks', '--status', 'Review'], { routes: {
+    'GET /team/1/task': NO_TASKS,
+    [`GET /folder/${FOLDER_ID}/list`]: { body: { lists: [{ id: LIST_ID }, { id: '801' }] } },
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    'GET /list/801': { body: rawList({ id: '801', statuses: [{ status: 'review' }] }) },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), []);
+});
+
+test('tasks with a status and some result does not load the lists', async () => {
+  const run = await runCli(['tasks', '--status', 'to do'], { routes: {
+    'GET /team/1/task': { body: { tasks: [rawTask()], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.length, 1);
+});
