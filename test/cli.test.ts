@@ -46,3 +46,32 @@ test('--help taken as the value of an option is a usage error, not help', async 
   assert.equal(run.stdout, '');
   assert.match(JSON.parse(run.stderr).error, /ambiguous/);
 });
+
+test('global flags may come before the command', async () => {
+  const run = await runCli(['--pretty', 'whoami'], { routes: {
+    'GET /user': { body: { user: { id: 7, username: 'jane' } } },
+  } });
+  assert.equal(run.code, 0);
+  assert.match(run.stdout, /\n  "id": 7/);
+});
+
+test('an option with a value before the command is a usage error', async () => {
+  const run = await runCli(['--list', '800', 'tasks']);
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
+  assert.match(JSON.parse(run.stderr).error, /Options must come after the command/);
+});
+
+test('extra arguments for a command without arguments are a usage error', async () => {
+  const run = await runCli(['tasks', 'backend']);
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
+  assert.match(JSON.parse(run.stderr).error, /Unexpected argument "backend"/);
+});
+
+test('a second id for a command that takes one is a usage error', async () => {
+  const run = await runCli(['task', 'get', 't1', 't2']);
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
+  assert.match(JSON.parse(run.stderr).error, /Unexpected argument "t2"/);
+});
