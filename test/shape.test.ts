@@ -63,3 +63,10 @@ test('toList returns status names', () => {
   assert.deepEqual(toList(rawList()), { id: '800', name: 'Backlog', statuses: ['to do', 'in progress', 'complete'] });
   assert.deepEqual(toList(rawList({ statuses: undefined })).statuses, []);
 });
+
+test('toTaskDetail accepts subtasks as ClickUp nests them, without list, folder or priority', () => {
+  const { list, folder, priority, ...nested } = rawTask({ id: 's1', name: 'Sub', parent: 't1' });
+  const detail = toTaskDetail(rawTask({ subtasks: [nested] }), []);
+  assert.deepEqual(detail.subtasks[0].list, { id: '800', name: 'Backlog' });
+  assert.equal(detail.subtasks[0].priority, null);
+});

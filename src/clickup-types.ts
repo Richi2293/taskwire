@@ -41,10 +41,13 @@ export interface RawTask {
   folder: { id: string; name: string };
   markdown_description?: string | null;
   description?: string | null;
-  subtasks?: RawTask[];
+  subtasks?: RawSubtask[];
   checklists?: RawChecklist[];
   dependencies?: RawDependency[];
 }
+
+// Subtasks nested in GET /task/{id} come without list, folder and priority.
+export type RawSubtask = Omit<RawTask, 'list' | 'folder' | 'priority'> & Partial<Pick<RawTask, 'list' | 'folder' | 'priority'>>;
 
 export interface RawList {
   id: string;

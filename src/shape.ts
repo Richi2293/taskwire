@@ -64,7 +64,9 @@ export function toTaskDetail(raw: RawTask, comments: RawComment[]): TaskDetail {
   return {
     ...toTask(raw),
     description: raw.markdown_description ?? raw.description ?? '',
-    subtasks: (raw.subtasks ?? []).map(toTask),
+    subtasks: (raw.subtasks ?? []).map((subtask) =>
+      toTask({ ...subtask, list: subtask.list ?? raw.list, folder: subtask.folder ?? raw.folder, priority: subtask.priority ?? null }),
+    ),
     checklists: (raw.checklists ?? []).map(toChecklist),
     dependencies: {
       blockedBy: dependencies.filter((d) => d.task_id === raw.id).map((d) => d.depends_on),
