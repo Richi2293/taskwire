@@ -70,3 +70,7 @@ Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and
 ```
 node --test
 ```
+
+## License
+
+[MIT](LICENSE)
