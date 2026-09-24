@@ -32,6 +32,14 @@ taskwire lists                             # lists of the folder and their statu
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 
+## Real API behavior
+
+Facts checked against the live API:
+
+- Subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; taskwire fills them from the parent.
+- Date-only due dates come back at 04:00 local time. The day is the one that was sent.
+- Filtering by a closed status returns closed tasks even without `--include-closed`.
+
 ## Notes for agents
 
 The generic rules in [agent-rules.md](../agent-rules.md) apply. On ClickUp, agents must also avoid features that consume free-plan allowances (custom fields, sprint points, time estimates, attachments); taskwire does not expose them.
