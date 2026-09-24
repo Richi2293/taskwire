@@ -13,10 +13,19 @@ test('conventions prints the task conventions of the project without calling the
   assert.equal(run.calls.length, 0);
 });
 
-test('conventions returns nulls when the project sets none', async () => {
+test('conventions defaults to English when the project sets none', async () => {
   const run = await runCli(['conventions']);
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), { language: null, instructions: null });
+  assert.deepEqual(run.json(), { language: 'English', instructions: null });
+});
+
+test('conventions defaults to English when only instructions are set', async () => {
+  const run = await runCli(['conventions'], { config: {
+    provider: 'clickup',
+    folderId: FOLDER_ID,
+    conventions: { instructions: 'Names in the imperative.' },
+  } });
+  assert.deepEqual(run.json(), { language: 'English', instructions: 'Names in the imperative.' });
 });
 
 test('conventions needs a .taskwire.json', async () => {

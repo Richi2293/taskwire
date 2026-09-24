@@ -63,7 +63,7 @@ Add an optional `conventions` object to tell agents how tasks must be written in
 }
 ```
 
-- `language`: the language of task names, descriptions, comments and checklist items. Statuses and tags keep their existing names.
+- `language`: the language of task names, descriptions, comments and checklist items. Defaults to English. Statuses and tags keep their existing names.
 - `instructions`: any other writing rule, as free text.
 
 Both fields are optional. `taskwire conventions` prints them, and the rules in [docs/agent-rules.md](docs/agent-rules.md) tell agents to read them before writing. They are guidance for agents: the CLI does not check the text of tasks. `taskwire init --force` keeps them.

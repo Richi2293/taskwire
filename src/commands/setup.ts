@@ -51,7 +51,9 @@ export async function init(
   return { path, workspaceId, folderId, folderName: folder.name, defaultListId: listId ?? null };
 }
 
-export function conventions(ctx: Context): { language: string | null; instructions: string | null } {
+export const DEFAULT_LANGUAGE = 'English';
+
+export function conventions(ctx: Context): { language: string; instructions: string | null } {
   const found = projectConfig(ctx).conventions;
-  return { language: found?.language ?? null, instructions: found?.instructions ?? null };
+  return { language: found?.language ?? DEFAULT_LANGUAGE, instructions: found?.instructions ?? null };
 }
