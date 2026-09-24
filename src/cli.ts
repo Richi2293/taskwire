@@ -12,6 +12,7 @@ import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
 import type { Context } from './commands/context.ts';
 import { folders, init, whoami } from './commands/setup.ts';
+import { createList, listLists } from './commands/lists.ts';
 
 export interface CommandSpec {
   options: ParseArgsOptionsConfig;
@@ -77,6 +78,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { folder: { type: 'string' }, list: { type: 'string' }, force: { type: 'boolean' } },
     needsConfig: false,
     run: (ctx, input) => init(ctx, input),
+  },
+  lists: { options: {}, needsConfig: true, run: (ctx) => listLists(ctx) },
+  'list create': {
+    options: { name: { type: 'string' } },
+    needsConfig: true,
+    run: (ctx, input) => createList(ctx, input),
   },
 };
 
