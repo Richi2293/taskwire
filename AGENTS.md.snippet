@@ -1,0 +1,12 @@
+## Project tasks (taskwire)
+
+This project's tasks live in ClickUp. Use the `taskwire` CLI to read and manage them; it only touches the ClickUp folder set in `.taskwire.json`. Output is JSON; run `taskwire --help` for every command.
+
+- Before starting a piece of work, look for a related task: `taskwire tasks` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>`.
+- You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), and add checklists or dependencies.
+- Delete a task only when the user explicitly asks. Otherwise move it to a closed status. `taskwire task delete` requires `--yes`.
+- Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
+- Do not use ClickUp features that consume free-plan allowances: custom fields, sprint points, time estimates, attachments. taskwire does not expose them.
+- Never put secrets, tokens, passwords or end-customer personal data in tasks or comments.
+- At the end of the session, tell the user what changed in ClickUp, with the task links.
+- Exit codes: 1 ClickUp or network error (retry later), 2 wrong command usage (fix the command), 3 configuration problem (ask the user).
