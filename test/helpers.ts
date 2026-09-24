@@ -1,3 +1,8 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { main } from '../src/cli.ts';
+import type { ProjectConfig } from '../src/config.ts';
 import type { RawList, RawTask } from '../src/clickup-types.ts';
 import { createClient } from '../src/client.ts';
 import type { Client, FetchFn } from '../src/client.ts';
@@ -91,4 +96,42 @@ export function rawList(overrides: Partial<RawList> = {}): RawList {
     ],
     ...overrides,
   };
+}
+
+export interface CliRun {
+  code: number;
+  stdout: string;
+  stderr: string;
+  calls: FakeCall[];
+  cwd: string;
+  json: () => unknown;
+}
+
+export async function runCli(
+  argv: string[],
+  options: { routes?: Record<string, Route>; cwd?: string; config?: ProjectConfig | null; keychain?: string | null } = {},
+): Promise<CliRun> {
+  const cwd = options.cwd ?? mkdtempSync(join(tmpdir(), 'taskwire-cli-'));
+  const config: ProjectConfig | null =
+    options.config === undefined ? { provider: 'clickup', folderId: FOLDER_ID, defaultListId: LIST_ID } : options.config;
+  if (options.cwd === undefined && config !== null) {
+    writeFileSync(join(cwd, '.taskwire.json'), JSON.stringify(config));
+  }
+  const { fetch, calls } = fakeFetch(options.routes ?? {});
+  const out: string[] = [];
+  const err: string[] = [];
+  const keychain = options.keychain === undefined ? 'pk_test_token' : options.keychain;
+  const code = await main({
+    argv,
+    env: {},
+    cwd,
+    stdout: { write: (chunk: string) => out.push(chunk) },
+    stderr: { write: (chunk: string) => err.push(chunk) },
+    fetch,
+    sleep: async () => {},
+    now: () => 0,
+    readKeychain: () => keychain,
+  });
+  const stdout = out.join('');
+  return { code, stdout, stderr: err.join(''), calls, cwd, json: () => JSON.parse(stdout) };
 }
