@@ -15,11 +15,13 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
   - Due dates use midnight in the system time zone. No hardcoded time zone.
   - ClickUp is the only provider. Do not build a provider abstraction until a second provider is actually planned; keep ClickUp code in `client.ts`, `clickup-types.ts` and `shape.ts`.
 - `docs/specs/` and `docs/plans/` are local working notes: they are gitignored and must never be committed (no `git add -f`).
+- `main` is protected: changes reach it only through a pull request, merged with squash once CI passes. The PR title becomes the commit on `main`, so it follows Conventional Commits.
 
 ## Tech constraints
 
 - Node >= 24.7, TypeScript executed directly (native type stripping), no build step.
 - Zero runtime and dev dependencies. Do not run `npm install` or add packages.
+- Types are checked only in CI (`tsc` with `tsconfig.json`, installed by the `typecheck` job). Type errors do not show up in `node --test`, so keep the types correct by hand.
 - Erasable TypeScript only: no `enum`, no `namespace`, no constructor parameter properties.
 - Relative imports use the `.ts` extension. Type-only imports use `import type` (otherwise they fail at runtime).
 - Never use `any`: use explicit types, `unknown` or generics.
