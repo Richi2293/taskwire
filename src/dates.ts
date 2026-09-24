@@ -3,9 +3,26 @@ import { usageError } from './errors.ts';
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function msToIso(ms: string | number | null | undefined): string | null {
+  const date = parseMs(ms);
+  return date === null ? null : date.toISOString();
+}
+
+// Due dates are days picked by a person, so they read best in the system time zone, with its offset.
+export function msToLocalIso(ms: string | number | null | undefined): string | null {
+  const date = parseMs(ms);
+  if (date === null) return null;
+  const pad = (n: number) => String(Math.abs(n)).padStart(2, '0');
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${day}T${time}${sign}${pad(Math.trunc(offset / 60))}:${pad(offset % 60)}`;
+}
+
+function parseMs(ms: string | number | null | undefined): Date | null {
   if (ms === null || ms === undefined || ms === '') return null;
   const value = Number(ms);
-  return Number.isFinite(value) ? new Date(value).toISOString() : null;
+  return Number.isFinite(value) ? new Date(value) : null;
 }
 
 // Midnight of the given day in the system time zone (the TZ environment variable, or the OS setting).

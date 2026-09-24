@@ -1,5 +1,5 @@
 import type { RawChecklist, RawComment, RawList, RawTask } from './clickup-types.ts';
-import { msToIso } from './dates.ts';
+import { msToIso, msToLocalIso } from './dates.ts';
 
 export interface TaskSummary {
   id: string;
@@ -43,7 +43,7 @@ export function toTask(raw: RawTask): TaskSummary {
     priority: raw.priority?.priority ?? null,
     tags: raw.tags.map((tag) => tag.name),
     assignees: raw.assignees.map((user) => ({ id: user.id, username: user.username })),
-    due: msToIso(raw.due_date),
+    due: msToLocalIso(raw.due_date),
     list: { id: raw.list.id, name: raw.list.name },
     parent: raw.parent,
     url: raw.url,

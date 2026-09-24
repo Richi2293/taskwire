@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { localMidnightMs, msToIso } from '../src/dates.ts';
+import { localMidnightMs, msToIso, msToLocalIso } from '../src/dates.ts';
 import { TaskwireError } from '../src/errors.ts';
 
 // Node applies a new process.env.TZ immediately, so each test pins the zone it checks.
@@ -46,4 +46,23 @@ test('localMidnightMs rejects bad formats and impossible dates', () => {
   for (const bad of ['2026-1-5', '15/01/2026', '2026-02-30', '']) {
     assert.throws(() => localMidnightMs(bad), (e: unknown) => e instanceof TaskwireError && e.exitCode === 2, bad);
   }
+});
+
+test('msToLocalIso shows the instant in the system time zone with its offset', () => {
+  inTimeZone('Europe/Berlin', () => {
+    assert.equal(msToLocalIso(localMidnightMs('2026-10-01')), '2026-10-01T00:00:00+02:00');
+    assert.equal(msToLocalIso(localMidnightMs('2026-01-15')), '2026-01-15T00:00:00+01:00');
+  });
+  inTimeZone('America/New_York', () => {
+    assert.equal(msToLocalIso(localMidnightMs('2026-01-15')), '2026-01-15T00:00:00-05:00');
+  });
+  inTimeZone('Asia/Kolkata', () => {
+    assert.equal(msToLocalIso('1767225600000'), '2026-01-01T05:30:00+05:30');
+  });
+});
+
+test('msToLocalIso keeps null for missing or invalid values', () => {
+  assert.equal(msToLocalIso(null), null);
+  assert.equal(msToLocalIso(''), null);
+  assert.equal(msToLocalIso('not a number'), null);
 });

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { toList, toTask, toTaskDetail } from '../src/shape.ts';
 import { rawList, rawTask } from './helpers.ts';
 
-test('toTask keeps only the useful fields', () => {
+test('toTask keeps only the useful fields, with the due date in the system time zone', () => {
+  const previous = process.env.TZ;
+  process.env.TZ = 'Europe/Berlin';
   const summary = toTask(rawTask({
     priority: { priority: 'high' },
     tags: [{ name: 'backend' }],
@@ -18,12 +20,14 @@ test('toTask keeps only the useful fields', () => {
     priority: 'high',
     tags: ['backend'],
     assignees: [{ id: 7, username: 'jane' }],
-    due: '2026-01-01T00:00:00.000Z',
+    due: '2026-01-01T01:00:00+01:00',
     list: { id: '800', name: 'Backlog' },
     parent: 'p1',
     url: 'https://app.clickup.com/t/t1',
     updatedAt: '2026-01-01T00:00:00.000Z',
   });
+  if (previous === undefined) delete process.env.TZ;
+  else process.env.TZ = previous;
 });
 
 test('toTaskDetail adds description, subtasks, checklists, dependencies and comments', () => {
