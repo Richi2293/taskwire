@@ -175,3 +175,53 @@ test('tasks with a status and some result does not load the lists', async () => 
   assert.equal(run.code, 0);
   assert.equal(run.calls.length, 1);
 });
+
+function rawComments(from: number, count: number) {
+  // Newest first, like ClickUp: ids and dates go down along the page.
+  return Array.from({ length: count }, (_, i) => ({
+    id: String(from - i),
+    comment_text: `c${from - i}`,
+    user: { id: 7, username: 'jane' },
+    date: String((from - i) * 1000),
+  }));
+}
+
+test('task get reads older comment pages from the oldest comment of the previous page', async () => {
+  const pages = (call: FakeCall) => {
+    const startId = call.url.searchParams.get('start_id');
+    if (startId === null) return { body: { comments: rawComments(60, 25) } };
+    if (startId === '36') return { body: { comments: rawComments(35, 25) } };
+    return { body: { comments: rawComments(10, 10) } };
+  };
+  const run = await runCli(['task', 'get', 't1'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/t1/comment': pages,
+  } });
+  assert.equal(run.code, 0);
+  const commentCalls = run.calls.filter((c) => c.path === '/task/t1/comment');
+  assert.equal(commentCalls.length, 3);
+  assert.equal(commentCalls[1].url.searchParams.get('start'), '36000');
+  assert.equal(commentCalls[2].url.searchParams.get('start_id'), '11');
+  const detail = run.json() as { comments: { text: string }[] };
+  assert.equal(detail.comments.length, 60);
+  assert.equal(detail.comments[59].text, 'c1');
+});
+
+test('task get stops at the comment page limit and warns on stderr', async () => {
+  let next = 100_000;
+  const endless = () => {
+    const comments = rawComments(next, 25);
+    next -= 25;
+    return { body: { comments } };
+  };
+  const run = await runCli(['task', 'get', 't1'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/t1/comment': endless,
+  } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as { comments: unknown[] }).comments.length, 500);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    warning: 'Stopped after 500 comments, older ones are missing',
+    hint: 'Open the task in ClickUp to read the full history',
+  });
+});

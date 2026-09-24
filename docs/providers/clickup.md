@@ -30,6 +30,7 @@ taskwire lists                             # lists of the folder and their statu
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
 - Descriptions are sent as markdown.
 - Task ids copied from the UI with a leading `#` are accepted.
+- `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `taskwire tasks` reads up to 5000 tasks and warns the same way.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 

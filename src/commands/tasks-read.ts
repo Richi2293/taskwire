@@ -12,6 +12,8 @@ import type { Context } from './context.ts';
 
 export const MAX_PAGES = 50;
 const PAGE_SIZE = 100;
+export const MAX_COMMENT_PAGES = 20;
+const COMMENT_PAGE_SIZE = 25;
 
 export async function listTasks(ctx: Context, input: CommandInput): Promise<TaskSummary[]> {
   const { folderId } = projectConfig(ctx);
@@ -64,6 +66,23 @@ function assertStatusExists(lists: RawList[], wanted: string): void {
 export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDetail> {
   const { folderId } = projectConfig(ctx);
   const task = await loadTaskInFolder(ctx.client, onePositional(input, 'task id'), folderId);
-  const { comments } = await ctx.client.request<{ comments: RawComment[] }>('GET', `/task/${encodeURIComponent(task.id)}/comment`);
-  return toTaskDetail(task, comments);
+  return toTaskDetail(task, await loadComments(ctx, task.id));
+}
+
+// ClickUp returns comments newest first, 25 at a time; older pages start from the oldest comment seen.
+async function loadComments(ctx: Context, taskId: string): Promise<RawComment[]> {
+  const path = `/task/${encodeURIComponent(taskId)}/comment`;
+  const comments: RawComment[] = [];
+  let complete = false;
+  for (let page = 0; page < MAX_COMMENT_PAGES && !complete; page++) {
+    const oldest = comments.at(-1);
+    const query = oldest === undefined ? {} : { start: oldest.date, start_id: oldest.id };
+    const response = await ctx.client.request<{ comments: RawComment[] }>('GET', path, { query });
+    comments.push(...response.comments);
+    complete = response.comments.length < COMMENT_PAGE_SIZE;
+  }
+  if (!complete) {
+    ctx.warn(`Stopped after ${comments.length} comments, older ones are missing`, 'Open the task in ClickUp to read the full history');
+  }
+  return comments;
 }
