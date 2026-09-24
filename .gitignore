@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+
+# Design specs and plans stay local, never committed
+docs/specs/
+docs/plans/
