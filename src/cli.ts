@@ -11,7 +11,7 @@ import type { Writer } from './output.ts';
 import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
 import type { Context } from './commands/context.ts';
-import { folders, init, whoami } from './commands/setup.ts';
+import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
@@ -45,6 +45,7 @@ Setup:
   taskwire whoami
   taskwire folders
   taskwire init --folder <id> [--list <id>] [--force]
+  taskwire conventions            how tasks must be written in this project (language, style)
 
 Lists:
   taskwire lists
@@ -87,6 +88,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     needsConfig: false,
     run: (ctx, input) => init(ctx, input),
   },
+  conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
   lists: { options: {}, positionals: 0, needsConfig: true, run: (ctx) => listLists(ctx) },
   'list create': {
     options: { name: { type: 'string' } },

@@ -82,3 +82,17 @@ test('an invalid .taskwire.json does not block whoami', async () => {
   } });
   assert.equal(run.code, 0);
 });
+
+test('init --force keeps the task conventions of the existing config', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-init-'));
+  const conventions = { language: 'Italian', instructions: 'Names in the imperative.' };
+  writeFileSync(join(cwd, '.taskwire.json'), JSON.stringify({ folderId: '1', conventions }));
+  const run = await runCli(['init', '--folder', FOLDER_ID, '--force'], { cwd, routes: { ...folderRoute, ...oneWorkspace } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')), {
+    provider: 'clickup',
+    workspaceId: '1',
+    folderId: FOLDER_ID,
+    conventions,
+  });
+});

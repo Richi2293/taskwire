@@ -70,3 +70,27 @@ test('rejects a non numeric workspaceId', () => {
   assert.throws(() => parseConfig('{"workspaceId":"abc","folderId":"1"}', '/x'), (e: unknown) =>
     e instanceof TaskwireError && e.exitCode === 3);
 });
+
+test('parses optional task conventions', () => {
+  assert.deepEqual(parseConfig('{"folderId":"1","conventions":{"language":"Italian","instructions":"Short names."}}', '/x'), {
+    provider: 'clickup',
+    folderId: '1',
+    conventions: { language: 'Italian', instructions: 'Short names.' },
+  });
+});
+
+test('drops unknown and empty convention keys', () => {
+  assert.deepEqual(parseConfig('{"folderId":"1","conventions":{"language":"English","extra":true}}', '/x'), {
+    provider: 'clickup',
+    folderId: '1',
+    conventions: { language: 'English' },
+  });
+  assert.deepEqual(parseConfig('{"folderId":"1","conventions":{}}', '/x'), { provider: 'clickup', folderId: '1' });
+});
+
+test('rejects conventions that are not an object of non empty strings', () => {
+  for (const conventions of ['"Italian"', '[]', 'null', '{"language":3}', '{"language":" "}', '{"instructions":false}']) {
+    assert.throws(() => parseConfig(`{"folderId":"1","conventions":${conventions}}`, '/x'), (e: unknown) =>
+      e instanceof TaskwireError && e.exitCode === 3, conventions);
+  }
+});
