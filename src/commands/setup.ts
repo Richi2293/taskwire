@@ -1,11 +1,11 @@
 import type { CommandInput } from '../args.ts';
 import { flag, optString, reqString } from '../args.ts';
 import type { RawUser } from '../clickup-types.ts';
-import { writeConfig } from '../config.ts';
+import { readConventions, writeConfig } from '../config.ts';
 import type { ProjectConfig } from '../config.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder } from '../guard.ts';
-import { findWorkspaceId } from './context.ts';
+import { findWorkspaceId, projectConfig } from './context.ts';
 import type { Context } from './context.ts';
 
 interface Named {
@@ -45,6 +45,13 @@ export async function init(
   if (listId !== undefined) await loadListInFolder(ctx.client, listId, folderId);
   const config: ProjectConfig = { provider: 'clickup', workspaceId, folderId };
   if (listId !== undefined) config.defaultListId = listId;
+  const conventions = readConventions(ctx.cwd);
+  if (conventions !== undefined) config.conventions = conventions;
   const path = writeConfig(ctx.cwd, config, flag(input.values, 'force'));
   return { path, workspaceId, folderId, folderName: folder.name, defaultListId: listId ?? null };
+}
+
+export function conventions(ctx: Context): { language: string | null; instructions: string | null } {
+  const found = projectConfig(ctx).conventions;
+  return { language: found?.language ?? null, instructions: found?.instructions ?? null };
 }

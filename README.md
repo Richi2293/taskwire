@@ -48,6 +48,26 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init`:
 
 Commit it: it only holds ids, which are useless without the token. `provider` defaults to `clickup` when missing. The other fields depend on the provider (see its page).
 
+### Task conventions
+
+Add an optional `conventions` object to tell agents how tasks must be written in this project:
+
+```json
+{
+  "provider": "clickup",
+  "folderId": "901234567",
+  "conventions": {
+    "language": "Italian",
+    "instructions": "Task names in the imperative, under 80 characters. Descriptions: context first, then acceptance criteria as a list."
+  }
+}
+```
+
+- `language`: the language of task names, descriptions, comments and checklist items. Statuses and tags keep their existing names.
+- `instructions`: any other writing rule, as free text.
+
+Both fields are optional. `taskwire conventions` prints them, and the rules in [docs/agent-rules.md](docs/agent-rules.md) tell agents to read them before writing. They are guidance for agents: the CLI does not check the text of tasks. `taskwire init --force` keeps them.
+
 Paste the block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md` so every agent follows the same rules.
 
 ## Commands

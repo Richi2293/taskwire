@@ -10,6 +10,7 @@ The rules do not depend on the task system. Provider-specific notes, if any, are
 This project's tasks live in an external task system, managed through the `taskwire` CLI. taskwire only touches the part of that system set in `.taskwire.json` (see its `provider` field). Output is JSON; run `taskwire --help` for every command.
 
 - Before starting a piece of work, look for a related task: `taskwire tasks` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>`.
+- Before creating or editing tasks, comments or checklists, run `taskwire conventions` and follow it: `language` is the language to write in, `instructions` are the project's writing rules. Existing tasks keep their text unless the user asks to rewrite them.
 - You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), and add checklists or dependencies.
 - Delete a task only when the user explicitly asks. Otherwise move it to a closed status. `taskwire task delete` requires `--yes`.
 - Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
