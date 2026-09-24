@@ -34,12 +34,16 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   }
 
   const tasks: RawTask[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
+  let complete = false;
+  for (let page = 0; page < MAX_PAGES && !complete; page++) {
     const response = await ctx.client.request<{ tasks: RawTask[]; last_page?: boolean }>('GET', path, {
       query: { ...filters, page },
     });
     tasks.push(...response.tasks);
-    if (response.last_page === true || response.tasks.length < PAGE_SIZE) break;
+    complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
+  }
+  if (!complete) {
+    ctx.warn(`Stopped after ${tasks.length} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
   }
   return tasks.map(toTask);
 }

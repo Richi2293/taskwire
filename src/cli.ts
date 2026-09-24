@@ -6,7 +6,7 @@ import { createClient } from './client.ts';
 import type { FetchFn } from './client.ts';
 import { CONFIG_FILE, findConfig } from './config.ts';
 import { EXIT, TaskwireError, configError, usageError } from './errors.ts';
-import { printError, printResult } from './output.ts';
+import { printError, printResult, printWarning } from './output.ts';
 import type { Writer } from './output.ts';
 import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
@@ -69,7 +69,7 @@ Comments, checklists, dependencies:
   taskwire dependency remove <task-id> --blocked-by <task-id>
 
 Global options: --pretty (human readable output), --help
-Output is JSON on stdout; errors are JSON on stderr.
+Output is JSON on stdout; errors and warnings are JSON lines on stderr.
 Exit codes: 0 ok, 1 ClickUp or network error, 2 usage error, 3 configuration error.
 `;
 
@@ -241,8 +241,10 @@ export async function main(deps: CliDeps): Promise<number> {
       );
     }
     token = resolveToken(deps.readKeychain, deps.env);
-    const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now });
-    const ctx: Context = { client, config: found?.config ?? null, cwd: deps.cwd };
+    const secrets = [token];
+    const warn = (message: string, hint?: string) => printWarning(deps.stderr, message, hint, secrets);
+    const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
+    const ctx: Context = { client, config: found?.config ?? null, cwd: deps.cwd, warn };
     const result = await resolved.spec.run(ctx, input);
     printResult(deps.stdout, result, flag(input.values, 'pretty'));
     return EXIT.ok;

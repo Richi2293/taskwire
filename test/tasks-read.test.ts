@@ -117,3 +117,17 @@ test('tasks exits 3 when no workspace contains the folder space', async () => {
   });
   assert.equal(run.code, 3);
 });
+
+test('tasks stops at the page limit and warns on stderr', async () => {
+  const full = (call: FakeCall) => {
+    const n = Number(call.url.searchParams.get('page'));
+    return { body: { tasks: Array.from({ length: 100 }, (_, i) => rawTask({ id: `p${n}-${i}` })), last_page: false } };
+  };
+  const run = await runCli(['tasks'], { routes: { 'GET /team/1/task': full } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as unknown[]).length, 5000);
+  assert.deepEqual(JSON.parse(run.stderr), {
+    warning: 'Stopped after 5000 tasks, there may be more',
+    hint: 'Narrow the query with --list, --status or --tag',
+  });
+});

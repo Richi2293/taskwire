@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { printError, printResult, redact } from '../src/output.ts';
+import { printError, printResult, printWarning, redact } from '../src/output.ts';
 import { TaskwireError, EXIT, usageError } from '../src/errors.ts';
 
 function memory() {
@@ -45,4 +45,11 @@ test('printError omits the hint when there is none', () => {
   const err = memory();
   printError(err, new TaskwireError('boom', EXIT.api), []);
   assert.deepEqual(JSON.parse(err.text()), { error: 'boom' });
+});
+
+test('printWarning writes a JSON line with warning and hint, redacting secrets', () => {
+  const err = memory();
+  printWarning(err, 'slow pk_secret', 'wait', ['pk_secret']);
+  printWarning(err, 'no hint', undefined, []);
+  assert.equal(err.text(), '{"warning":"slow ***","hint":"wait"}\n{"warning":"no hint"}\n');
 });

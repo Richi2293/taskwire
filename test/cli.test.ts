@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCli } from './helpers.ts';
+import { runCli, sequence } from './helpers.ts';
 
 test('no command prints help and exits 0', async () => {
   const run = await runCli([]);
@@ -74,4 +74,13 @@ test('a second id for a command that takes one is a usage error', async () => {
   assert.equal(run.code, 2);
   assert.equal(run.calls.length, 0);
   assert.match(JSON.parse(run.stderr).error, /Unexpected argument "t2"/);
+});
+
+test('a rate limit wait is reported on stderr and the command still succeeds', async () => {
+  const run = await runCli(['whoami'], { routes: {
+    'GET /user': sequence({ status: 429 }, { body: { user: { id: 7, username: 'jane' } } }),
+  } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as { id: number }).id, 7);
+  assert.deepEqual(JSON.parse(run.stderr), { warning: 'ClickUp rate limit reached, waiting 60 seconds' });
 });

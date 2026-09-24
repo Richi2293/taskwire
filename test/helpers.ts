@@ -48,9 +48,12 @@ export function sequence(...replies: FakeReply[]): (call: FakeCall) => FakeReply
   return () => replies[Math.min(index++, replies.length - 1)];
 }
 
-export function testClient(routes: Record<string, Route>): { client: Client; calls: FakeCall[]; sleeps: number[] } {
+export function testClient(
+  routes: Record<string, Route>,
+): { client: Client; calls: FakeCall[]; sleeps: number[]; warnings: string[] } {
   const { fetch, calls } = fakeFetch(routes);
   const sleeps: number[] = [];
+  const warnings: string[] = [];
   const client = createClient({
     token: 'pk_test_token',
     fetch,
@@ -58,8 +61,11 @@ export function testClient(routes: Record<string, Route>): { client: Client; cal
       sleeps.push(ms);
     },
     now: () => 1_000_000,
+    warn: (message) => {
+      warnings.push(message);
+    },
   });
-  return { client, calls, sleeps };
+  return { client, calls, sleeps, warnings };
 }
 
 export const WORKSPACE_ID = '1';
