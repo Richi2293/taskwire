@@ -30,12 +30,23 @@ export async function resolveAssignee(ctx: Context, value: string): Promise<numb
   throw usageError(`Invalid assignee "${value}"`, 'Use "me" or a numeric ClickUp user id');
 }
 
-export async function singleTeamId(ctx: Context): Promise<string> {
-  const { teams } = await ctx.client.request<{ teams: { id: string; name: string }[] }>('GET', '/team');
-  if (teams.length !== 1) {
-    throw usageError(`Found ${teams.length} ClickUp workspaces, expected one`, 'Pass --list to read a specific list');
+// The workspace (ClickUp "team") that owns the given space. One workspace needs no search.
+export async function findWorkspaceId(client: Client, spaceId: string): Promise<string> {
+  const { teams } = await client.request<{ teams: { id: string; name: string }[] }>('GET', '/team');
+  if (teams.length === 1) return teams[0].id;
+  for (const team of teams) {
+    const { spaces } = await client.request<{ spaces: { id: string }[] }>('GET', `/team/${team.id}/space`);
+    if (spaces.some((space) => space.id === spaceId)) return team.id;
   }
-  return teams[0].id;
+  throw configError(`No ClickUp workspace contains space ${spaceId}`, 'Check the folder id with "taskwire folders"');
+}
+
+// Uses the workspaceId saved by init; older or hand-written configs fall back to a search.
+export async function projectWorkspaceId(ctx: Context): Promise<string> {
+  const config = projectConfig(ctx);
+  if (config.workspaceId !== undefined) return config.workspaceId;
+  const folder = await ctx.client.request<{ space: { id: string } }>('GET', `/folder/${config.folderId}`);
+  return findWorkspaceId(ctx.client, folder.space.id);
 }
 
 export function matchStatus(list: RawList, wanted: string): string {

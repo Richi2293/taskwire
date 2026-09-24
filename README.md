@@ -40,6 +40,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init`:
 ```json
 {
   "provider": "clickup",
+  "workspaceId": "9012345",
   "folderId": "901234567",
   "defaultListId": "901234890"
 }

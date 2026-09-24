@@ -22,24 +22,39 @@ test('folders flattens workspaces, spaces and folders', async () => {
   assert.deepEqual(run.json(), [{ id: FOLDER_ID, name: 'Website', space: 'Projects', workspace: 'Acme' }]);
 });
 
-test('init writes .taskwire.json after checking the folder and list', async () => {
+const folderRoute = { [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website', space: { id: '2' } } } };
+const oneWorkspace = { 'GET /team': { body: { teams: [{ id: '1', name: 'Acme' }] } } };
+
+test('init writes .taskwire.json after checking the folder and list, with the folder workspace', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'taskwire-init-'));
   const run = await runCli(['init', '--folder', FOLDER_ID, '--list', LIST_ID], { cwd, routes: {
-    [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website' } },
+    ...folderRoute,
+    ...oneWorkspace,
     [`GET /list/${LIST_ID}`]: { body: rawList() },
   } });
   assert.equal(run.code, 0);
   assert.deepEqual(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')), {
     provider: 'clickup',
+    workspaceId: '1',
     folderId: FOLDER_ID,
     defaultListId: LIST_ID,
   });
 });
 
-test('init refuses to overwrite an existing config without --force', async () => {
-  const run = await runCli(['init', '--folder', FOLDER_ID], { routes: {
-    [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'P' } },
+test('init finds the workspace of the folder among several', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-init-'));
+  const run = await runCli(['init', '--folder', FOLDER_ID], { cwd, routes: {
+    ...folderRoute,
+    'GET /team': { body: { teams: [{ id: '1', name: 'Acme' }, { id: '3', name: 'Other' }] } },
+    'GET /team/1/space': { body: { spaces: [{ id: '8', name: 'Elsewhere' }] } },
+    'GET /team/3/space': { body: { spaces: [{ id: '2', name: 'Projects' }] } },
   } });
+  assert.equal(run.code, 0);
+  assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).workspaceId, '3');
+});
+
+test('init refuses to overwrite an existing config without --force', async () => {
+  const run = await runCli(['init', '--folder', FOLDER_ID], { routes: { ...folderRoute, ...oneWorkspace } });
   assert.equal(run.code, 2);
   assert.match(JSON.parse(run.stderr).hint, /--force/);
 });
@@ -53,9 +68,7 @@ test('init rejects a non numeric folder id before calling ClickUp', async () => 
 test('an invalid .taskwire.json does not block init --force from repairing it', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'taskwire-broken-'));
   writeFileSync(join(cwd, '.taskwire.json'), '{"folderId": 900}');
-  const run = await runCli(['init', '--folder', FOLDER_ID, '--force'], { cwd, routes: {
-    [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website' } },
-  } });
+  const run = await runCli(['init', '--folder', FOLDER_ID, '--force'], { cwd, routes: { ...folderRoute, ...oneWorkspace } });
   assert.equal(run.code, 0);
   assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).folderId, FOLDER_ID);
 });

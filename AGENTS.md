@@ -26,7 +26,7 @@ If the plan and the code disagree with reality (for example a ClickUp endpoint b
 - ClickUp stays on the Free Forever plan. REST API with a personal token (100 requests per minute, no daily cap). The official ClickUp MCP was rejected: OAuth only and 50 calls per day on the free plan.
 - Model-agnostic by design: a shell CLI plus `AGENTS.md` rules, nothing specific to one AI tool.
 - Token: macOS Keychain, service `taskwire`, fallback env `TASKWIRE_API_TOKEN`. Never printed.
-- Project config: `.taskwire.json` with `provider` (only `"clickup"`, default when missing), `folderId` and optional `defaultListId`, committed in each project.
+- Project config: `.taskwire.json` with `provider` (only `"clickup"`, default when missing), `workspaceId` (written by `init`, looked up at runtime when missing), `folderId` and optional `defaultListId`, committed in each project. Accounts with several ClickUp workspaces are supported.
 - Other providers are a future possibility, not a goal of this version: no provider abstraction now (YAGNI), just the `provider` field and ClickUp code kept in `client.ts`, `clickup-types.ts` and `shape.ts`. The README stays provider-neutral; provider specifics go in `docs/providers/<name>.md`.
 - Due dates are set at midnight in the system time zone (`TZ` or the OS setting). No hardcoded time zone.
 - Every write checks that the task or list belongs to the configured folder.

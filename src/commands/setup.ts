@@ -5,6 +5,7 @@ import { writeConfig } from '../config.ts';
 import type { ProjectConfig } from '../config.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder } from '../guard.ts';
+import { findWorkspaceId } from './context.ts';
 import type { Context } from './context.ts';
 
 interface Named {
@@ -39,10 +40,11 @@ export async function init(
   const folderId = reqString(input.values, 'folder');
   if (!/^\d+$/.test(folderId)) throw usageError(`Invalid folder id "${folderId}"`, 'Run "taskwire folders" to see the ids');
   const listId = optString(input.values, 'list');
-  const folder = await ctx.client.request<Named>('GET', `/folder/${folderId}`);
+  const folder = await ctx.client.request<Named & { space: { id: string } }>('GET', `/folder/${folderId}`);
+  const workspaceId = await findWorkspaceId(ctx.client, folder.space.id);
   if (listId !== undefined) await loadListInFolder(ctx.client, listId, folderId);
-  const config: ProjectConfig =
-    listId === undefined ? { provider: 'clickup', folderId } : { provider: 'clickup', folderId, defaultListId: listId };
+  const config: ProjectConfig = { provider: 'clickup', workspaceId, folderId };
+  if (listId !== undefined) config.defaultListId = listId;
   const path = writeConfig(ctx.cwd, config, flag(input.values, 'force'));
   return { path, folderId, folderName: folder.name, defaultListId: listId ?? null };
 }

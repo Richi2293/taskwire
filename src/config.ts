@@ -10,6 +10,7 @@ export type Provider = (typeof PROVIDERS)[number];
 
 export interface ProjectConfig {
   provider: Provider;
+  workspaceId?: string;
   folderId: string;
   defaultListId?: string;
 }
@@ -39,16 +40,25 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw configError(`${path} must contain a JSON object`);
   }
-  const { provider, folderId, defaultListId } = data as Record<string, unknown>;
-  const checkedProvider = parseProvider(provider, path);
-  if (typeof folderId !== 'string' || !NUMERIC_ID.test(folderId)) {
-    throw configError(`${path}: "folderId" must be a numeric string`, 'Run "taskwire folders" to find the folder id');
+  const { provider, workspaceId, folderId, defaultListId } = data as Record<string, unknown>;
+  const config: ProjectConfig = {
+    provider: parseProvider(provider, path),
+    folderId: checkId(folderId, 'folderId', path, 'Run "taskwire folders" to find the folder id'),
+  };
+  if (workspaceId !== undefined) {
+    config.workspaceId = checkId(workspaceId, 'workspaceId', path, 'Run "taskwire init --force" to rewrite it');
   }
-  if (defaultListId === undefined) return { provider: checkedProvider, folderId };
-  if (typeof defaultListId !== 'string' || !NUMERIC_ID.test(defaultListId)) {
-    throw configError(`${path}: "defaultListId" must be a numeric string`, 'Run "taskwire lists" to find the list id');
+  if (defaultListId !== undefined) {
+    config.defaultListId = checkId(defaultListId, 'defaultListId', path, 'Run "taskwire lists" to find the list id');
   }
-  return { provider: checkedProvider, folderId, defaultListId };
+  return config;
+}
+
+function checkId(value: unknown, key: string, path: string, hint: string): string {
+  if (typeof value !== 'string' || !NUMERIC_ID.test(value)) {
+    throw configError(`${path}: "${key}" must be a numeric string`, hint);
+  }
+  return value;
 }
 
 function parseProvider(value: unknown, path: string): Provider {

@@ -61,3 +61,12 @@ test('writeConfig writes pretty JSON and refuses to overwrite without force', ()
   writeConfig(dir, { provider: 'clickup', folderId: '2' }, true);
   assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { provider: 'clickup', folderId: '2' });
 });
+
+test('accepts an optional numeric workspaceId', () => {
+  assert.deepEqual(parseConfig('{"workspaceId":"5","folderId":"1"}', '/x'), { provider: 'clickup', workspaceId: '5', folderId: '1' });
+});
+
+test('rejects a non numeric workspaceId', () => {
+  assert.throws(() => parseConfig('{"workspaceId":"abc","folderId":"1"}', '/x'), (e: unknown) =>
+    e instanceof TaskwireError && e.exitCode === 3);
+});

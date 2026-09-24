@@ -5,7 +5,7 @@ import type { RawComment, RawTask } from '../clickup-types.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
-import { projectConfig, resolveAssignee, singleTeamId } from './context.ts';
+import { projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
 import type { Context } from './context.ts';
 
 export const MAX_PAGES = 50;
@@ -29,7 +29,7 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
     await loadListInFolder(ctx.client, listId, folderId);
     path = `/list/${listId}/task`;
   } else {
-    path = `/team/${await singleTeamId(ctx)}/task`;
+    path = `/team/${await projectWorkspaceId(ctx)}/task`;
     filters.project_ids = [folderId];
   }
 

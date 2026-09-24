@@ -62,6 +62,7 @@ export function testClient(routes: Record<string, Route>): { client: Client; cal
   return { client, calls, sleeps };
 }
 
+export const WORKSPACE_ID = '1';
 export const FOLDER_ID = '900';
 export const OTHER_FOLDER_ID = '901';
 export const LIST_ID = '800';
@@ -113,7 +114,9 @@ export async function runCli(
 ): Promise<CliRun> {
   const cwd = options.cwd ?? mkdtempSync(join(tmpdir(), 'taskwire-cli-'));
   const config: ProjectConfig | null =
-    options.config === undefined ? { provider: 'clickup', folderId: FOLDER_ID, defaultListId: LIST_ID } : options.config;
+    options.config === undefined
+      ? { provider: 'clickup', workspaceId: WORKSPACE_ID, folderId: FOLDER_ID, defaultListId: LIST_ID }
+      : options.config;
   if (options.cwd === undefined && config !== null) {
     writeFileSync(join(cwd, '.taskwire.json'), JSON.stringify(config));
   }

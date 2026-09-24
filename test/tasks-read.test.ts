@@ -81,3 +81,39 @@ test('task get of a task in another folder exits 3 without reading comments', as
   assert.equal(run.code, 3);
   assert.equal(run.calls.length, 1);
 });
+
+test('tasks uses the workspaceId from .taskwire.json without listing workspaces', async () => {
+  const run = await runCli(['tasks'], { routes: {
+    'GET /team/1/task': { body: { tasks: [], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls.map((c) => c.path), ['/team/1/task']);
+});
+
+test('tasks without workspaceId finds the workspace of the folder among several', async () => {
+  const run = await runCli(['tasks'], {
+    config: { provider: 'clickup', folderId: FOLDER_ID },
+    routes: {
+      [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website', space: { id: '2' } } },
+      'GET /team': { body: { teams: [{ id: '1', name: 'Acme' }, { id: '3', name: 'Other' }] } },
+      'GET /team/1/space': { body: { spaces: [{ id: '8', name: 'Elsewhere' }] } },
+      'GET /team/3/space': { body: { spaces: [{ id: '2', name: 'Projects' }] } },
+      'GET /team/3/task': { body: { tasks: [rawTask()], last_page: true } },
+    },
+  });
+  assert.equal(run.code, 0);
+  assert.deepEqual((run.json() as { id: string }[]).map((t) => t.id), ['t1']);
+});
+
+test('tasks exits 3 when no workspace contains the folder space', async () => {
+  const run = await runCli(['tasks'], {
+    config: { provider: 'clickup', folderId: FOLDER_ID },
+    routes: {
+      [`GET /folder/${FOLDER_ID}`]: { body: { id: FOLDER_ID, name: 'Website', space: { id: '2' } } },
+      'GET /team': { body: { teams: [{ id: '1', name: 'Acme' }, { id: '3', name: 'Other' }] } },
+      'GET /team/1/space': { body: { spaces: [] } },
+      'GET /team/3/space': { body: { spaces: [] } },
+    },
+  });
+  assert.equal(run.code, 3);
+});

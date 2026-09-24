@@ -19,6 +19,7 @@ taskwire lists                             # lists of the folder and their statu
 
 | Field | Meaning |
 |---|---|
+| `workspaceId` | the ClickUp workspace that contains the folder, found and saved by `init` (optional: when missing, taskwire looks it up on every `taskwire tasks` without `--list`) |
 | `folderId` | the ClickUp folder of the project (required) |
 | `defaultListId` | list used by `task create` when `--list` is missing (optional) |
 
@@ -28,7 +29,7 @@ taskwire lists                             # lists of the folder and their statu
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
 - Descriptions are sent as markdown.
 - Task ids copied from the UI with a leading `#` are accepted.
-- `taskwire tasks` without `--list` needs exactly one workspace; with more, pass `--list`.
+- Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 
 ## Free Forever plan
