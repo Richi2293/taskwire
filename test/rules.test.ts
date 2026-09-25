@@ -92,3 +92,8 @@ test('the default rules say who checks the acceptance criteria and when', () => 
   assert.match(DEFAULT_RULES, /Checking an acceptance criterion is not progress/);
   assert.match(DEFAULT_RULES, /Before moving a task to a closed status, check every verified acceptance criterion/);
 });
+
+test('the default rules ask to move a task to its in-progress status when the work starts', () => {
+  assert.match(DEFAULT_RULES, /When you start the work a task asks for, move it to the status of its list that means work in progress/);
+  assert.match(DEFAULT_RULES, /If the list has no such status, leave the status as it is/);
+});
