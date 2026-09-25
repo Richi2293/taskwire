@@ -10,6 +10,7 @@ These rules cover only task management. The project conventions that come with t
 - Use only the statuses of the task's list (`taskwire lists`). Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing.
 - Reuse the tags already used in the project (see `taskwire tasks`). Create a new tag only when the user asks.
 - You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, and add, rename or check checklist items.
+- Assign to the user (`me`, the owner of the token) every task and subtask you create (`--assignee me`), and a task you start working on when it has no assignee (`taskwire task update <id> --add-assignee me`). Do not change the assignees of a task that already has some, unless the user asks.
 - Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it. The one exception is a small update to the last comment of the task, when you wrote it in this session (see below).
 - Delete a task or remove a checklist item only when the user explicitly asks. Otherwise move the task to a closed status, or check the item. `taskwire task delete` and `taskwire checklist remove-item` require `--yes`.
 - Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
