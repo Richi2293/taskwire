@@ -80,7 +80,7 @@ Other filters of `taskwire tasks`: `--due-before YYYY-MM-DD` and `--due-after YY
 
 `taskwire task get <id>` returns the task with its comments. Add `--comments <n>` to read only the n most recent ones, or `--comments 0` to skip them: reading every comment can take several requests.
 
-Comments can be added (`taskwire comment add`) and edited (`taskwire comment update <comment-id> --task <task-id>`), for example to rewrite them after the project's conventions change. Editing changes only the text: the comment must belong to the given task, and taskwire checks that the task is in the project. Comments cannot be deleted.
+Descriptions and comments are markdown. Comments can be added (`taskwire comment add`) and edited (`taskwire comment update <comment-id> --task <task-id>`), for example to rewrite them after the project's conventions change. Editing changes only the text: the comment must belong to the given task, and taskwire checks that the task is in the project. Comments cannot be deleted.
 
 Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and `due` in the output is shown in that zone with its offset (`2026-10-01T00:00:00+02:00`). Set `TZ` to use another zone. Other timestamps are UTC.
 

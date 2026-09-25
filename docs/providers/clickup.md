@@ -28,10 +28,10 @@ taskwire lists                             # lists of the folder and their statu
 - Statuses are matched case-insensitively against the target list and sent with the list's exact name.
 - `taskwire tasks --status` with no result checks that the status exists in the project's lists, so a typo is an error instead of an empty list.
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
-- Descriptions are sent as markdown.
+- Descriptions are sent as markdown (`markdown_content`), comments too (`comment_markdown`).
 - Task ids copied from the UI with a leading `#` are accepted.
 - `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `--comments <n>` reads only the pages needed for the n most recent comments (one request per 25), and `--comments 0` makes no comment request. `taskwire tasks` reads up to 5000 tasks and warns the same way.
-- `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text is plain text, so rich formatting of the old comment is lost.
+- `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text replaces the old one, formatting included.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - `taskwire tasks --due-before` and `--due-after` map to `due_date_lt` (midnight of the day) and `due_date_gt` (midnight of the next day, minus 1 ms), `--top-level` to `subtasks=false`. `--limit` stops reading pages once enough tasks are found.
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
@@ -57,6 +57,8 @@ Facts checked against the live API:
 - `DELETE /checklist/{id}/checklist_item/{item_id}` answers `{}` with 200, also for an item that no longer exists. `PUT` and `POST` on checklist items return the whole checklist.
 - The order of checklist items in responses is not the creation order and can change between calls (renaming an item moved it); `orderindex` is `null` for items created through the API.
 - Task lists come newest created first when `order_by` is not given. `due_date_lt` and `due_date_gt` leave out tasks without a due date, and `subtasks=false` leaves out subtasks.
+- Comments sent with `comment_text` are plain text: ClickUp renders only backticks as inline code, so headings and lists show as raw markdown. `comment_markdown` (on `POST /task/{id}/comment` and `PUT /comment/{id}`) is rendered: headings, bold, italic, inline code, code blocks, bullet, numbered and checkbox lists, quotes, links and `---` dividers. Plain text with `snake_case`, `2 * 3`, `#123` or paths stays as written, and single line breaks are kept. HTML such as `<details>` is shown as raw text. Sending both fields fails with 400 ("Provide either comment_text or comment_markdown"); `markdown` and `markdown_content` are not accepted for comments.
+- A comment written with `comment_markdown` reads back with `comment_text` as plain text without markers (list dashes and `#` are gone); the structure is only in the `comment` array of blocks.
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` are also sent on successful responses (checked on `GET /user` and `GET /team`), although the docs mention them only for rate limit errors. `X-RateLimit-Remaining` goes down by one with each request.
 
 ## Notes for agents
