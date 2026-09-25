@@ -7,12 +7,12 @@ import { OTHER_FOLDER_ID, rawTask, runCli } from './helpers.ts';
 
 const task = { 'GET /task/t1': { body: rawTask() } };
 
-test('comment add posts the text without notifying everyone', async () => {
+test('comment add posts the text as markdown without notifying everyone', async () => {
   const run = await runCli(['comment', 'add', 't1', '--text', 'Done in abc123'], { routes: {
     ...task, 'POST /task/t1/comment': { body: { id: 99, hist_id: 'h', date: 0 } },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.calls[1].body, { comment_text: 'Done in abc123', notify_all: false });
+  assert.deepEqual(run.calls[1].body, { comment_markdown: 'Done in abc123', notify_all: false });
   assert.deepEqual(run.json(), { id: '99', taskId: 't1' });
 });
 
@@ -22,7 +22,7 @@ test('comment add reads the text from a file', async () => {
   const run = await runCli(['comment', 'add', 't1', '--file', join(dir, 'c.md')], { routes: {
     ...task, 'POST /task/t1/comment': { body: { id: 1 } },
   } });
-  assert.equal((run.calls[1].body as { comment_text: string }).comment_text, 'From file');
+  assert.equal((run.calls[1].body as { comment_markdown: string }).comment_markdown, 'From file');
 });
 
 test('comment add needs exactly one of --text or --file', async () => {
@@ -42,7 +42,7 @@ test('comment update replaces the text and keeps resolved', async () => {
     ...task, ...comments, 'PUT /comment/5': { body: {} },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.calls[2].body, { comment_text: 'New', resolved: false });
+  assert.deepEqual(run.calls[2].body, { comment_markdown: 'New', resolved: false });
   assert.deepEqual(run.json(), { id: '5', taskId: 't1' });
 });
 
@@ -53,7 +53,7 @@ test('comment update keeps the current assignee', async () => {
     ...task, ...comments, 'PUT /comment/6': { body: {} },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.calls[2].body, { comment_text: 'From file', resolved: true, assignee: 8 });
+  assert.deepEqual(run.calls[2].body, { comment_markdown: 'From file', resolved: true, assignee: 8 });
 });
 
 test('comment update with a comment not in the task exits 2', async () => {

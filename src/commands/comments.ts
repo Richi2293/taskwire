@@ -47,7 +47,8 @@ export async function addComment(ctx: Context, input: CommandInput): Promise<{ i
   const text = readCommentText(input);
   const task = await loadTaskInFolder(ctx.client, taskId, folderId);
   const created = await ctx.client.request<{ id: string | number }>('POST', `/task/${encodeURIComponent(task.id)}/comment`, {
-    body: { comment_text: text, notify_all: false },
+    // comment_markdown is rendered by ClickUp; comment_text would show the markdown as plain text.
+    body: { comment_markdown: text, notify_all: false },
   });
   return { id: String(created.id), taskId: task.id };
 }
@@ -63,8 +64,8 @@ export async function updateComment(ctx: Context, input: CommandInput): Promise<
     throw usageError(`Comment ${commentId} is not in task ${task.id}`, `Run "taskwire task get ${task.id}" to see the comment ids`);
   }
   // ClickUp requires assignee and resolved on every update: send the current values so only the text changes.
-  const body: { comment_text: string; resolved: boolean; assignee?: number } = {
-    comment_text: text,
+  const body: { comment_markdown: string; resolved: boolean; assignee?: number } = {
+    comment_markdown: text,
     resolved: comment.resolved ?? false,
   };
   if (comment.assignee) body.assignee = comment.assignee.id;

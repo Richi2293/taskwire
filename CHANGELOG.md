@@ -4,6 +4,11 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- Comments are sent as markdown, so ClickUp shows headings, lists and quotes formatted instead of raw.
+- The agent rules describe how to write descriptions and comments: a short part for people first, then the details for agents.
+
 ## [0.1.1] - 2026-09-25
 
 ### Added
