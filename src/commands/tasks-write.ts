@@ -24,6 +24,17 @@ export function readDescription(input: CommandInput): string | undefined {
   }
 }
 
+// "none" clears a value, which only makes sense on a task that already has one.
+function isClear(value: string): boolean {
+  return value.trim().toLowerCase() === 'none';
+}
+
+function rejectClear(option: string, value: string | undefined): void {
+  if (value !== undefined && isClear(value)) {
+    throw usageError(`Invalid ${option} "${value}"`, `"none" clears the ${option}, so it works only with task update`);
+  }
+}
+
 export async function createTask(ctx: Context, input: CommandInput): Promise<TaskSummary> {
   const config = projectConfig(ctx);
   const name = reqString(input.values, 'name');
@@ -35,6 +46,8 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   let listId = optString(input.values, 'list');
 
   // Validate every local input before the first network call.
+  rejectClear('priority', priority);
+  rejectClear('due date', due);
   const priorityValue = priority === undefined ? undefined : parsePriority(priority);
   const dueValue = due === undefined ? undefined : localMidnightMs(due);
   if (listId === undefined && parentId === undefined && config.defaultListId === undefined) {
@@ -83,8 +96,10 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   const addAssignees = optStrings(input.values, 'add-assignee');
   const removeAssignees = optStrings(input.values, 'remove-assignee');
 
-  const priorityValue = priority === undefined ? undefined : parsePriority(priority);
-  const dueValue = due === undefined ? undefined : localMidnightMs(due);
+  let priorityValue: number | null | undefined;
+  if (priority !== undefined) priorityValue = isClear(priority) ? null : parsePriority(priority);
+  let dueValue: number | null | undefined;
+  if (due !== undefined) dueValue = isClear(due) ? null : localMidnightMs(due);
   const nothingToDo = [name, description, status, priority, due].every((v) => v === undefined) &&
     addTags.length + removeTags.length + addAssignees.length + removeAssignees.length === 0;
   if (nothingToDo) throw usageError('Nothing to update', 'Run "taskwire --help" to see the update options');
@@ -100,7 +115,9 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
     body.status = matchStatus(list, status);
   }
   if (priorityValue !== undefined) body.priority = priorityValue;
-  if (dueValue !== undefined) {
+  if (dueValue === null) {
+    body.due_date = null;
+  } else if (dueValue !== undefined) {
     body.due_date = dueValue;
     body.due_date_time = false;
   }

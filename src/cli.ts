@@ -58,8 +58,8 @@ Tasks:
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
                        [--assignee <id|me>]... [--due YYYY-MM-DD] [--parent <id>]
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
-                       [--status <s>] [--priority <p>] [--add-tag <t>]... [--remove-tag <t>]...
-                       [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD]
+                       [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
+                       [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
   taskwire task delete <id> --yes
 
 Comments, checklists, dependencies:

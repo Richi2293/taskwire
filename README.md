@@ -78,6 +78,8 @@ Comments can be added (`taskwire comment add`) and edited (`taskwire comment upd
 
 Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and `due` in the output is shown in that zone with its offset (`2026-10-01T00:00:00+02:00`). Set `TZ` to use another zone. Other timestamps are UTC.
 
+`taskwire task update <id> --due none` removes the due date, and `--priority none` removes the priority.
+
 ## Exit codes
 
 | Code | Meaning |

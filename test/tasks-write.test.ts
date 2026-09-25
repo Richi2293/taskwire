@@ -92,6 +92,25 @@ test('task update changes fields, encodes tag names and returns the fresh task',
   assert.equal((run.json() as { status: string }).status, 'complete');
 });
 
+test('task update clears the due date and the priority with "none"', async () => {
+  const run = await runCli(['task', 'update', 't1', '--due', 'none', '--priority', 'None'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'PUT /task/t1': { body: rawTask() },
+  } });
+  assert.equal(run.code, 0);
+  const put = run.calls.find((c) => c.method === 'PUT');
+  assert.deepEqual(put?.body, { due_date: null, priority: null });
+});
+
+test('task create rejects "none" as due date and priority', async () => {
+  for (const args of [['--due', 'none'], ['--priority', 'none']]) {
+    const run = await runCli(['task', 'create', '--name', 'N', ...args]);
+    assert.equal(run.code, 2);
+    assert.match(JSON.parse(run.stderr).hint, /only with task update/);
+    assert.equal(run.calls.length, 0);
+  }
+});
+
 test('task update with nothing to change exits 2', async () => {
   const run = await runCli(['task', 'update', 't1']);
   assert.equal(run.code, 2);
