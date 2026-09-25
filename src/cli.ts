@@ -60,6 +60,7 @@ Tasks:
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
                        [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
+                       [--list <id> | --parent <id>]
   taskwire task delete <id> --yes
 
 Comments, checklists, dependencies:
@@ -139,6 +140,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'remove-tag': { type: 'string', multiple: true },
       'add-assignee': { type: 'string', multiple: true },
       'remove-assignee': { type: 'string', multiple: true },
+      list: { type: 'string' },
+      parent: { type: 'string' },
     },
     positionals: 1,
     needsConfig: true,

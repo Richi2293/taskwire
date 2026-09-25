@@ -27,7 +27,8 @@ export function fakeFetch(routes: Record<string, Route>): { fetch: FetchFn; call
   const fetch: FetchFn = async (input, init) => {
     const url = new URL(input);
     const method = init.method ?? 'GET';
-    const path = url.pathname.replace(/^\/api\/v2/, '');
+    // v2 routes are keyed without a prefix ("/task/t1"), v3 routes keep theirs ("/v3/workspaces/...").
+    const path = url.pathname.replace(/^\/api\/v2/, '').replace(/^\/api(?=\/v3\/)/, '');
     const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
     const call: FakeCall = { method, path, url, body };
     calls.push(call);

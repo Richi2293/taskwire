@@ -7,7 +7,7 @@ import { EXIT, TaskwireError, usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder, normalizeTaskId } from '../guard.ts';
 import { toTask } from '../shape.ts';
 import type { TaskSummary } from '../shape.ts';
-import { matchStatus, parsePriority, projectConfig, resolveAssignee } from './context.ts';
+import { matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
 import type { Context } from './context.ts';
 
 export function readDescription(input: CommandInput): string | undefined {
@@ -83,6 +83,22 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   return toTask(created);
 }
 
+// Checks --list and --parent before any network call and returns the normalized parent id.
+function readMove(input: CommandInput, taskId: string): { listId?: string; parentId?: string } {
+  const listId = optString(input.values, 'list');
+  const parent = optString(input.values, 'parent');
+  if (parent === undefined) return { listId };
+  if (listId !== undefined) {
+    throw usageError('Use either --list or --parent, not both', 'A new parent already moves the task to the parent list');
+  }
+  if (isClear(parent)) {
+    throw usageError('A subtask cannot be detached from its parent here', 'The ClickUp API does not support it: do it in the ClickUp UI');
+  }
+  const parentId = normalizeTaskId(parent);
+  if (parentId === taskId) throw usageError(`Task ${taskId} cannot be a subtask of itself`);
+  return { parentId };
+}
+
 export async function updateTask(ctx: Context, input: CommandInput): Promise<TaskSummary> {
   const { folderId } = projectConfig(ctx);
   const taskId = normalizeTaskId(onePositional(input, 'task id'));
@@ -95,25 +111,36 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   const removeTags = optStrings(input.values, 'remove-tag');
   const addAssignees = optStrings(input.values, 'add-assignee');
   const removeAssignees = optStrings(input.values, 'remove-assignee');
+  const { listId, parentId } = readMove(input, taskId);
 
   let priorityValue: number | null | undefined;
   if (priority !== undefined) priorityValue = isClear(priority) ? null : parsePriority(priority);
   let dueValue: number | null | undefined;
   if (due !== undefined) dueValue = isClear(due) ? null : localMidnightMs(due);
-  const nothingToDo = [name, description, status, priority, due].every((v) => v === undefined) &&
+  const nothingToDo = [name, description, status, priority, due, listId, parentId].every((v) => v === undefined) &&
     addTags.length + removeTags.length + addAssignees.length + removeAssignees.length === 0;
   if (nothingToDo) throw usageError('Nothing to update', 'Run "taskwire --help" to see the update options');
 
   const task = await loadTaskInFolder(ctx.client, taskId, folderId);
   const path = `/task/${encodeURIComponent(task.id)}`;
+  const targetList = listId === undefined ? undefined : await loadListInFolder(ctx.client, listId, folderId);
+  if (targetList !== undefined && task.parent !== null) {
+    throw usageError(
+      `Task ${task.id} is a subtask and cannot be moved to another list on its own`,
+      'Move its parent with --list, or give it another parent with --parent',
+    );
+  }
+  const parent = parentId === undefined ? undefined : await loadTaskInFolder(ctx.client, parentId, folderId);
 
   const body: Record<string, unknown> = {};
   if (name !== undefined) body.name = name;
   if (description !== undefined) body.markdown_content = description;
   if (status !== undefined) {
-    const list = await ctx.client.request<RawList>('GET', `/list/${task.list.id}`);
+    // After a move the status must exist in the list the task ends up in.
+    const list = targetList ?? (await ctx.client.request<RawList>('GET', `/list/${parent?.list.id ?? task.list.id}`));
     body.status = matchStatus(list, status);
   }
+  if (parent !== undefined) body.parent = parent.id;
   if (priorityValue !== undefined) body.priority = priorityValue;
   if (dueValue === null) {
     body.due_date = null;
@@ -130,6 +157,11 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   }
 
   const steps: UpdateStep[] = [];
+  if (targetList !== undefined) {
+    // Only the v3 API can change the list of a task; its subtasks follow it.
+    const movePath = `/workspaces/${await projectWorkspaceId(ctx)}/tasks/${encodeURIComponent(task.id)}/home_list/${targetList.id}`;
+    steps.push({ label: `move to list "${targetList.name}"`, apply: () => ctx.client.request('PUT', movePath, { api: 'v3' }) });
+  }
   if (Object.keys(body).length > 0) {
     steps.push({ label: 'fields', apply: () => ctx.client.request('PUT', path, { body }) });
   }

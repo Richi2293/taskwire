@@ -1,6 +1,6 @@
 # ClickUp
 
-taskwire talks to the ClickUp REST API v2 with a personal token.
+taskwire talks to the ClickUp REST API v2 with a personal token. Moving a task to another list uses the API v3, the only one that supports it.
 
 ## Token
 
@@ -34,6 +34,8 @@ taskwire lists                             # lists of the folder and their statu
 - `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text is plain text, so rich formatting of the old comment is lost.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
+- `task update --list` moves only top-level tasks, and their subtasks follow. With `--status`, the status is matched against the target list and set after the move.
+- `task update --parent` accepts a parent in another list of the project: the subtask moves to the parent's list. `--parent none` is refused, because the API cannot detach a subtask (see below); do it in the ClickUp UI.
 
 ## Real API behavior
 
@@ -45,6 +47,9 @@ Facts checked against the live API:
 - `PUT /comment/{id}` accepts a body without `assignee`, although the docs mark it as required: updating a comment with no assignee works. The comment keeps its id, author, creation date and position, and multiline text with accents and backticks is stored as sent.
 - `GET /task/{id}/comment` returns comments newest first, 25 per page. Passing `start` and `start_id` of the oldest comment returns the next older page, which does not repeat that comment (checked with 30 comments: pages of 25 and 5, no duplicates).
 - `PUT /task/{id}` with `due_date: null` removes the due date, and `priority: null` removes the priority (used by `--due none` and `--priority none`).
+- `PUT /task/{id}` with `parent: <task-id>` turns a top-level task into a subtask and moves a subtask to another parent. A parent in another list moves the subtask to that list. `parent` equal to the task id fails with 400 (`ITEM_069`).
+- `PUT /task/{id}` with `parent: null` or `parent: ""` answers 200 but changes nothing: a subtask cannot be detached through the API.
+- `PUT /task/{id}` with a `list` field answers 200 but ignores it. Moving a task needs the v3 `PUT /api/v3/workspaces/{workspace_id}/tasks/{task_id}/home_list/{list_id}`: its subtasks follow it, a subtask fails with 400 ("Only root tasks can be moved to a new home list") and an unknown list with 404. v3 errors are `{ "status", "message" }` instead of `{ "err", "ECODE" }`.
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` are also sent on successful responses (checked on `GET /user` and `GET /team`), although the docs mention them only for rate limit errors. `X-RateLimit-Remaining` goes down by one with each request.
 
 ## Notes for agents

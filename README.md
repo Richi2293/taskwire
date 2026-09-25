@@ -80,6 +80,8 @@ Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and
 
 `taskwire task update <id> --due none` removes the due date, and `--priority none` removes the priority.
 
+`taskwire task update <id> --list <list-id>` moves a task to another list of the project, together with its subtasks. `--parent <task-id>` makes it a subtask of another task of the project. A subtask cannot be moved to another list on its own, and some providers do not allow detaching a subtask from its parent (see the provider page).
+
 ## Exit codes
 
 | Code | Meaning |

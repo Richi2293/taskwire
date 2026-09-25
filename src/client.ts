@@ -9,6 +9,8 @@ export type QueryValue = string | number | boolean | Array<string | number>;
 export interface RequestOptions {
   query?: Record<string, QueryValue | undefined>;
   body?: unknown;
+  // Almost everything is in v2; a few operations, like moving a task to another list, exist only in v3.
+  api?: 'v2' | 'v3';
 }
 
 export interface Client {
@@ -25,7 +27,7 @@ export interface ClientDeps {
 }
 
 export const MAX_RATE_LIMIT_WAIT_MS = 60_000;
-const DEFAULT_BASE_URL = 'https://api.clickup.com/api/v2';
+const DEFAULT_BASE_URL = 'https://api.clickup.com/api';
 
 export function buildUrl(base: string, path: string, query?: RequestOptions['query']): string {
   const url = new URL(base + path);
@@ -58,7 +60,7 @@ export function createClient(deps: ClientDeps): Client {
 
   return {
     async request<T>(method: HttpMethod, path: string, options: RequestOptions = {}): Promise<T> {
-      const url = buildUrl(base, path, options.query);
+      const url = buildUrl(`${base}/${options.api ?? 'v2'}`, path, options.query);
       let response = await send(method, url, options.body);
 
       if (response.status === 429) {
@@ -100,7 +102,9 @@ function parseBody(text: string): unknown {
 
 function describeFailure(status: number, data: unknown): string {
   const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
-  const message = typeof record.err === 'string' ? record.err : 'request failed';
+  // v2 errors carry "err" and "ECODE", v3 errors carry "message".
+  const text = record.err ?? record.message;
+  const message = typeof text === 'string' ? text : 'request failed';
   const code = typeof record.ECODE === 'string' ? ` (${record.ECODE})` : '';
   return `ClickUp API ${status}: ${message}${code}`;
 }
