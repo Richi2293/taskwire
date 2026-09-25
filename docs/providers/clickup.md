@@ -30,7 +30,7 @@ taskwire lists                             # lists of the folder and their statu
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
 - Descriptions are sent as markdown.
 - Task ids copied from the UI with a leading `#` are accepted.
-- `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `taskwire tasks` reads up to 5000 tasks and warns the same way.
+- `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `--comments <n>` reads only the pages needed for the n most recent comments (one request per 25), and `--comments 0` makes no comment request. `taskwire tasks` reads up to 5000 tasks and warns the same way.
 - `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text is plain text, so rich formatting of the old comment is lost.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
