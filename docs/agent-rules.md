@@ -12,7 +12,7 @@ This project's tasks live in an external task system, managed through the `taskw
 - Before starting a piece of work, look for a related task: `taskwire tasks --search <words>` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>` (add `--comments 0` when the comments are not needed).
 - Before creating or editing tasks, comments or checklists, run `taskwire conventions` and follow it: `language` is the language to write in, `instructions` are the project's writing rules. Existing tasks keep their text unless the user asks to rewrite them.
 - You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, and add, rename or check checklist items.
-- Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it.
+- Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it. The one exception is a small update to the last comment of the task, when you wrote it in this session (see below).
 - Delete a task or remove a checklist item only when the user explicitly asks. Otherwise move the task to a closed status, or check the item. `taskwire task delete` and `taskwire checklist remove-item` require `--yes`.
 - Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
 - Never put secrets, tokens, passwords or end-customer personal data in tasks or comments.
@@ -24,8 +24,10 @@ This project's tasks live in an external task system, managed through the `taskw
 
 Descriptions and comments are markdown. Each one has a short part for people, then the details for agents.
 
-- The part for people comes first, as a quote of at most 3 lines, one fact per line, each opening with a bold label. In a comment: **Done**, **Status**, **Next**. In a description: **Goal**, **Why**. Translate the labels into the project language.
+- The part for people comes first, as a quote of at most 3 lines, one fact per line, each opening with a bold label. In a comment: **Done**, **Status**, **Next**. In a description: **Goal**, **Why**. Use only the labels that apply (no **Next** when the work is finished).
 - Then a `---` divider and a `### Details` section with everything an agent needs later: branch, commits, files, decisions and their reasons, checks run, open points, useful commands.
+- Translate the labels and the `Details` heading into the project language.
+- A small update with nothing for agents (for example a status change) needs only the quote, even a single line. If the last comment of the task is yours from this session and stays short, update it instead of adding a new one.
 - A description states what the task must achieve and why, then the context and the acceptance criteria as a checklist (`- [ ]`). Keep it stable: progress goes in comments, not in the description.
 - Write for a person who skims:
   - start with the outcome, not with how you got there;
