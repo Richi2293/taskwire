@@ -2,6 +2,12 @@
 
 All notable changes to taskwire are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `task update --due none` and `--priority none` remove the due date and the priority.
+
 ## [0.1.0] - 2026-09-25
 
 First release. ClickUp is the only provider.
@@ -20,4 +26,5 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/Richi2293/taskwire/releases/tag/v0.1.0
