@@ -104,6 +104,60 @@ test('checklist check with an item not in the task exits 2', async () => {
   assert.equal(run.code, 2);
 });
 
+const withChecklist = {
+  'GET /task/t1': { body: rawTask({ checklists: [{ id: 'c1', name: 'S', items: [{ id: 'i1', name: 'One', resolved: false }] }] }) },
+};
+const checklistReply = (items: { id: string; name: string; resolved: boolean }[]) => ({ body: { checklist: { id: 'c1', name: 'S', items } } });
+
+test('checklist add-item adds items to a checklist of the task', async () => {
+  const run = await runCli(['checklist', 'add-item', 'c1', '--task', 't1', '--item', 'Two', '--item', 'Three'], { routes: {
+    ...withChecklist,
+    'POST /checklist/c1/checklist_item': checklistReply([{ id: 'i1', name: 'One', resolved: false }, { id: 'i2', name: 'Two', resolved: false }]),
+  } });
+  assert.equal(run.code, 0);
+  const posts = run.calls.filter((c) => c.method === 'POST');
+  assert.deepEqual(posts.map((c) => c.body), [{ name: 'Two' }, { name: 'Three' }]);
+  assert.equal((run.json() as { id: string }).id, 'c1');
+});
+
+test('checklist add-item without --item or with a checklist of another task exits 2 without writing', async () => {
+  assert.equal((await runCli(['checklist', 'add-item', 'c1', '--task', 't1'])).code, 2);
+  const run = await runCli(['checklist', 'add-item', 'c9', '--task', 't1', '--item', 'X'], { routes: withChecklist });
+  assert.equal(run.code, 2);
+  assert.match(JSON.parse(run.stderr).error, /Checklist c9 is not in task t1/);
+  assert.equal(run.calls.filter((c) => c.method !== 'GET').length, 0);
+});
+
+test('checklist rename-item changes only the item name', async () => {
+  const run = await runCli(['checklist', 'rename-item', 'i1', '--task', 't1', '--name', 'First'], { routes: {
+    ...withChecklist,
+    'PUT /checklist/c1/checklist_item/i1': checklistReply([{ id: 'i1', name: 'First', resolved: false }]),
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls[1].body, { name: 'First' });
+});
+
+test('checklist remove-item requires --yes, then deletes the item of the task', async () => {
+  const refused = await runCli(['checklist', 'remove-item', 'i1', '--task', 't1']);
+  assert.equal(refused.code, 2);
+  assert.equal(refused.calls.length, 0);
+
+  const run = await runCli(['checklist', 'remove-item', 'i1', '--task', 't1', '--yes'], { routes: {
+    ...withChecklist,
+    'DELETE /checklist/c1/checklist_item/i1': { body: {} },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), { removed: 'i1', name: 'One', checklist: 'c1' });
+});
+
+test('checklist rename-item and remove-item with an item not in the task exit 2 without writing', async () => {
+  for (const args of [['rename-item', 'zz', '--task', 't1', '--name', 'X'], ['remove-item', 'zz', '--task', 't1', '--yes']]) {
+    const run = await runCli(['checklist', ...args], { routes: withChecklist });
+    assert.equal(run.code, 2);
+    assert.equal(run.calls.filter((c) => c.method !== 'GET').length, 0);
+  }
+});
+
 test('dependency add checks both tasks then posts depends_on', async () => {
   const run = await runCli(['dependency', 'add', 't1', '--blocked-by', 'b1'], { routes: {
     ...task,

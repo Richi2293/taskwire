@@ -16,7 +16,7 @@ import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
 import { addComment, updateComment } from './commands/comments.ts';
-import { addChecklist, checkChecklistItem } from './commands/checklists.ts';
+import { addChecklist, addChecklistItems, checkChecklistItem, removeChecklistItem, renameChecklistItem } from './commands/checklists.ts';
 import { changeDependency } from './commands/dependencies.ts';
 
 export interface CommandSpec {
@@ -69,6 +69,9 @@ Comments, checklists, dependencies:
   taskwire comment update <comment-id> --task <task-id> (--text <text> | --file <path>)
   taskwire checklist add <task-id> --name <name> [--item <text>]...
   taskwire checklist check <item-id> --task <task-id> [--uncheck]
+  taskwire checklist add-item <checklist-id> --task <task-id> --item <text>...
+  taskwire checklist rename-item <item-id> --task <task-id> --name <text>
+  taskwire checklist remove-item <item-id> --task <task-id> --yes
   taskwire dependency add <task-id> --blocked-by <task-id>
   taskwire dependency remove <task-id> --blocked-by <task-id>
 
@@ -178,6 +181,24 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 1,
     needsConfig: true,
     run: (ctx, input) => checkChecklistItem(ctx, input),
+  },
+  'checklist add-item': {
+    options: { task: { type: 'string' }, item: { type: 'string', multiple: true } },
+    positionals: 1,
+    needsConfig: true,
+    run: (ctx, input) => addChecklistItems(ctx, input),
+  },
+  'checklist rename-item': {
+    options: { task: { type: 'string' }, name: { type: 'string' } },
+    positionals: 1,
+    needsConfig: true,
+    run: (ctx, input) => renameChecklistItem(ctx, input),
+  },
+  'checklist remove-item': {
+    options: { task: { type: 'string' }, yes: { type: 'boolean' } },
+    positionals: 1,
+    needsConfig: true,
+    run: (ctx, input) => removeChecklistItem(ctx, input),
   },
   'dependency add': {
     options: { 'blocked-by': { type: 'string' } },
