@@ -8,6 +8,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 - `task update --due none` and `--priority none` remove the due date and the priority.
 - `task update --list <id>` moves a task and its subtasks to another list of the project, `--parent <id>` makes a task a subtask of another one.
+- `tasks --search <words>` finds tasks by words in the name or description, ignoring case and accents.
 
 ## [0.1.0] - 2026-09-25
 

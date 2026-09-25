@@ -53,6 +53,7 @@ Lists:
 
 Tasks:
   taskwire tasks [--list <id>] [--status <s>] [--tag <t>]... [--assignee <id|me>] [--include-closed]
+                 [--search <words>]   every word in the name or description, ignoring case and accents
   taskwire task get <id>
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
@@ -105,6 +106,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       tag: { type: 'string', multiple: true },
       assignee: { type: 'string' },
       'include-closed': { type: 'boolean' },
+      search: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,

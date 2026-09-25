@@ -41,6 +41,8 @@ export interface RawTask {
   folder: { id: string; name: string };
   markdown_description?: string | null;
   description?: string | null;
+  // Plain text of the description, sent in task lists.
+  text_content?: string | null;
   subtasks?: RawSubtask[];
   checklists?: RawChecklist[];
   dependencies?: RawDependency[];
