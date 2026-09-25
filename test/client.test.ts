@@ -47,6 +47,20 @@ test('turns a ClickUp error into an api error with ECODE', async () => {
     e instanceof TaskwireError && e.exitCode === 1 && e.message === 'ClickUp API 404: Task not found (ITEM_013)');
 });
 
+test('sends a request to the v3 api when asked', async () => {
+  const { client, calls } = testClient({ 'PUT /v3/workspaces/1/tasks/t1/home_list/2': { body: { data: {} } } });
+  await client.request('PUT', '/workspaces/1/tasks/t1/home_list/2', { api: 'v3' });
+  assert.equal(calls[0].url.href, 'https://api.clickup.com/api/v3/workspaces/1/tasks/t1/home_list/2');
+});
+
+test('turns a v3 error message into an api error', async () => {
+  const { client } = testClient({
+    'PUT /v3/x': { status: 400, body: { status: 400, message: 'Only root tasks can be moved to a new home list' } },
+  });
+  await assert.rejects(client.request('PUT', '/x', { api: 'v3' }), (e: unknown) =>
+    e instanceof TaskwireError && e.message === 'ClickUp API 400: Only root tasks can be moved to a new home list');
+});
+
 test('401 gives a hint to regenerate the token', async () => {
   const { client } = testClient({ 'GET /user': { status: 401, body: { err: 'Token invalid', ECODE: 'OAUTH_025' } } });
   await assert.rejects(client.request('GET', '/user'), (e: unknown) =>
