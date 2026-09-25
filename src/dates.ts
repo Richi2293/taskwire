@@ -38,3 +38,10 @@ export function localMidnightMs(date: string): number {
   }
   return midnight.getTime();
 }
+
+// Midnight at the start of the day after the given one, in the system time zone.
+export function nextLocalMidnightMs(date: string): number {
+  const next = new Date(localMidnightMs(date));
+  next.setDate(next.getDate() + 1);
+  return next.getTime();
+}

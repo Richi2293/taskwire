@@ -54,6 +54,9 @@ Lists:
 Tasks:
   taskwire tasks [--list <id>] [--status <s>] [--tag <t>]... [--assignee <id|me>] [--include-closed]
                  [--search <words>]   every word in the name or description, ignoring case and accents
+                 [--due-before YYYY-MM-DD] [--due-after YYYY-MM-DD]   the given day excluded
+                 [--top-level]        leave out subtasks
+                 [--limit <n>]        the n most recently created tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
@@ -110,6 +113,10 @@ export const COMMANDS: Record<string, CommandSpec> = {
       assignee: { type: 'string' },
       'include-closed': { type: 'boolean' },
       search: { type: 'string' },
+      'due-before': { type: 'string' },
+      'due-after': { type: 'string' },
+      'top-level': { type: 'boolean' },
+      limit: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,

@@ -7,6 +7,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 ### Added
 
 - `task get --comments <n>` reads only the n most recent comments, and `--comments 0` skips them.
+- `tasks --due-before`, `--due-after`, `--top-level` and `--limit` filter and shorten the task list.
 - `task update --due none` and `--priority none` remove the due date and the priority.
 - `task update --list <id>` moves a task and its subtasks to another list of the project, `--parent <id>` makes a task a subtask of another one.
 - `checklist add-item`, `checklist rename-item` and `checklist remove-item --yes` edit the items of an existing checklist.

@@ -33,6 +33,7 @@ taskwire lists                             # lists of the folder and their statu
 - `taskwire task get` reads up to 500 comments (20 pages of 25) and warns when older ones are left out. `--comments <n>` reads only the pages needed for the n most recent comments (one request per 25), and `--comments 0` makes no comment request. `taskwire tasks` reads up to 5000 tasks and warns the same way.
 - `taskwire comment update` looks for the comment among the ones `task get` reads, so replies in a thread and comments older than the 500 most recent cannot be edited. The update sends the current `resolved` and `assignee` (required by `PUT /comment/{id}`) unchanged, and omits `assignee` when the comment has none. The new text is plain text, so rich formatting of the old comment is lost.
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
+- `taskwire tasks --due-before` and `--due-after` map to `due_date_lt` (midnight of the day) and `due_date_gt` (midnight of the next day, minus 1 ms), `--top-level` to `subtasks=false`. `--limit` stops reading pages once enough tasks are found.
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
 - Checklist items are found through the task given with `--task`, so an item or checklist of another task is refused before any write.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
@@ -55,6 +56,7 @@ Facts checked against the live API:
 - The API has no text search for tasks, in v2 or v3 (the only search endpoint is for Docs). `GET /list/{id}/task` and `GET /team/{id}/task` silently ignore `search`, `name`, `query` and `q` and return every task. Both return `text_content` and `description` for each task.
 - `DELETE /checklist/{id}/checklist_item/{item_id}` answers `{}` with 200, also for an item that no longer exists. `PUT` and `POST` on checklist items return the whole checklist.
 - The order of checklist items in responses is not the creation order and can change between calls (renaming an item moved it); `orderindex` is `null` for items created through the API.
+- Task lists come newest created first when `order_by` is not given. `due_date_lt` and `due_date_gt` leave out tasks without a due date, and `subtasks=false` leaves out subtasks.
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` are also sent on successful responses (checked on `GET /user` and `GET /team`), although the docs mention them only for rate limit errors. `X-RateLimit-Remaining` goes down by one with each request.
 
 ## Notes for agents
