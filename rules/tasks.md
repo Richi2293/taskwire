@@ -21,7 +21,7 @@ Descriptions and comments are markdown. Each one has a short part for people, th
 
 - The part for people comes first, as a quote of at most 3 lines, one fact per line, each opening with a bold label. In a comment: **Done**, **Status**, **Next**. In a description: **Goal**, **Why**. Use only the labels that apply (no **Next** when the work is finished).
 - In a comment, the quote is followed by a `---` divider and a `### Details` section with everything an agent needs later: branch, commits, files, decisions and their reasons, checks run, open points, useful commands.
-- In a description, the quote is followed by a `---` divider, a `### Context` section and a `### Acceptance criteria` checklist (`- [ ]`), then useful links if any. A description has no `Details` section.
+- In a description, the quote is followed by a `---` divider, a `### Context` section, a `### Steps` numbered list when the work needs concrete steps (file paths, commands, values), and a `### Acceptance criteria` checklist (`- [ ]`), then useful links if any. A description has no `Details` section.
 - Translate the labels and the headings into the project language.
 - A small update with nothing for agents (for example a status change) needs only the quote, even a single line. If the last comment of the task is yours from this session and stays short, update it instead of adding a new one.
 - Update the description when the goal or the context changes, so it always tells what must be done now. Progress (what was done, checks, results) goes in comments, never in the description.
