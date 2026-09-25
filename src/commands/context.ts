@@ -1,7 +1,8 @@
 import type { Client, Warn } from '../client.ts';
-import type { RawList, RawUser } from '../clickup-types.ts';
+import type { RawList, RawTask, RawUser } from '../clickup-types.ts';
 import type { ProjectConfig } from '../config.ts';
 import { configError, usageError } from '../errors.ts';
+import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 
 export interface Context {
   client: Client;
@@ -17,6 +18,17 @@ const userIdCache = new WeakMap<Context, number>();
 export function projectConfig(ctx: Context): ProjectConfig {
   if (ctx.config === null) throw configError('No .taskwire.json found for this project');
   return ctx.config;
+}
+
+// A task or list of this project: in its folder and, when the config sets listIds, in one of those lists.
+export function loadProjectTask(ctx: Context, taskId: string): Promise<RawTask> {
+  const { folderId, listIds } = projectConfig(ctx);
+  return loadTaskInFolder(ctx.client, taskId, folderId, listIds);
+}
+
+export function loadProjectList(ctx: Context, listId: string): Promise<RawList> {
+  const { folderId, listIds } = projectConfig(ctx);
+  return loadListInFolder(ctx.client, listId, folderId, listIds);
 }
 
 export async function currentUserId(ctx: Context): Promise<number> {

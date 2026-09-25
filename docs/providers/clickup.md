@@ -10,18 +10,22 @@ In ClickUp: avatar > Settings > Apps > API Token. Store it as described in the R
 
 One project is one ClickUp folder. taskwire reads and writes only the lists and tasks inside that folder, and checks it before every write.
 
+A project can also be some lists of a folder, set with `listIds`: for example one folder per company and one list per project. taskwire then reads and writes only those lists, and a task or list of another list in the folder is refused with exit code 3.
+
 ```
 cd path/to/project
-taskwire folders                           # every folder with its space and workspace
-taskwire init --folder <id> [--list <id>]  # --list sets defaultListId
-taskwire lists                             # lists of the folder and their statuses
+taskwire folders                                   # every folder with its space and workspace
+taskwire init --folder <id> [--list <id>]          # --list sets defaultListId
+taskwire init --folder <id> --scope-list <id>...   # limits the project to those lists (listIds)
+taskwire lists                                     # lists of the project and their statuses
 ```
 
 | Field | Meaning |
 |---|---|
 | `workspaceId` | the ClickUp workspace that contains the folder, found and saved by `init` (optional: when missing, taskwire looks it up on every `taskwire tasks` without `--list`) |
 | `folderId` | the ClickUp folder of the project (required) |
-| `defaultListId` | list used by `task create` when `--list` is missing (optional) |
+| `listIds` | lists of the folder that belong to the project, for a folder shared by several projects (optional: when missing, the project is the whole folder) |
+| `defaultListId` | list used by `task create` when `--list` is missing (optional; with `listIds`, one of them) |
 
 ## Behavior notes
 
@@ -37,6 +41,12 @@ taskwire lists                             # lists of the folder and their statu
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
 - Checklist items are found through the task given with `--task`, so an item or checklist of another task is refused before any write.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
+- With `listIds`:
+  - a task belongs to the project of its home list (`list` in the API), also when it shows in other lists as well; subtasks always share the home list of their parent;
+  - `taskwire tasks` without `--list` filters with `list_ids[]` instead of `project_ids[]`, and leaves out tasks whose home list is not in `listIds`;
+  - `taskwire tasks` with no result checks the lists in `listIds`, so a wrong id is an error instead of an empty list;
+  - `taskwire lists` reads only those lists, and `taskwire list create` is refused: create the list in ClickUp, then add its id to `listIds`;
+  - `init` checks every list, sets the only list as `defaultListId` when there is one, and `init --force` keeps `listIds` when the folder does not change and no `--scope-list` is given.
 - `task update --list` moves only top-level tasks, and their subtasks follow. With `--status`, the status is matched against the target list and set after the move.
 - `task update --parent` accepts a parent in another list of the project: the subtask moves to the parent's list. `--parent none` is refused, because the API cannot detach a subtask (see below); do it in the ClickUp UI.
 
@@ -44,7 +54,9 @@ taskwire lists                             # lists of the folder and their statu
 
 Facts checked against the live API:
 
-- Subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; taskwire fills them from the parent.
+- Subtasks nested in `GET /task/{id}` have no `list`, `folder` or `priority`; taskwire fills them from the parent. A subtask read on its own has the `list` of its parent.
+- `GET /team/{id}/task` filters by list with `list_ids[]`, subtasks included; several ids return the union. An unknown list id answers 200 with no tasks instead of an error.
+- Tasks in multiple lists (TIML) show their extra lists in `locations`; `list` stays the home list. On the free plan `POST /list/{id}/task/{task_id}` (add a task to another list) fails with 403 `TIML_001` ("Your plan is limited to ... usages of feature").
 - Date-only due dates come back at 04:00 local time. The day is the one that was sent.
 - Filtering by a closed status returns closed tasks even without `--include-closed`.
 - `PUT /comment/{id}` accepts a body without `assignee`, although the docs mark it as required: updating a comment with no assignee works. The comment keeps its id, author, creation date and position, and multiline text with accents and backticks is stored as sent.
