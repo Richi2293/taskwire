@@ -3,8 +3,7 @@ import type { CommandInput } from '../args.ts';
 import { onePositional, optString, reqString } from '../args.ts';
 import type { RawComment } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
-import { loadTaskInFolder } from '../guard.ts';
-import { projectConfig } from './context.ts';
+import { loadProjectTask } from './context.ts';
 import type { Context } from './context.ts';
 
 export const MAX_COMMENT_PAGES = 20;
@@ -42,10 +41,9 @@ export async function loadComments(ctx: Context, taskId: string, limit = Infinit
 }
 
 export async function addComment(ctx: Context, input: CommandInput): Promise<{ id: string; taskId: string }> {
-  const { folderId } = projectConfig(ctx);
   const taskId = onePositional(input, 'task id');
   const text = readCommentText(input);
-  const task = await loadTaskInFolder(ctx.client, taskId, folderId);
+  const task = await loadProjectTask(ctx, taskId);
   const created = await ctx.client.request<{ id: string | number }>('POST', `/task/${encodeURIComponent(task.id)}/comment`, {
     // comment_markdown is rendered by ClickUp; comment_text would show the markdown as plain text.
     body: { comment_markdown: text, notify_all: false },
@@ -54,11 +52,10 @@ export async function addComment(ctx: Context, input: CommandInput): Promise<{ i
 }
 
 export async function updateComment(ctx: Context, input: CommandInput): Promise<{ id: string; taskId: string }> {
-  const { folderId } = projectConfig(ctx);
   const commentId = onePositional(input, 'comment id');
   const taskId = reqString(input.values, 'task');
   const text = readCommentText(input);
-  const task = await loadTaskInFolder(ctx.client, taskId, folderId);
+  const task = await loadProjectTask(ctx, taskId);
   const comment = (await loadComments(ctx, task.id)).find((candidate) => candidate.id === commentId);
   if (comment === undefined) {
     throw usageError(`Comment ${commentId} is not in task ${task.id}`, `Run "taskwire task get ${task.id}" to see the comment ids`);

@@ -94,3 +94,20 @@ test('rejects conventions that are not an object of non empty strings', () => {
       e instanceof TaskwireError && e.exitCode === 3, conventions);
   }
 });
+
+test('parses optional listIds and keeps a defaultListId among them', () => {
+  const config = parseConfig('{"folderId":"1","listIds":["2","3"],"defaultListId":"3"}', '/x');
+  assert.deepEqual(config, { provider: 'clickup', folderId: '1', listIds: ['2', '3'], defaultListId: '3' });
+});
+
+test('rejects listIds that are not a non empty array of distinct numeric strings', () => {
+  for (const listIds of ['"2"', '[]', '[2]', '["x"]', '["2","2"]']) {
+    assert.throws(() => parseConfig(`{"folderId":"1","listIds":${listIds}}`, '/x'), (e: unknown) =>
+      e instanceof TaskwireError && e.exitCode === 3 && e.message.includes('listIds'), listIds);
+  }
+});
+
+test('rejects a defaultListId outside listIds', () => {
+  assert.throws(() => parseConfig('{"folderId":"1","listIds":["2"],"defaultListId":"3"}', '/x'), (e: unknown) =>
+    e instanceof TaskwireError && e.exitCode === 3 && e.message.includes('defaultListId'));
+});

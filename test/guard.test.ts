@@ -43,3 +43,29 @@ test('loadListInFolder rejects a non numeric list id before calling ClickUp', as
     e instanceof TaskwireError && e.exitCode === 2);
   assert.equal(calls.length, 0);
 });
+
+test('loadTaskInFolder with listIds refuses a task from another list of the folder', async () => {
+  const { client } = testClient({ 'GET /task/t1': { body: rawTask({ list: { id: '803', name: 'Other project' } }) } });
+  await assert.rejects(loadTaskInFolder(client, 't1', FOLDER_ID, ['800', '802']), (e: unknown) =>
+    e instanceof TaskwireError && e.exitCode === 3 && e.message.includes("project's lists") &&
+    (e.hint ?? '').includes('800, 802') && (e.hint ?? '').includes('Other project'));
+});
+
+test('loadTaskInFolder with listIds still refuses a task from another folder', async () => {
+  const { client } = testClient({
+    'GET /task/t1': { body: rawTask({ folder: { id: OTHER_FOLDER_ID, name: 'Other' } }) },
+  });
+  await assert.rejects(loadTaskInFolder(client, 't1', FOLDER_ID, ['800']), (e: unknown) =>
+    e instanceof TaskwireError && e.exitCode === 3 && e.message.includes('folder'));
+});
+
+test('loadTaskInFolder with listIds returns a task of one of the lists', async () => {
+  const { client } = testClient({ 'GET /task/t1': { body: rawTask() } });
+  assert.equal((await loadTaskInFolder(client, 't1', FOLDER_ID, ['802', '800'])).id, 't1');
+});
+
+test('loadListInFolder with listIds refuses another list of the folder', async () => {
+  const { client } = testClient({ 'GET /list/803': { body: rawList({ id: '803', name: 'Other project' }) } });
+  await assert.rejects(loadListInFolder(client, '803', FOLDER_ID, ['800']), (e: unknown) =>
+    e instanceof TaskwireError && e.exitCode === 3 && e.message.includes("project's lists"));
+});

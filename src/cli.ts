@@ -48,13 +48,14 @@ export const HELP = `taskwire: manage the tasks of this project (provider: Click
 Setup:
   taskwire whoami
   taskwire folders
-  taskwire init --folder <id> [--list <id>] [--force]
+  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--force]
+                  --scope-list limits the project to some lists of the folder, --list is the default list
   taskwire rules                  how agents must manage tasks in this project (rules and conventions)
   taskwire conventions            the project conventions only (language, instructions)
 
 Lists:
   taskwire lists
-  taskwire list create --name <name>
+  taskwire list create --name <name>   not available when the project is limited to some lists
 
 Tasks:
   taskwire tasks [--list <id>] [--status <s>] [--tag <t>]... [--assignee <id|me>] [--include-closed]
@@ -97,7 +98,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
   whoami: { options: {}, positionals: 0, needsConfig: false, run: (ctx) => whoami(ctx) },
   folders: { options: {}, positionals: 0, needsConfig: false, run: (ctx) => folders(ctx) },
   init: {
-    options: { folder: { type: 'string' }, list: { type: 'string' }, force: { type: 'boolean' } },
+    options: { folder: { type: 'string' }, list: { type: 'string' }, 'scope-list': { type: 'string', multiple: true }, force: { type: 'boolean' } },
     positionals: 0,
     needsConfig: false,
     run: (ctx, input) => init(ctx, input),

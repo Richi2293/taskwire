@@ -7,6 +7,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 ### Added
 
 - `taskwire rules` prints the task management rules for agents with the project conventions, so projects always get the rules of the installed version. `conventions.rulesFile` replaces them with a project file.
+- `listIds` in `.taskwire.json` limits a project to some lists of its folder, so several projects can share one folder: taskwire refuses the tasks and lists of the others. `init --scope-list <id>` writes it.
 
 ### Changed
 

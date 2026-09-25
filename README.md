@@ -48,6 +48,8 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init`:
 
 Commit it: it only holds ids, which are useless without the token. `provider` defaults to `clickup` when missing. The other fields depend on the provider (see its page).
 
+Several projects can share one container of the task system, each limited to some of its lists: see `listIds` in the provider page. taskwire then refuses to read or write the tasks of the other projects.
+
 ### Task conventions
 
 Add an optional `conventions` object to adapt the agent rules to this project:

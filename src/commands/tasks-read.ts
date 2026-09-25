@@ -3,20 +3,19 @@ import { flag, onePositional, optString, optStrings } from '../args.ts';
 import type { QueryValue } from '../client.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
-import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 import { localMidnightMs, nextLocalMidnightMs } from '../dates.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
 import { loadComments } from './comments.ts';
-import { projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
-import { loadFolderLists } from './lists.ts';
+import { loadProjectList, loadProjectTask, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { loadProjectLists } from './lists.ts';
 import type { Context } from './context.ts';
 
 export const MAX_PAGES = 50;
 const PAGE_SIZE = 100;
 
 export async function listTasks(ctx: Context, input: CommandInput): Promise<TaskSummary[]> {
-  const { folderId } = projectConfig(ctx);
+  const { folderId, listIds } = projectConfig(ctx);
   const listId = optString(input.values, 'list');
   const status = optString(input.values, 'status');
   const assignee = optString(input.values, 'assignee');
@@ -38,11 +37,15 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   let path: string;
   let list: RawList | undefined;
   if (listId !== undefined) {
-    list = await loadListInFolder(ctx.client, listId, folderId);
+    list = await loadProjectList(ctx, listId);
     path = `/list/${listId}/task`;
   } else {
     path = `/team/${await projectWorkspaceId(ctx)}/task`;
-    filters.project_ids = [folderId];
+    if (listIds === undefined) {
+      filters.project_ids = [folderId];
+    } else {
+      filters.list_ids = listIds;
+    }
   }
 
   let read = 0;
@@ -53,15 +56,19 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
       query: { ...filters, page },
     });
     read += response.tasks.length;
-    found.push(...(searchWords === undefined ? response.tasks : response.tasks.filter((task) => matchesAllWords(task, searchWords))));
+    // list_ids may also return tasks that only show in a project list, while their home list belongs to another project.
+    const owned = listIds === undefined ? response.tasks : response.tasks.filter((task) => listIds.includes(task.list.id));
+    found.push(...(searchWords === undefined ? owned : owned.filter((task) => matchesAllWords(task, searchWords))));
     complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
   }
   if (!complete && found.length < limit) {
     ctx.warn(`Stopped after ${read} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
   }
-  // ClickUp answers an unknown status with no tasks, so a typo would look like an empty result.
-  if (status !== undefined && read === 0) {
-    assertStatusExists(list === undefined ? await loadFolderLists(ctx) : [list], status);
+  // ClickUp answers an unknown status or list with no tasks, so a typo would look like an empty result.
+  const checkLists = read === 0 && (status !== undefined || (list === undefined && listIds !== undefined));
+  if (checkLists) {
+    const lists = list === undefined ? await loadProjectLists(ctx) : [list];
+    if (status !== undefined) assertStatusExists(lists, status);
   }
   return found.slice(0, limit).map(toTask);
 }
@@ -100,9 +107,8 @@ function assertStatusExists(lists: RawList[], wanted: string): void {
 }
 
 export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDetail> {
-  const { folderId } = projectConfig(ctx);
   const limit = readCommentLimit(input);
-  const task = await loadTaskInFolder(ctx.client, onePositional(input, 'task id'), folderId);
+  const task = await loadProjectTask(ctx, onePositional(input, 'task id'));
   const comments = limit === 0 ? [] : await loadComments(ctx, task.id, limit);
   return toTaskDetail(task, comments);
 }

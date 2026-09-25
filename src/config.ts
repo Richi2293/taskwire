@@ -20,6 +20,8 @@ export interface ProjectConfig {
   provider: Provider;
   workspaceId?: string;
   folderId: string;
+  // Lists of the folder that belong to this project, for folders shared by several projects. Missing means the whole folder.
+  listIds?: string[];
   defaultListId?: string;
   conventions?: TaskConventions;
 }
@@ -49,7 +51,7 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw configError(`${path} must contain a JSON object`);
   }
-  const { provider, workspaceId, folderId, defaultListId, conventions } = data as Record<string, unknown>;
+  const { provider, workspaceId, folderId, listIds, defaultListId, conventions } = data as Record<string, unknown>;
   const config: ProjectConfig = {
     provider: parseProvider(provider, path),
     folderId: checkId(folderId, 'folderId', path, 'Run "taskwire folders" to find the folder id'),
@@ -57,14 +59,34 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (workspaceId !== undefined) {
     config.workspaceId = checkId(workspaceId, 'workspaceId', path, 'Run "taskwire init --force" to rewrite it');
   }
+  if (listIds !== undefined) {
+    config.listIds = parseListIds(listIds, path);
+  }
   if (defaultListId !== undefined) {
     config.defaultListId = checkId(defaultListId, 'defaultListId', path, 'Run "taskwire lists" to find the list id');
+    if (config.listIds !== undefined && !config.listIds.includes(config.defaultListId)) {
+      throw configError(`${path}: "defaultListId" must be one of "listIds"`, 'Add it to "listIds" or pick one of them');
+    }
   }
   if (conventions !== undefined) {
     const parsed = parseConventions(conventions, path);
     if (Object.keys(parsed).length > 0) config.conventions = parsed;
   }
   return config;
+}
+
+function parseListIds(value: unknown, path: string): string[] {
+  const invalid = () => configError(
+    `${path}: "listIds" must be a non empty array of distinct numeric strings`,
+    'Example: "listIds": ["901234890"]. Run "taskwire lists" to find the list ids',
+  );
+  if (!Array.isArray(value) || value.length === 0) throw invalid();
+  const ids: string[] = [];
+  for (const id of value as unknown[]) {
+    if (typeof id !== 'string' || !NUMERIC_ID.test(id) || ids.includes(id)) throw invalid();
+    ids.push(id);
+  }
+  return ids;
 }
 
 function parseConventions(value: unknown, path: string): TaskConventions {
@@ -112,6 +134,19 @@ export function readConventions(dir: string): TaskConventions | undefined {
     if (typeof data !== 'object' || data === null || !('conventions' in data)) return undefined;
     const conventions = parseConventions(data.conventions, path);
     return Object.keys(conventions).length > 0 ? conventions : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The listIds of the config file in dir when it is for the same folder, read leniently like readConventions.
+export function readListIds(dir: string, folderId: string): string[] | undefined {
+  const path = join(dir, CONFIG_FILE);
+  if (!existsSync(path)) return undefined;
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (typeof data !== 'object' || data === null || !('listIds' in data) || !('folderId' in data)) return undefined;
+    return data.folderId === folderId ? parseListIds(data.listIds, path) : undefined;
   } catch {
     return undefined;
   }

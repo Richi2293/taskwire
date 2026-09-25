@@ -4,10 +4,10 @@ import { flag, onePositional, optString, optStrings, reqString } from '../args.t
 import type { RawList, RawTask } from '../clickup-types.ts';
 import { localMidnightMs } from '../dates.ts';
 import { EXIT, TaskwireError, usageError } from '../errors.ts';
-import { loadListInFolder, loadTaskInFolder, normalizeTaskId } from '../guard.ts';
+import { normalizeTaskId } from '../guard.ts';
 import { toTask } from '../shape.ts';
 import type { TaskSummary } from '../shape.ts';
-import { matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { loadProjectList, loadProjectTask, matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
 import type { Context } from './context.ts';
 
 export function readDescription(input: CommandInput): string | undefined {
@@ -56,12 +56,12 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
 
   let parent: RawTask | undefined;
   if (parentId !== undefined) {
-    parent = await loadTaskInFolder(ctx.client, parentId, config.folderId);
+    parent = await loadProjectTask(ctx, parentId);
     listId = listId ?? parent.list.id;
   }
   const targetListId = listId ?? config.defaultListId;
   if (targetListId === undefined) throw usageError('No list given');
-  const list = await loadListInFolder(ctx.client, targetListId, config.folderId);
+  const list = await loadProjectList(ctx, targetListId);
 
   const assignees: number[] = [];
   for (const value of optStrings(input.values, 'assignee')) assignees.push(await resolveAssignee(ctx, value));
@@ -100,7 +100,6 @@ function readMove(input: CommandInput, taskId: string): { listId?: string; paren
 }
 
 export async function updateTask(ctx: Context, input: CommandInput): Promise<TaskSummary> {
-  const { folderId } = projectConfig(ctx);
   const taskId = normalizeTaskId(onePositional(input, 'task id'));
   const name = optString(input.values, 'name');
   const description = readDescription(input);
@@ -121,16 +120,16 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
     addTags.length + removeTags.length + addAssignees.length + removeAssignees.length === 0;
   if (nothingToDo) throw usageError('Nothing to update', 'Run "taskwire --help" to see the update options');
 
-  const task = await loadTaskInFolder(ctx.client, taskId, folderId);
+  const task = await loadProjectTask(ctx, taskId);
   const path = `/task/${encodeURIComponent(task.id)}`;
-  const targetList = listId === undefined ? undefined : await loadListInFolder(ctx.client, listId, folderId);
+  const targetList = listId === undefined ? undefined : await loadProjectList(ctx, listId);
   if (targetList !== undefined && task.parent !== null) {
     throw usageError(
       `Task ${task.id} is a subtask and cannot be moved to another list on its own`,
       'Move its parent with --list, or give it another parent with --parent',
     );
   }
-  const parent = parentId === undefined ? undefined : await loadTaskInFolder(ctx.client, parentId, folderId);
+  const parent = parentId === undefined ? undefined : await loadProjectTask(ctx, parentId);
 
   const body: Record<string, unknown> = {};
   if (name !== undefined) body.name = name;
@@ -173,7 +172,7 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   }
   await applySteps(task.id, steps);
 
-  return toTask(await loadTaskInFolder(ctx.client, task.id, folderId));
+  return toTask(await loadProjectTask(ctx, task.id));
 }
 
 interface UpdateStep {
@@ -201,12 +200,11 @@ async function applySteps(taskId: string, steps: UpdateStep[]): Promise<void> {
 }
 
 export async function deleteTask(ctx: Context, input: CommandInput): Promise<{ deleted: string; name: string }> {
-  const { folderId } = projectConfig(ctx);
   const taskId = normalizeTaskId(onePositional(input, 'task id'));
   if (!flag(input.values, 'yes')) {
     throw usageError('Refusing to delete without --yes', 'Deleting is permanent: prefer moving the task to a closed status');
   }
-  const task = await loadTaskInFolder(ctx.client, taskId, folderId);
+  const task = await loadProjectTask(ctx, taskId);
   await ctx.client.request('DELETE', `/task/${encodeURIComponent(task.id)}`);
   return { deleted: task.id, name: task.name };
 }
