@@ -19,6 +19,7 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   const listId = optString(input.values, 'list');
   const status = optString(input.values, 'status');
   const assignee = optString(input.values, 'assignee');
+  const searchWords = readSearch(input);
   const filters: Record<string, QueryValue | undefined> = {
     statuses: status === undefined ? undefined : [status],
     tags: optStrings(input.values, 'tag'),
@@ -53,7 +54,27 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   if (status !== undefined && tasks.length === 0) {
     assertStatusExists(list === undefined ? await loadFolderLists(ctx) : [list], status);
   }
-  return tasks.map(toTask);
+  const found = searchWords === undefined ? tasks : tasks.filter((task) => matchesAllWords(task, searchWords));
+  return found.map(toTask);
+}
+
+// ClickUp has no text search in its API, so taskwire filters the tasks it reads.
+function readSearch(input: CommandInput): string[] | undefined {
+  const search = optString(input.values, 'search');
+  if (search === undefined) return undefined;
+  const words = foldText(search).split(/\s+/).filter((word) => word !== '');
+  if (words.length === 0) throw usageError('Empty search', 'Pass one or more words to --search');
+  return words;
+}
+
+function matchesAllWords(task: RawTask, words: string[]): boolean {
+  const text = foldText(`${task.name}\n${task.text_content ?? ''}`);
+  return words.every((word) => text.includes(word));
+}
+
+// Lowercase without accents, so "priorita" finds "Priorità".
+function foldText(text: string): string {
+  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
 
 function assertStatusExists(lists: RawList[], wanted: string): void {

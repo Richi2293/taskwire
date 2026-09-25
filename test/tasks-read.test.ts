@@ -32,6 +32,42 @@ test('tasks with --list and filters reads the list endpoint', async () => {
   assert.equal(params.get('include_closed'), 'true');
 });
 
+test('tasks --search keeps tasks whose name or description contain every word, ignoring case and accents', async () => {
+  const tasks = [
+    rawTask({ id: 'name', name: 'Fix LOGIN redirect' }),
+    rawTask({ id: 'split', name: 'Redirect bug', text_content: 'After the login' }),
+    rawTask({ id: 'accent', name: 'Login: priorità del redirect' }),
+    rawTask({ id: 'one-word', name: 'Login page' }),
+    rawTask({ id: 'none', name: 'Unrelated', text_content: null }),
+  ];
+  const run = await runCli(['tasks', '--search', ' login  REDIRECT '], { routes: {
+    'GET /team/1/task': { body: { tasks, last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual((run.json() as { id: string }[]).map((t) => t.id), ['name', 'split', 'accent']);
+  assert.equal(run.calls[0].url.searchParams.has('search'), false);
+
+  const accents = await runCli(['tasks', '--search', 'priorita'], { routes: {
+    'GET /team/1/task': { body: { tasks, last_page: true } },
+  } });
+  assert.deepEqual((accents.json() as { id: string }[]).map((t) => t.id), ['accent']);
+});
+
+test('tasks --search with no match returns an empty list without checking the status', async () => {
+  const run = await runCli(['tasks', '--status', 'to do', '--search', 'nothing'], { routes: {
+    'GET /team/1/task': { body: { tasks: [rawTask()], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), []);
+  assert.equal(run.calls.length, 1);
+});
+
+test('tasks --search with only spaces exits 2 without calling ClickUp', async () => {
+  const run = await runCli(['tasks', '--search', '  ']);
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
+});
+
 test('tasks with --list from another folder exits 3', async () => {
   const run = await runCli(['tasks', '--list', LIST_ID], { routes: {
     [`GET /list/${LIST_ID}`]: { body: rawList({ folder: { id: OTHER_FOLDER_ID } }) },
