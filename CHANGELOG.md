@@ -14,6 +14,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 - The block for the `AGENTS.md` of projects is now short and points to `taskwire rules`: replace the old, longer block once.
 
 - Comments are sent as markdown, so ClickUp shows headings, lists and quotes formatted instead of raw.
+- The agent rules ask agents to assign to the user (`me`) the tasks they create and the unassigned tasks they start working on.
 - The agent rules describe how to write descriptions and comments: a short part for people first, then the details for agents.
 
 ## [0.1.1] - 2026-09-25
