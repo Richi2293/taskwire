@@ -6,6 +6,8 @@ import { configError, usageError } from '../errors.ts';
 export interface Context {
   client: Client;
   config: ProjectConfig | null;
+  // Where the config was found, to resolve paths written in it; null when the command reads no config.
+  configPath: string | null;
   cwd: string;
   warn: Warn;
 }

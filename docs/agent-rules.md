@@ -1,59 +1,41 @@
 # Agent rules
 
-Paste the block below into the `AGENTS.md` of every project that uses taskwire, so every AI agent working on it follows the same rules. If the project also has a `CLAUDE.md`, make it reference `AGENTS.md`.
+AI agents get the task management rules from taskwire itself: `taskwire rules` prints the rules of the installed version together with the project conventions. Updating taskwire updates the rules in every project, with no change to the project files.
 
-The rules do not depend on the task system. Provider-specific notes, if any, are in the provider's page under [providers](providers/).
+The rules cover only task management (tasks, comments, checklists, dependencies, statuses). They do not change how agents write code, commits or pull requests. The default rules are in [rules/tasks.md](../rules/tasks.md).
 
-````markdown
+## Project setup
+
+Paste the block below into the `AGENTS.md` of every project that uses taskwire. If the project also has a `CLAUDE.md`, make it reference `AGENTS.md`. The block is short on purpose and should not need updates.
+
+```markdown
 ## Project tasks (taskwire)
 
-This project's tasks live in an external task system, managed through the `taskwire` CLI. taskwire only touches the part of that system set in `.taskwire.json` (see its `provider` field). Output is JSON; run `taskwire --help` for every command.
+This project's tasks are managed with the `taskwire` CLI. Before reading or writing tasks, run `taskwire rules` and follow it: those rules apply only to task management (tasks, comments, checklists, statuses), not to the code.
 
-- Before starting a piece of work, look for a related task: `taskwire tasks --search <words>` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>` (add `--comments 0` when the comments are not needed).
-- Before creating or editing tasks, comments or checklists, run `taskwire conventions` and follow it: `language` is the language to write in, `instructions` are the project's writing rules. Existing tasks keep their text unless the user asks to rewrite them.
-- You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, and add, rename or check checklist items.
-- Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it. The one exception is a small update to the last comment of the task, when you wrote it in this session (see below).
-- Delete a task or remove a checklist item only when the user explicitly asks. Otherwise move the task to a closed status, or check the item. `taskwire task delete` and `taskwire checklist remove-item` require `--yes`.
-- Write long descriptions or comments to a temporary file and pass it with `--description-file` or `--file`, instead of quoting them inline.
-- Never put secrets, tokens, passwords or end-customer personal data in tasks or comments.
-- At the end of the session, tell the user what changed in the task system, with the task links.
-- Exit codes: 1 task system or network error (retry later), 2 wrong command usage (fix the command), 3 configuration problem (ask the user).
-- A `warning` line on stderr means the command worked but was slowed down or returned partial results: follow its hint.
-
-### Writing tasks and comments
-
-Descriptions and comments are markdown. Each one has a short part for people, then the details for agents.
-
-- The part for people comes first, as a quote of at most 3 lines, one fact per line, each opening with a bold label. In a comment: **Done**, **Status**, **Next**. In a description: **Goal**, **Why**. Use only the labels that apply (no **Next** when the work is finished).
-- Then a `---` divider and a `### Details` section with everything an agent needs later: branch, commits, files, decisions and their reasons, checks run, open points, useful commands.
-- Translate the labels and the `Details` heading into the project language.
-- A small update with nothing for agents (for example a status change) needs only the quote, even a single line. If the last comment of the task is yours from this session and stays short, update it instead of adding a new one.
-- A description states what the task must achieve and why, then the context and the acceptance criteria as a checklist (`- [ ]`). Keep it stable: progress goes in comments, not in the description.
-- Write for a person who skims:
-  - start with the outcome, not with how you got there;
-  - put the key word at the start of each line and bullet;
-  - keep sentences under 20 words, and split any sentence over 25;
-  - one idea per line or bullet, with a line break where a new idea starts and a blank line between blocks;
-  - use plain words and the active voice; keep ids, paths and hashes out of the part for people unless they are the point;
-  - write dates as absolute dates, never "tomorrow" or "next week".
-- Lists: a lead-in line, one sentence per bullet, at most 7 bullets. Use a numbered list for steps in order.
-- No collapsible sections: HTML such as `<details>` is shown as raw text.
-
-Example of a comment:
-
+- Before starting a piece of work, look for a related task with `taskwire tasks --search <words>`.
+- Never put secrets, tokens or personal data in tasks or comments.
 ```
-> **Done:** text search added to the task list.
-> **Status:** PR #10 open, all tests pass.
-> **Next:** merge, then the task moves to complete.
 
----
+Projects set up before `taskwire rules` existed have a longer block copied from this page: replace it with the one above.
 
-### Details
+## Project overrides
 
-- **Branch:** `feat/task-search`, commit `d544fcb`
-- **Decision:** search on the client side, because the API has none
-- **Checks:** 144 tests, end-to-end run in a sandbox list
+The defaults apply unless the project chooses otherwise, in the `conventions` of `.taskwire.json`:
+
+- `language` and `instructions` are added on top of the default rules and win when they conflict. Use `instructions` for project habits, for example a status flow or a naming rule.
+- `rulesFile` replaces the default rules entirely with a markdown file, given as a path relative to `.taskwire.json`. The project then no longer gets rule updates from taskwire, so use it only when the defaults do not fit at all.
+
+```json
+{
+  "conventions": {
+    "language": "Italian",
+    "instructions": "Move a task to complete only after the merge.",
+    "rulesFile": "docs/task-rules.md"
+  }
+}
 ```
-````
+
+## Sources of the writing rules
 
 The writing rules follow plain language and web readability guidance: the [inverted pyramid](https://www.nngroup.com/articles/inverted-pyramid/) and [concise, scannable text](https://www.nngroup.com/articles/concise-scannable-and-objective-how-to-write-for-the-web/) (Nielsen Norman Group), the [GOV.UK style guide](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/a-to-z-style-guide/) (sentences over 25 words, bullets, numbered steps) and the [Federal Plain Language Guidelines](https://wid.org/wp-content/uploads/2022/03/FederalPLGuidelines.pdf) (short sentences, active voice).

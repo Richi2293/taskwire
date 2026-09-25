@@ -12,6 +12,8 @@ export type Provider = (typeof PROVIDERS)[number];
 export interface TaskConventions {
   language?: string;
   instructions?: string;
+  // Path, relative to .taskwire.json, of a markdown file that replaces the default task rules.
+  rulesFile?: string;
 }
 
 export interface ProjectConfig {
@@ -70,10 +72,11 @@ function parseConventions(value: unknown, path: string): TaskConventions {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw configError(`${path}: "conventions" must be an object`, hint);
   }
-  const { language, instructions } = value as Record<string, unknown>;
+  const { language, instructions, rulesFile } = value as Record<string, unknown>;
   const conventions: TaskConventions = {};
   if (language !== undefined) conventions.language = checkText(language, 'conventions.language', path, hint);
   if (instructions !== undefined) conventions.instructions = checkText(instructions, 'conventions.instructions', path, hint);
+  if (rulesFile !== undefined) conventions.rulesFile = checkText(rulesFile, 'conventions.rulesFile', path, hint);
   return conventions;
 }
 

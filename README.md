@@ -50,7 +50,7 @@ Commit it: it only holds ids, which are useless without the token. `provider` de
 
 ### Task conventions
 
-Add an optional `conventions` object to tell agents how tasks must be written in this project:
+Add an optional `conventions` object to adapt the agent rules to this project:
 
 ```json
 {
@@ -64,11 +64,16 @@ Add an optional `conventions` object to tell agents how tasks must be written in
 ```
 
 - `language`: the language of task names, descriptions, comments and checklist items. Defaults to English. Statuses and tags keep their existing names.
-- `instructions`: any other writing rule, as free text.
+- `instructions`: any other rule for agents, as free text. It is added on top of the default rules and wins when they conflict.
+- `rulesFile`: a markdown file, relative to `.taskwire.json`, that replaces the default rules entirely.
 
-Both fields are optional. `taskwire conventions` prints them, and the rules in [docs/agent-rules.md](docs/agent-rules.md) tell agents to read them before writing. They are guidance for agents: the CLI does not check the text of tasks. `taskwire init --force` keeps them.
+All fields are optional. They are guidance for agents: the CLI does not check the text of tasks. `taskwire init --force` keeps them.
 
-Paste the block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md` so every agent follows the same rules.
+### Agent rules
+
+`taskwire rules` prints the task management rules for AI agents, with the project conventions: the default rules of the installed version, or the project `rulesFile`. Add `--pretty` to read them as markdown. `taskwire conventions` prints only the conventions.
+
+Paste the short block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md`: it tells agents to run `taskwire rules`, so the rules stay up to date when taskwire is updated.
 
 ## Commands
 
