@@ -7,9 +7,9 @@ These rules cover only task management. The project conventions that come with t
 - Before starting a piece of work, look for a related task: `taskwire tasks --search <words>` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>` (add `--comments 0` when the comments are not needed).
 - Write tasks, comments and checklists in the project `language`, following its `instructions`. Existing tasks keep their text unless the user asks to rewrite them.
 - Keep each task self-contained: a person or an agent must be able to do the work reading only the task, without opening issues, pull requests, git history or other docs. When a task comes from an issue, copy into it what is needed to work, not only a summary.
-- Use only the statuses of the task's list (`taskwire lists`). Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing.
+- Use only the statuses of the task's list (`taskwire lists`). Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing. Before moving a task to a closed status, check every verified acceptance criterion. If the user asks to close it anyway, leave the unverified criteria unchecked and list them in the closing comment.
 - Reuse the tags already used in the project (see `taskwire tasks`). Create a new tag only when the user asks.
-- You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, and add, rename or check checklist items.
+- You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, add, rename or check checklist items, and check an acceptance criterion in the description (`- [x]`) once it is verified.
 - Assign to the user (`me`, the owner of the token) every task and subtask you create (`--assignee me`), and a task you start working on when it has no assignee (`taskwire task update <id> --add-assignee me`). Do not change the assignees of a task that already has some, unless the user asks.
 - Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it. The one exception is a small update to the last comment of the task, when you wrote it in this session (see below).
 - Delete a task or remove a checklist item only when the user explicitly asks. Otherwise move the task to a closed status, or check the item. `taskwire task delete` and `taskwire checklist remove-item` require `--yes`.
@@ -31,6 +31,7 @@ Descriptions and comments are markdown. Each one has a short part for people, th
 - Keep code identifiers, file names and commands as they are, in backticks, whatever the project language.
 - A small update with nothing for agents (for example a status change) needs only the quote, even a single line. If the last comment of the task is yours from this session and stays short, update it instead of adding a new one.
 - Update the description when the goal or the context changes, so it always tells what must be done now. Progress (what was done, checks, results) goes in comments, never in the description.
+- Checking an acceptance criterion is not progress: it keeps the description true. Read the description with `taskwire task get` right before, change only `[ ]` into `[x]` and send the rest back as it was. A criterion the user decides to skip stays unchecked, struck through with the reason: `- [ ] ~~Export to PDF~~ (skipped: not needed for now)`.
 - Write for a person who skims:
   - start with the outcome, not with how you got there;
   - put the key word at the start of each line and bullet;
