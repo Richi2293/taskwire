@@ -23,21 +23,22 @@ function readCommentText(input: CommandInput): string {
 }
 
 // ClickUp returns comments newest first, 25 at a time; older pages start from the oldest comment seen.
-export async function loadComments(ctx: Context, taskId: string): Promise<RawComment[]> {
+// With a limit, only the pages holding the most recent `limit` comments are read.
+export async function loadComments(ctx: Context, taskId: string, limit = Infinity): Promise<RawComment[]> {
   const path = `/task/${encodeURIComponent(taskId)}/comment`;
   const comments: RawComment[] = [];
   let complete = false;
-  for (let page = 0; page < MAX_COMMENT_PAGES && !complete; page++) {
+  for (let page = 0; page < MAX_COMMENT_PAGES && !complete && comments.length < limit; page++) {
     const oldest = comments.at(-1);
     const query = oldest === undefined ? {} : { start: oldest.date, start_id: oldest.id };
     const response = await ctx.client.request<{ comments: RawComment[] }>('GET', path, { query });
     comments.push(...response.comments);
     complete = response.comments.length < COMMENT_PAGE_SIZE;
   }
-  if (!complete) {
+  if (!complete && comments.length < limit) {
     ctx.warn(`Stopped after ${comments.length} comments, older ones are missing`, 'Open the task in ClickUp to read the full history');
   }
-  return comments;
+  return comments.slice(0, limit);
 }
 
 export async function addComment(ctx: Context, input: CommandInput): Promise<{ id: string; taskId: string }> {

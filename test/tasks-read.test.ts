@@ -261,3 +261,40 @@ test('task get stops at the comment page limit and warns on stderr', async () =>
     hint: 'Open the task in ClickUp to read the full history',
   });
 });
+
+function endlessComments(): () => { body: { comments: ReturnType<typeof rawComments> } } {
+  let next = 100_000;
+  return () => {
+    const comments = rawComments(next, 25);
+    next -= 25;
+    return { body: { comments } };
+  };
+}
+
+test('task get --comments 0 skips reading the comments', async () => {
+  const run = await runCli(['task', 'get', 't1', '--comments', '0'], { routes: { 'GET /task/t1': { body: rawTask() } } });
+  assert.equal(run.code, 0);
+  assert.deepEqual((run.json() as { comments: unknown[] }).comments, []);
+  assert.equal(run.calls.filter((c) => c.path === '/task/t1/comment').length, 0);
+});
+
+test('task get --comments <n> reads only the pages needed for the n most recent comments, without warning', async () => {
+  const run = await runCli(['task', 'get', 't1', '--comments', '30'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/t1/comment': endlessComments(),
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.filter((c) => c.path === '/task/t1/comment').length, 2);
+  const comments = (run.json() as { comments: { text: string }[] }).comments;
+  assert.equal(comments.length, 30);
+  assert.equal(comments[0].text, 'c100000');
+  assert.equal(run.stderr, '');
+});
+
+test('task get --comments with an invalid number exits 2 without calling ClickUp', async () => {
+  for (const value of ['-1', 'abc', '2.5', '']) {
+    const run = await runCli(['task', 'get', 't1', '--comments', value]);
+    assert.equal(run.code, 2, value);
+    assert.equal(run.calls.length, 0);
+  }
+});

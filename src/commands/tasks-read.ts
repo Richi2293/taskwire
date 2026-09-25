@@ -85,6 +85,16 @@ function assertStatusExists(lists: RawList[], wanted: string): void {
 
 export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDetail> {
   const { folderId } = projectConfig(ctx);
+  const limit = readCommentLimit(input);
   const task = await loadTaskInFolder(ctx.client, onePositional(input, 'task id'), folderId);
-  return toTaskDetail(task, await loadComments(ctx, task.id));
+  const comments = limit === 0 ? [] : await loadComments(ctx, task.id, limit);
+  return toTaskDetail(task, comments);
+}
+
+// Comments can cost up to 20 requests, so agents that only need the description can skip or limit them.
+function readCommentLimit(input: CommandInput): number | undefined {
+  const value = optString(input.values, 'comments');
+  if (value === undefined) return undefined;
+  if (!/^\d+$/.test(value)) throw usageError(`Invalid --comments "${value}"`, 'Use 0 to skip the comments, or the number of recent comments to read');
+  return Number(value);
 }
