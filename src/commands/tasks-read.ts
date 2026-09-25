@@ -4,6 +4,7 @@ import type { QueryValue } from '../client.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
+import { localMidnightMs, nextLocalMidnightMs } from '../dates.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
 import { loadComments } from './comments.ts';
@@ -20,12 +21,18 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
   const status = optString(input.values, 'status');
   const assignee = optString(input.values, 'assignee');
   const searchWords = readSearch(input);
+  const limit = readLimit(input);
+  const dueBefore = optString(input.values, 'due-before');
+  const dueAfter = optString(input.values, 'due-after');
   const filters: Record<string, QueryValue | undefined> = {
     statuses: status === undefined ? undefined : [status],
     tags: optStrings(input.values, 'tag'),
+    // Both bounds leave the given day out: before its midnight, or from the next day's midnight.
+    due_date_lt: dueBefore === undefined ? undefined : localMidnightMs(dueBefore),
+    due_date_gt: dueAfter === undefined ? undefined : nextLocalMidnightMs(dueAfter) - 1,
     assignees: assignee === undefined ? undefined : [await resolveAssignee(ctx, assignee)],
     include_closed: flag(input.values, 'include-closed'),
-    subtasks: true,
+    subtasks: !flag(input.values, 'top-level'),
   };
 
   let path: string;
@@ -38,24 +45,33 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
     filters.project_ids = [folderId];
   }
 
-  const tasks: RawTask[] = [];
+  let read = 0;
+  const found: RawTask[] = [];
   let complete = false;
-  for (let page = 0; page < MAX_PAGES && !complete; page++) {
+  for (let page = 0; page < MAX_PAGES && !complete && found.length < limit; page++) {
     const response = await ctx.client.request<{ tasks: RawTask[]; last_page?: boolean }>('GET', path, {
       query: { ...filters, page },
     });
-    tasks.push(...response.tasks);
+    read += response.tasks.length;
+    found.push(...(searchWords === undefined ? response.tasks : response.tasks.filter((task) => matchesAllWords(task, searchWords))));
     complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
   }
-  if (!complete) {
-    ctx.warn(`Stopped after ${tasks.length} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
+  if (!complete && found.length < limit) {
+    ctx.warn(`Stopped after ${read} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
   }
   // ClickUp answers an unknown status with no tasks, so a typo would look like an empty result.
-  if (status !== undefined && tasks.length === 0) {
+  if (status !== undefined && read === 0) {
     assertStatusExists(list === undefined ? await loadFolderLists(ctx) : [list], status);
   }
-  const found = searchWords === undefined ? tasks : tasks.filter((task) => matchesAllWords(task, searchWords));
-  return found.map(toTask);
+  return found.slice(0, limit).map(toTask);
+}
+
+// ClickUp returns the most recently created tasks first, so a limit keeps the newest ones.
+function readLimit(input: CommandInput): number {
+  const value = optString(input.values, 'limit');
+  if (value === undefined) return Infinity;
+  if (!/^[1-9]\d*$/.test(value)) throw usageError(`Invalid --limit "${value}"`, 'Use a whole number greater than 0');
+  return Number(value);
 }
 
 // ClickUp has no text search in its API, so taskwire filters the tasks it reads.

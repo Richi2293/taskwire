@@ -298,3 +298,55 @@ test('task get --comments with an invalid number exits 2 without calling ClickUp
     assert.equal(run.calls.length, 0);
   }
 });
+
+test('tasks --due-before and --due-after send the day bounds in local time, the given days excluded', async () => {
+  const run = await runCli(['tasks', '--due-after', '2026-10-01', '--due-before', '2026-10-10'], { routes: {
+    'GET /team/1/task': { body: { tasks: [], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  const params = run.calls[0].url.searchParams;
+  assert.equal(params.get('due_date_gt'), String(new Date(2026, 9, 2).getTime() - 1));
+  assert.equal(params.get('due_date_lt'), String(new Date(2026, 9, 10).getTime()));
+});
+
+test('tasks with an invalid due filter or limit exits 2 without calling ClickUp', async () => {
+  for (const args of [['--due-before', '2026-13-01'], ['--due-after', 'tomorrow'], ['--limit', '0'], ['--limit', 'ten']]) {
+    const run = await runCli(['tasks', ...args]);
+    assert.equal(run.code, 2, args.join(' '));
+    assert.equal(run.calls.length, 0);
+  }
+});
+
+test('tasks --top-level asks ClickUp to leave out subtasks', async () => {
+  const run = await runCli(['tasks', '--top-level'], { routes: {
+    'GET /team/1/task': { body: { tasks: [], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls[0].url.searchParams.get('subtasks'), 'false');
+});
+
+test('tasks --limit stops reading pages once it has enough tasks, without warning', async () => {
+  const page = (call: FakeCall) => {
+    const n = Number(call.url.searchParams.get('page'));
+    return { body: { tasks: Array.from({ length: 100 }, (_, i) => rawTask({ id: `p${n}-${i}` })), last_page: false } };
+  };
+  const run = await runCli(['tasks', '--limit', '150'], { routes: { 'GET /team/1/task': page } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.length, 2);
+  const ids = (run.json() as { id: string }[]).map((t) => t.id);
+  assert.equal(ids.length, 150);
+  assert.equal(ids[149], 'p1-49');
+  assert.equal(run.stderr, '');
+});
+
+test('tasks --limit with --search counts only the matching tasks', async () => {
+  const page = (call: FakeCall) => {
+    const n = Number(call.url.searchParams.get('page'));
+    const tasks = Array.from({ length: 100 }, (_, i) => rawTask({ id: `p${n}-${i}`, name: i < 2 ? 'Login bug' : 'Other' }));
+    return { body: { tasks, last_page: n >= 4 } };
+  };
+  const run = await runCli(['tasks', '--search', 'login', '--limit', '5'], { routes: { 'GET /team/1/task': page } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.length, 3);
+  assert.deepEqual((run.json() as { id: string }[]).map((t) => t.id), ['p0-0', 'p0-1', 'p1-0', 'p1-1', 'p2-0']);
+});
