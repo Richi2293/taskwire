@@ -63,7 +63,7 @@ Facts checked against the live API:
 
 ## Notes for agents
 
-The generic rules in [agent-rules.md](../agent-rules.md) apply. On ClickUp, agents must also avoid features that consume free-plan allowances (custom fields, sprint points, time estimates, attachments); taskwire does not expose them.
+The generic rules served by `taskwire rules` apply (see [agent-rules.md](../agent-rules.md)). On ClickUp, agents must also avoid features that consume free-plan allowances (custom fields, sprint points, time estimates, attachments); taskwire does not expose them.
 
 ## Free Forever plan
 

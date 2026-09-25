@@ -4,7 +4,13 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- `taskwire rules` prints the task management rules for agents with the project conventions, so projects always get the rules of the installed version. `conventions.rulesFile` replaces them with a project file.
+
 ### Changed
+
+- The block for the `AGENTS.md` of projects is now short and points to `taskwire rules`: replace the old, longer block once.
 
 - Comments are sent as markdown, so ClickUp shows headings, lists and quotes formatted instead of raw.
 - The agent rules describe how to write descriptions and comments: a short part for people first, then the details for agents.

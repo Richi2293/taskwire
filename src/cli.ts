@@ -12,6 +12,8 @@ import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
 import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
+import { formatRules, rules } from './commands/rules.ts';
+import type { RulesOut } from './commands/rules.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
@@ -25,6 +27,8 @@ export interface CommandSpec {
   positionals: 0 | 1;
   needsConfig: boolean;
   run: (ctx: Context, input: CommandInput) => Promise<unknown>;
+  // Replaces the generic --pretty view for commands whose result reads better as text.
+  formatPretty?: (result: unknown) => string;
 }
 
 export interface CliDeps {
@@ -45,7 +49,8 @@ Setup:
   taskwire whoami
   taskwire folders
   taskwire init --folder <id> [--list <id>] [--force]
-  taskwire conventions            how tasks must be written in this project (language, style)
+  taskwire rules                  how agents must manage tasks in this project (rules and conventions)
+  taskwire conventions            the project conventions only (language, instructions)
 
 Lists:
   taskwire lists
@@ -96,6 +101,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 0,
     needsConfig: false,
     run: (ctx, input) => init(ctx, input),
+  },
+  rules: {
+    options: {},
+    positionals: 0,
+    needsConfig: true,
+    run: async (ctx) => rules(ctx),
+    formatPretty: (result) => formatRules(result as RulesOut),
   },
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
   lists: { options: {}, positionals: 0, needsConfig: true, run: (ctx) => listLists(ctx) },
@@ -291,9 +303,14 @@ export async function main(deps: CliDeps): Promise<number> {
     const secrets = [token];
     const warn = (message: string, hint?: string) => printWarning(deps.stderr, message, hint, secrets);
     const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
-    const ctx: Context = { client, config: found?.config ?? null, cwd: deps.cwd, warn };
+    const ctx: Context = { client, config: found?.config ?? null, configPath: found?.path ?? null, cwd: deps.cwd, warn };
     const result = await resolved.spec.run(ctx, input);
-    printResult(deps.stdout, result, flag(input.values, 'pretty'));
+    const pretty = flag(input.values, 'pretty');
+    if (pretty && resolved.spec.formatPretty !== undefined) {
+      deps.stdout.write(resolved.spec.formatPretty(result));
+    } else {
+      printResult(deps.stdout, result, pretty);
+    }
     return EXIT.ok;
   } catch (error) {
     const known =
