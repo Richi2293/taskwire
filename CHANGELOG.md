@@ -16,6 +16,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 - Comments are sent as markdown, so ClickUp shows headings, lists and quotes formatted instead of raw.
 - The agent rules ask agents to assign to the user (`me`) the tasks they create and the unassigned tasks they start working on.
 - The agent rules describe how to write descriptions and comments: a short part for people first, then the details for agents.
+- The agent rules ask agents to check the acceptance criteria in the description once verified, and before closing a task. Criteria left unchecked are listed in the closing comment, and skipped ones are struck through with the reason.
 
 ## [0.1.1] - 2026-09-25
 

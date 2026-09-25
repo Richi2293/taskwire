@@ -86,3 +86,9 @@ test('rules needs a .taskwire.json', async () => {
   const run = await runCli(['rules'], { config: null });
   assert.equal(run.code, 3);
 });
+
+test('the default rules say who checks the acceptance criteria and when', () => {
+  assert.match(DEFAULT_RULES, /check an acceptance criterion in the description \(`- \[x\]`\) once it is verified/);
+  assert.match(DEFAULT_RULES, /Checking an acceptance criterion is not progress/);
+  assert.match(DEFAULT_RULES, /Before moving a task to a closed status, check every verified acceptance criterion/);
+});
