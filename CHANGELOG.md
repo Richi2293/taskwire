@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-25
+
 ### Added
 
 - `task get --comments <n>` reads only the n most recent comments, and `--comments 0` skips them.
@@ -31,5 +33,6 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Richi2293/taskwire/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Richi2293/taskwire/releases/tag/v0.1.0
