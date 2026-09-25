@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LIST_ID, OTHER_FOLDER_ID, rawList, rawTask, runCli } from './helpers.ts';
+import { LIST_ID, OTHER_FOLDER_ID, WORKSPACE_ID, rawList, rawTask, runCli, sequence } from './helpers.ts';
 
 const listRoute = { [`GET /list/${LIST_ID}`]: { body: rawList() } };
 
@@ -107,6 +107,99 @@ test('task create rejects "none" as due date and priority', async () => {
     const run = await runCli(['task', 'create', '--name', 'N', ...args]);
     assert.equal(run.code, 2);
     assert.match(JSON.parse(run.stderr).hint, /only with task update/);
+    assert.equal(run.calls.length, 0);
+  }
+});
+
+const OTHER_LIST_ID = '801';
+const otherListRoute = { [`GET /list/${OTHER_LIST_ID}`]: { body: rawList({ id: OTHER_LIST_ID, name: 'Doing', statuses: [{ status: 'review', type: 'custom' }] }) } };
+const moveRoute = `PUT /v3/workspaces/${WORKSPACE_ID}/tasks/t1/home_list/${OTHER_LIST_ID}`;
+
+test('task update --list moves the task with the v3 api after checking both folders', async () => {
+  const run = await runCli(['task', 'update', 't1', '--list', OTHER_LIST_ID], { routes: {
+    'GET /task/t1': sequence({ body: rawTask() }, { body: rawTask({ list: { id: OTHER_LIST_ID, name: 'Doing' } }) }),
+    ...otherListRoute,
+    [moveRoute]: { body: { data: { task_id: 't1', new_list_id: OTHER_LIST_ID } } },
+  } });
+  assert.equal(run.code, 0);
+  assert.equal(run.calls.filter((c) => c.method === 'PUT').length, 1);
+  assert.equal((run.json() as { list: { id: string } }).list.id, OTHER_LIST_ID);
+});
+
+test('task update --list with --status matches the status in the target list and sets it after the move', async () => {
+  const run = await runCli(['task', 'update', 't1', '--list', OTHER_LIST_ID, '--status', 'Review'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    ...otherListRoute,
+    [moveRoute]: { body: { data: {} } },
+    'PUT /task/t1': { body: rawTask() },
+  } });
+  assert.equal(run.code, 0);
+  const writes = run.calls.filter((c) => c.method === 'PUT');
+  assert.deepEqual(writes.map((c) => c.path), [moveRoute.slice(4), '/task/t1']);
+  assert.deepEqual(writes[1].body, { status: 'review' });
+});
+
+test('task update --list reports the move as applied when the field update fails', async () => {
+  const run = await runCli(['task', 'update', 't1', '--list', OTHER_LIST_ID, '--name', 'Renamed'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    ...otherListRoute,
+    [moveRoute]: { body: { data: {} } },
+    'PUT /task/t1': { status: 500, body: { err: 'Internal error' } },
+  } });
+  assert.equal(run.code, 1);
+  assert.equal(JSON.parse(run.stderr).hint, 'Applied: move to list "Doing". Not applied: fields');
+});
+
+test('task update --list of a subtask exits 2 without writing', async () => {
+  const run = await runCli(['task', 'update', 't1', '--list', OTHER_LIST_ID], { routes: {
+    'GET /task/t1': { body: rawTask({ parent: 'p1' }) },
+    ...otherListRoute,
+  } });
+  assert.equal(run.code, 2);
+  assert.match(JSON.parse(run.stderr).hint, /parent/);
+  assert.equal(run.calls.filter((c) => c.method !== 'GET').length, 0);
+});
+
+test('task update --list to a list in another folder exits 3 without writing', async () => {
+  const run = await runCli(['task', 'update', 't1', '--list', OTHER_LIST_ID], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    [`GET /list/${OTHER_LIST_ID}`]: { body: rawList({ id: OTHER_LIST_ID, folder: { id: OTHER_FOLDER_ID, name: 'Other' } }) },
+  } });
+  assert.equal(run.code, 3);
+  assert.equal(run.calls.filter((c) => c.method !== 'GET').length, 0);
+});
+
+test('task update --parent makes the task a subtask of a task in the project', async () => {
+  const run = await runCli(['task', 'update', 't1', '--parent', '#p2'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/p2': { body: rawTask({ id: 'p2' }) },
+    'PUT /task/t1': { body: rawTask({ parent: 'p2' }) },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls.find((c) => c.method === 'PUT')?.body, { parent: 'p2' });
+});
+
+test('task update --parent with a parent in another folder exits 3 without writing', async () => {
+  const run = await runCli(['task', 'update', 't1', '--parent', 'p2'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'GET /task/p2': { body: rawTask({ id: 'p2', folder: { id: OTHER_FOLDER_ID, name: 'Other' } }) },
+  } });
+  assert.equal(run.code, 3);
+  assert.equal(run.calls.filter((c) => c.method !== 'GET').length, 0);
+});
+
+test('task update rejects invalid parent and list combinations without calling ClickUp', async () => {
+  const cases: [string[], RegExp][] = [
+    [['--parent', 't1'], /itself/],
+    [['--parent', '#t1'], /itself/],
+    [['--parent', 'none'], /ClickUp UI/],
+    [['--parent', 'p2', '--list', OTHER_LIST_ID], /either --list or --parent/],
+  ];
+  for (const [args, message] of cases) {
+    const run = await runCli(['task', 'update', 't1', ...args]);
+    assert.equal(run.code, 2, args.join(' '));
+    const error = JSON.parse(run.stderr) as { error: string; hint?: string };
+    assert.match(`${error.error} ${error.hint ?? ''}`, message);
     assert.equal(run.calls.length, 0);
   }
 });
