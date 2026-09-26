@@ -15,6 +15,7 @@ import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
 import type { RulesOut } from './commands/rules.ts';
 import { createList, listLists } from './commands/lists.ts';
+import { listTags } from './commands/tags.ts';
 import { getTask, listTasks } from './commands/tasks-read.ts';
 import { createTask, deleteTask, updateTask } from './commands/tasks-write.ts';
 import { addComment, updateComment } from './commands/comments.ts';
@@ -63,6 +64,7 @@ Tasks:
                  [--due-before YYYY-MM-DD] [--due-after YYYY-MM-DD]   the given day excluded
                  [--top-level]        leave out subtasks
                  [--limit <n>]        the n most recently created tasks
+  taskwire tags                       the tags used in the project, with their number of tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
@@ -135,6 +137,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     needsConfig: true,
     run: (ctx, input) => listTasks(ctx, input),
   },
+  tags: { options: {}, positionals: 0, needsConfig: true, run: (ctx) => listTags(ctx) },
   'task get': {
     options: { comments: { type: 'string' } },
     positionals: 1,

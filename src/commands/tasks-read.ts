@@ -14,7 +14,10 @@ import type { Context } from './context.ts';
 export const MAX_PAGES = 50;
 const PAGE_SIZE = 100;
 
-export async function listTasks(ctx: Context, input: CommandInput): Promise<TaskSummary[]> {
+const NARROW_HINT = 'Narrow the query with --list, --status or --tag';
+
+// truncatedHint lets commands built on this one suggest only the options they accept.
+export async function listTasks(ctx: Context, input: CommandInput, truncatedHint = NARROW_HINT): Promise<TaskSummary[]> {
   const { folderId, listIds } = projectConfig(ctx);
   const listId = optString(input.values, 'list');
   const status = optString(input.values, 'status');
@@ -62,7 +65,7 @@ export async function listTasks(ctx: Context, input: CommandInput): Promise<Task
     complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
   }
   if (!complete && found.length < limit) {
-    ctx.warn(`Stopped after ${read} tasks, there may be more`, 'Narrow the query with --list, --status or --tag');
+    ctx.warn(`Stopped after ${read} tasks, there may be more`, truncatedHint);
   }
   // ClickUp answers an unknown status or list with no tasks, so a typo would look like an empty result.
   const checkLists = read === 0 && (status !== undefined || (list === undefined && listIds !== undefined));

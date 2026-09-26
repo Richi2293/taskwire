@@ -39,6 +39,7 @@ taskwire lists                                     # lists of the project and th
 - Accounts with several workspaces are supported: `init` saves the workspace of the folder, so `taskwire tasks` reads the right one.
 - `taskwire tasks --due-before` and `--due-after` map to `due_date_lt` (midnight of the day) and `due_date_gt` (midnight of the next day, minus 1 ms), `--top-level` to `subtasks=false`. `--limit` stops reading pages once enough tasks are found.
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
+- `taskwire tags` reads the tasks of the project, open and closed, subtasks included, and counts their tags. It does not use the space tags (`GET /space/{id}/tag`): they include the tags of other folders and of other projects of the same folder. A tag created in ClickUp but not used by any task of the project is not listed.
 - Checklist items are found through the task given with `--task`, so an item or checklist of another task is refused before any write.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 - With `listIds`:

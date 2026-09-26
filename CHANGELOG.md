@@ -8,15 +8,16 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 - `taskwire rules` prints the task management rules for agents with the project conventions, so projects always get the rules of the installed version. `conventions.rulesFile` replaces them with a project file.
 - `listIds` in `.taskwire.json` limits a project to some lists of its folder, so several projects can share one folder: taskwire refuses the tasks and lists of the others. `init --scope-list <id>` writes it.
+- `taskwire tags` lists the tags used in the project, with their number of tasks, so agents can reuse them.
 
 ### Changed
 
 - The block for the `AGENTS.md` of projects is now short and points to `taskwire rules`: replace the old, longer block once.
-
 - Comments are sent as markdown, so ClickUp shows headings, lists and quotes formatted instead of raw.
 - The agent rules ask agents to assign to the user (`me`) the tasks they create and the unassigned tasks they start working on.
 - The agent rules describe how to write descriptions and comments: a short part for people first, then the details for agents.
 - The agent rules ask agents to move a task to the in-progress status of its list when they start working on it, instead of changing the status only at the end.
+- The agent rules point to `taskwire tags` to find the tags to reuse.
 - The agent rules ask agents to check the acceptance criteria in the description once verified, and before closing a task. Criteria left unchecked are listed in the closing comment, and skipped ones are struck through with the reason.
 
 ## [0.1.1] - 2026-09-25
