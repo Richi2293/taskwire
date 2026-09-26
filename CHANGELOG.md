@@ -4,6 +4,10 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- The README is rewritten: shorter, with a quick start, a before and after demo, a diagram of how taskwire works, a command overview and the whole configuration in one place. New logo and images live in `docs/assets/`.
+
 ## [0.1.3] - 2026-09-26
 
 ### Added
