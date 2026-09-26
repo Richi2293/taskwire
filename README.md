@@ -83,6 +83,8 @@ Run `taskwire --help`. Output is compact JSON on stdout, errors and warnings are
 
 `taskwire tasks --search <words>` keeps the tasks whose name or description contain every word, in any order, ignoring case and accents. taskwire does the search itself on the tasks it reads, so narrow large projects with `--list` or `--status`.
 
+`taskwire tags` lists the tags used by the project's tasks, open and closed, with how many tasks use each one, most used first. It reads every task of the project, so it takes as many requests as `taskwire tasks --include-closed`.
+
 Other filters of `taskwire tasks`: `--due-before YYYY-MM-DD` and `--due-after YYYY-MM-DD` (the given day excluded, tasks without a due date left out), `--top-level` to leave out subtasks, and `--limit <n>` to get only the n most recently created tasks.
 
 `taskwire task get <id>` returns the task with its comments. Add `--comments <n>` to read only the n most recent ones, or `--comments 0` to skip them: reading every comment can take several requests.
