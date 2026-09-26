@@ -19,9 +19,9 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 
 ## Tech constraints
 
-- Node >= 24.7, TypeScript executed directly (native type stripping), no build step.
+- Node >= 24.7, TypeScript executed directly (native type stripping), no build step during development. Only the release workflow compiles `src/` to `dist/` for the npm package (`tsconfig.build.json`), because Node does not strip types inside `node_modules`. Run the CLI from the repo with `./bin/taskwire`.
 - Zero runtime and dev dependencies. Do not run `npm install` or add packages.
-- Types are checked only in CI (`tsc` with `tsconfig.json`, installed by the `typecheck` job). Type errors do not show up in `node --test`, so keep the types correct by hand.
+- Types are checked only in CI (`tsc` with `tsconfig.json`, installed by the `typecheck` job; the `package` job builds and installs the npm package with `scripts/check-package.sh`). Type errors do not show up in `node --test`, so keep the types correct by hand.
 - Erasable TypeScript only: no `enum`, no `namespace`, no constructor parameter properties.
 - Relative imports use the `.ts` extension. Type-only imports use `import type` (otherwise they fail at runtime).
 - Never use `any`: use explicit types, `unknown` or generics.

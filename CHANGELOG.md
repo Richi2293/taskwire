@@ -4,6 +4,16 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- taskwire is published on npm as `@richi2293/taskwire`: install it with `npm install --global @richi2293/taskwire`. A release workflow compiles it to JavaScript and publishes it when a version tag is pushed.
+- `taskwire --version` prints the installed version.
+- `taskwire rules` checks npm for a newer version at most once a day and reports it in the `update` field, with the command to install it. The agent rules ask agents to tell the user and ask before updating. `TASKWIRE_NO_UPDATE_CHECK=1` turns the check off.
+
+### Changed
+
+- The block for the `AGENTS.md` of projects tells agents how to install taskwire when it is missing: replace the block once.
+
 ## [0.1.2] - 2026-09-26
 
 ### Added

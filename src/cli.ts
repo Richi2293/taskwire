@@ -8,8 +8,10 @@ import { CONFIG_FILE, findConfig } from './config.ts';
 import { EXIT, TaskwireError, configError, usageError } from './errors.ts';
 import { printError, printResult, printWarning } from './output.ts';
 import type { Writer } from './output.ts';
+import { packageInfo } from './package-info.ts';
 import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
+import { checkForUpdate } from './update-check.ts';
 import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
@@ -86,7 +88,7 @@ Comments, checklists, dependencies:
   taskwire dependency add <task-id> --blocked-by <task-id>
   taskwire dependency remove <task-id> --blocked-by <task-id>
 
-Global options: --pretty (human readable output), --help
+Global options: --pretty (human readable output), --help, --version
 Output is JSON on stdout; errors and warnings are JSON lines on stderr.
 Exit codes: 0 ok, 1 ClickUp or network error, 2 usage error, 3 configuration error.
 `;
@@ -109,7 +111,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: {},
     positionals: 0,
     needsConfig: true,
-    run: async (ctx) => rules(ctx),
+    run: (ctx) => rules(ctx),
     formatPretty: (result) => formatRules(result as RulesOut),
   },
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
@@ -285,6 +287,10 @@ function parseInput(spec: CommandSpec, rest: string[]): CommandInput {
 export async function main(deps: CliDeps): Promise<number> {
   let token: string | undefined;
   try {
+    if (deps.argv.length === 1 && deps.argv[0] === '--version') {
+      deps.stdout.write(`${packageInfo().version}\n`);
+      return EXIT.ok;
+    }
     const resolved = resolveCommand(deps.argv);
     if (resolved === null) {
       deps.stdout.write(HELP);
@@ -307,7 +313,14 @@ export async function main(deps: CliDeps): Promise<number> {
     const secrets = [token];
     const warn = (message: string, hint?: string) => printWarning(deps.stderr, message, hint, secrets);
     const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
-    const ctx: Context = { client, config: found?.config ?? null, configPath: found?.path ?? null, cwd: deps.cwd, warn };
+    const ctx: Context = {
+      client,
+      config: found?.config ?? null,
+      configPath: found?.path ?? null,
+      cwd: deps.cwd,
+      warn,
+      checkUpdate: () => checkForUpdate({ fetch: deps.fetch, now: deps.now, env: deps.env }, packageInfo()),
+    };
     const result = await resolved.spec.run(ctx, input);
     const pretty = flag(input.values, 'pretty');
     if (pretty && resolved.spec.formatPretty !== undefined) {

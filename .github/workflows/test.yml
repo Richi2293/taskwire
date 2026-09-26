@@ -32,3 +32,14 @@ jobs:
       # The project has no dependencies: TypeScript is installed only here, to check the types.
       - run: npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
       - run: npx tsc -p .
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      # TypeScript compiles the npm package; it is never a dependency of taskwire.
+      - run: npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
+      - run: PATH="$PWD/node_modules/.bin:$PATH" scripts/check-package.sh
