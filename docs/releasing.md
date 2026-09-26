@@ -25,14 +25,14 @@ It is configured on npmjs.com, in the package settings, under "Trusted publisher
 
 ## First publication
 
-The trusted publisher can be set only on a package that already exists, so the first version is published by hand from a clean checkout of its tag:
+The trusted publisher can be set only on a package that already exists, so the first version is published by hand, from a clean checkout of the release commit on `main`, before pushing its tag:
 
 ```
 npm login
-git checkout v0.1.3
+git checkout main && git pull
 npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
 PATH="$PWD/node_modules/.bin:$PATH" scripts/check-package.sh
 npm publish
 ```
 
-Then set the trusted publisher as above. From the next version on, pushing the tag is enough.
+Then push the tag and set the trusted publisher as above: the workflow sees that the version is already on npm and skips publishing it. From the next version on, pushing the tag is enough.

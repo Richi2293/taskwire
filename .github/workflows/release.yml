@@ -29,6 +29,17 @@ jobs:
       # TypeScript compiles the npm package; it is never a dependency of taskwire.
       - run: npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
       - run: PATH="$PWD/node_modules/.bin:$PATH" scripts/check-package.sh
+      # A version published by hand (the first one, or a retry) is not published again.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          spec="$(node -p 'const p = require("./package.json"); p.name + "@" + p.version')"
+          if npm view "$spec" version > /dev/null 2>&1; then
+            echo "$spec is already on npm: nothing to publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
       # Trusted publishing needs npm 11.5.1 or later.
-      - run: npm install --global npm@latest
-      - run: npm publish --provenance
+      - if: steps.published.outputs.exists != 'true'
+        run: npm install --global npm@latest
+      - if: steps.published.outputs.exists != 'true'
+        run: npm publish --provenance

@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-26
+
 ### Added
 
 - taskwire is published on npm as `@richi2293/taskwire`: install it with `npm install --global @richi2293/taskwire`. A release workflow compiles it to JavaScript and publishes it when a version tag is pushed.
@@ -61,7 +63,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Richi2293/taskwire/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Richi2293/taskwire/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Richi2293/taskwire/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Richi2293/taskwire/releases/tag/v0.1.0
