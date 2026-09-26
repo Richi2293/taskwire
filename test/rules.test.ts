@@ -4,9 +4,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FOLDER_ID, runCli } from './helpers.ts';
+import type { Route } from './helpers.ts';
 
 const DEFAULT_RULES = readFileSync(new URL('../rules/tasks.md', import.meta.url), 'utf8');
-const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+const PACKAGE = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { name: string; version: string };
+const VERSION = PACKAGE.version;
+const DIST_TAGS = `GET /-/package/${PACKAGE.name.replace('/', '%2f')}/dist-tags`;
 
 interface RulesOut {
   version: string;
@@ -14,6 +17,16 @@ interface RulesOut {
   rulesSource: string;
   rules: string;
   conventions: { language: string; instructions: string | null };
+  update: { latest: string; command: string } | null;
+}
+
+// An environment with an empty cache folder, so rules asks the registry.
+function cacheEnv(): Record<string, string> {
+  return { XDG_CACHE_HOME: mkdtempSync(join(tmpdir(), 'taskwire-cache-')) };
+}
+
+function latest(version: string): Record<string, Route> {
+  return { [DIST_TAGS]: { body: { latest: version } } };
 }
 
 // A project folder with its own .taskwire.json, for the cases that need files next to it.
@@ -32,6 +45,7 @@ test('rules prints the default rules, their scope and the project conventions wi
   assert.equal(out.rulesSource, 'default');
   assert.equal(out.rules, DEFAULT_RULES);
   assert.deepEqual(out.conventions, { language: 'English', instructions: null });
+  assert.equal(out.update, null);
   assert.equal(run.calls.length, 0);
 });
 
@@ -96,4 +110,35 @@ test('the default rules say who checks the acceptance criteria and when', () => 
 test('the default rules ask to move a task to its in-progress status when the work starts', () => {
   assert.match(DEFAULT_RULES, /When you start the work a task asks for, move it to the status of its list that means work in progress/);
   assert.match(DEFAULT_RULES, /If the list has no such status, leave the status as it is/);
+});
+
+test('rules reports a newer version on npm with the command to install it', async () => {
+  const run = await runCli(['rules'], { env: cacheEnv(), routes: latest('99.0.0') });
+  assert.equal(run.code, 0);
+  assert.deepEqual((run.json() as RulesOut).update, { latest: '99.0.0', command: `npm i -g ${PACKAGE.name}@latest` });
+  assert.deepEqual(run.calls.map((call) => `${call.method} ${call.path}`), [DIST_TAGS]);
+});
+
+test('rules reports no update when the installed version is the latest', async () => {
+  const run = await runCli(['rules'], { env: cacheEnv(), routes: latest(VERSION) });
+  assert.equal((run.json() as RulesOut).update, null);
+});
+
+test('rules works as usual when the registry fails', async () => {
+  const run = await runCli(['rules'], { env: cacheEnv(), routes: { [DIST_TAGS]: { status: 503 } } });
+  assert.equal(run.code, 0);
+  assert.equal((run.json() as RulesOut).update, null);
+  assert.equal(run.stderr, '');
+});
+
+test('rules --pretty shows the update right after the title', async () => {
+  const run = await runCli(['rules', '--pretty'], { env: cacheEnv(), routes: latest('99.0.0') });
+  assert.ok(run.stdout.startsWith(
+    `# taskwire rules (v${VERSION})\n\n` +
+      `Update available: taskwire 99.0.0 (installed ${VERSION}). Tell the user and ask before running: npm i -g ${PACKAGE.name}@latest\n`,
+  ));
+});
+
+test('the default rules say what to do with an update notice', () => {
+  assert.match(DEFAULT_RULES, /If `taskwire rules` reports an `update`, tell the user and ask before running its `command`/);
 });

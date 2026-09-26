@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { configError } from '../errors.ts';
+import { packageInfo } from '../package-info.ts';
+import type { UpdateNotice } from '../update-check.ts';
 import { conventions } from './setup.ts';
 import { projectConfig } from './context.ts';
 import type { Context } from './context.ts';
@@ -16,13 +18,14 @@ export interface RulesOut {
   rulesSource: string;
   rules: string;
   conventions: { language: string; instructions: string | null };
+  // A newer taskwire on npm, or null when there is none or the check was skipped.
+  update: UpdateNotice | null;
 }
 
 // The rules ship with taskwire, so every project reads the ones of the installed version.
 const DEFAULT_RULES_URL = new URL('../../rules/tasks.md', import.meta.url);
-const PACKAGE_URL = new URL('../../package.json', import.meta.url);
 
-export function rules(ctx: Context): RulesOut {
+export async function rules(ctx: Context): Promise<RulesOut> {
   const config = projectConfig(ctx);
   const rulesFile = config.conventions?.rulesFile;
   let rulesSource = 'default';
@@ -37,20 +40,20 @@ export function rules(ctx: Context): RulesOut {
       throw configError(`Cannot read the rules file ${rulesSource}`, 'Fix "conventions.rulesFile" in .taskwire.json, or remove it to use the default rules');
     }
   }
-  return { version: packageVersion(), scope: RULES_SCOPE, rulesSource, rules: text, conventions: conventions(ctx) };
-}
-
-function packageVersion(): string {
-  const data = JSON.parse(readFileSync(PACKAGE_URL, 'utf8')) as { version?: unknown };
-  return typeof data.version === 'string' ? data.version : 'unknown';
+  const update = await ctx.checkUpdate();
+  return { version: packageInfo().version, scope: RULES_SCOPE, rulesSource, rules: text, conventions: conventions(ctx), update };
 }
 
 // --pretty shows the rules as plain markdown, which reads better than escaped JSON.
 export function formatRules(out: RulesOut): string {
   const { language, instructions } = out.conventions;
   const rulesText = out.rules.endsWith('\n') ? out.rules : `${out.rules}\n`;
+  const update = out.update === null
+    ? []
+    : [`Update available: taskwire ${out.update.latest} (installed ${out.version}). Tell the user and ask before running: ${out.update.command}\n`];
   return [
     `# taskwire rules (v${out.version})\n`,
+    ...update,
     `${out.scope}\n`,
     rulesText,
     '## Project conventions\n',

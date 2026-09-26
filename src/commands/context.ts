@@ -3,6 +3,7 @@ import type { RawList, RawTask, RawUser } from '../clickup-types.ts';
 import type { ProjectConfig } from '../config.ts';
 import { configError, usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
+import type { UpdateNotice } from '../update-check.ts';
 
 export interface Context {
   client: Client;
@@ -11,6 +12,8 @@ export interface Context {
   configPath: string | null;
   cwd: string;
   warn: Warn;
+  // Looks for a newer taskwire on npm; only the rules command uses it, since agents run it at the start of a session.
+  checkUpdate: () => Promise<UpdateNotice | null>;
 }
 
 const userIdCache = new WeakMap<Context, number>();

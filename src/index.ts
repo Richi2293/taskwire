@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { main } from './cli.ts';
 import { readKeychain } from './token.ts';
 

@@ -15,11 +15,12 @@ ClickUp is the first provider. Others may be added later.
 ## Install
 
 ```
-git clone git@github.com:Richi2293/taskwire.git
-ln -s "$PWD/taskwire/bin/taskwire" ~/.local/bin/taskwire
+npm install --global @richi2293/taskwire
 ```
 
-`~/.local/bin` must be on your `PATH`. Requires Node >= 24.7.
+Requires Node >= 24.7. Check it with `taskwire --version`.
+
+To update, run `npm install --global @richi2293/taskwire@latest`. `taskwire rules` checks npm for a newer version at most once a day and reports it in its `update` field, so agents can tell you. Set `TASKWIRE_NO_UPDATE_CHECK=1` to turn the check off.
 
 ## Token
 
@@ -75,7 +76,7 @@ All fields are optional. They are guidance for agents: the CLI does not check th
 
 `taskwire rules` prints the task management rules for AI agents, with the project conventions: the default rules of the installed version, or the project `rulesFile`. Add `--pretty` to read them as markdown. `taskwire conventions` prints only the conventions.
 
-Paste the short block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md`: it tells agents to run `taskwire rules`, so the rules stay up to date when taskwire is updated.
+Paste the short block in [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md`: it tells agents to run `taskwire rules`, so the rules stay up to date when taskwire is updated. The block also tells agents how to install taskwire when it is missing.
 
 ## Commands
 
@@ -106,11 +107,15 @@ Due dates (`--due YYYY-MM-DD`) are set to midnight in your system time zone, and
 | 2 | wrong command usage |
 | 3 | configuration: missing token, missing `.taskwire.json`, unsupported provider, resource outside the project |
 
-## Tests
+## Development
+
+Run the CLI from a clone with `./bin/taskwire`: it executes the TypeScript sources directly, with no build step. Run the tests with:
 
 ```
 node --test
 ```
+
+The npm package is compiled to JavaScript only by the release workflow: see [docs/releasing.md](docs/releasing.md).
 
 ## License
 

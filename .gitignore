@@ -1,4 +1,6 @@
 node_modules/
+# Compiled only by the release workflow for the npm package
+dist/
 .DS_Store
 
 # Design specs and plans stay local, never committed

@@ -19,6 +19,7 @@ These rules cover only task management. The project conventions that come with t
 - At the end of the session, tell the user what changed in the task system, with the task links.
 - Exit codes: 1 task system or network error (retry later), 2 wrong command usage (fix the command), 3 configuration problem (ask the user).
 - A `warning` line on stderr means the command worked but was slowed down or returned partial results: follow its hint.
+- If `taskwire rules` reports an `update`, tell the user and ask before running its `command`: it updates taskwire for the whole machine. Until then, keep working with the installed version.
 
 ## Writing tasks and comments
 

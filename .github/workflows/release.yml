@@ -1,0 +1,34 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  # npm trusted publishing: npm trusts this workflow through OIDC, so no npm token is stored in the repo.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Check that the tag matches package.json
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json ($expected)" >&2
+            exit 1
+          fi
+      - run: node --test
+      # TypeScript compiles the npm package; it is never a dependency of taskwire.
+      - run: npm install --no-save --no-package-lock typescript@7.0.2 @types/node@24
+      - run: PATH="$PWD/node_modules/.bin:$PATH" scripts/check-package.sh
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install --global npm@latest
+      - run: npm publish --provenance

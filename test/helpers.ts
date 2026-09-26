@@ -117,7 +117,13 @@ export interface CliRun {
 
 export async function runCli(
   argv: string[],
-  options: { routes?: Record<string, Route>; cwd?: string; config?: ProjectConfig | null; keychain?: string | null } = {},
+  options: {
+    routes?: Record<string, Route>;
+    cwd?: string;
+    config?: ProjectConfig | null;
+    keychain?: string | null;
+    env?: Record<string, string>;
+  } = {},
 ): Promise<CliRun> {
   const cwd = options.cwd ?? mkdtempSync(join(tmpdir(), 'taskwire-cli-'));
   const config: ProjectConfig | null =
@@ -133,7 +139,7 @@ export async function runCli(
   const keychain = options.keychain === undefined ? 'pk_test_token' : options.keychain;
   const code = await main({
     argv,
-    env: {},
+    env: options.env ?? {},
     cwd,
     stdout: { write: (chunk: string) => out.push(chunk) },
     stderr: { write: (chunk: string) => err.push(chunk) },

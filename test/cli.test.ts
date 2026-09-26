@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { runCli, sequence } from './helpers.ts';
 
 test('no command prints help and exits 0', async () => {
@@ -11,6 +12,14 @@ test('no command prints help and exits 0', async () => {
 test('--help prints help even with a command', async () => {
   const run = await runCli(['whoami', '--help']);
   assert.equal(run.code, 0);
+  assert.equal(run.calls.length, 0);
+});
+
+test('--version prints the installed version without a token or a config', async () => {
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+  const run = await runCli(['--version'], { config: null, keychain: null });
+  assert.equal(run.code, 0);
+  assert.equal(run.stdout, `${version}\n`);
   assert.equal(run.calls.length, 0);
 });
 
