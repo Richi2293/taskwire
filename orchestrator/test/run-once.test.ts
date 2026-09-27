@@ -74,7 +74,8 @@ test('run-once claims the task, runs the agent in a new worktree and records the
   const [record] = readFileSync(join(home, 'runs.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
   assert.deepEqual(
     { project: record.project, task: record.task, name: record.name, needs: record.needs, status: record.status, costUsd: record.costUsd, durationMs: record.durationMs },
-    { project, task: 't1', name: 'Add a discount', needs: 'review', status: 'qa', costUsd: 0.42, durationMs: 90_000 },
+    // The cost adds up the author's session and the verifier's.
+    { project, task: 't1', name: 'Add a discount', needs: 'review', status: 'qa', costUsd: 0.84, durationMs: 90_000 },
   );
   assert.equal(record.startedAt, '2026-09-27T10:00:00.000Z');
   assert.ok(existsSync(record.log as string));

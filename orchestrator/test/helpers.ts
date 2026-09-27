@@ -80,7 +80,7 @@ export function claudeResult(overrides: Record<string, unknown> = {}): Partial<C
     stdout: JSON.stringify({
       type: 'result',
       is_error: false,
-      result: 'Done: discount added, tests pass.',
+      result: 'Done: discount added, tests pass.\nVERDICT: pass',
       session_id: 'session-1',
       total_cost_usd: 0.42,
       duration_ms: 90_000,
