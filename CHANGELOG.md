@@ -4,6 +4,10 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+
+- `taskwire task get` returns comments in markdown, with the formatting they were written with (quotes, bold, headings, lists, code, links, dividers). Before, it returned them as plain text, so an agent editing a comment with `comment update` lost its formatting.
+
 ## [0.1.4] - 2026-09-27
 
 ### Changed
