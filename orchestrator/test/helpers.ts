@@ -99,7 +99,7 @@ export interface OrchestratorRun {
 
 export async function runOrchestrator(
   argv: string[],
-  options: { home?: string; cwd?: string; taskwire?: RunTaskwire; commands?: RunCommand; now?: () => number } = {},
+  options: { home?: string; cwd?: string; taskwire?: RunTaskwire; commands?: RunCommand; now?: () => number; stopped?: () => boolean } = {},
 ): Promise<OrchestratorRun> {
   const out: string[] = [];
   const err: string[] = [];
@@ -112,6 +112,8 @@ export async function runOrchestrator(
     runTaskwire: options.taskwire ?? fakeTaskwire({}).run,
     runCommand: options.commands ?? fakeCommands().run,
     now: options.now ?? (() => Date.UTC(2026, 8, 27, 10, 0, 0)),
+    sleep: async () => {},
+    stopped: options.stopped ?? (() => true),
   });
   const stdout = out.join('');
   return { code, stdout, stderr: err.join(''), json: () => JSON.parse(stdout) };

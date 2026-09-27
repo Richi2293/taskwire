@@ -15,6 +15,18 @@ try {
   // A broken config is reported by the command itself.
 }
 
+// Ctrl+C (or SIGTERM) stops "start" from launching new work and cuts the wait between ticks short.
+const stop = new AbortController();
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => stop.abort());
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    stop.signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+
 process.exitCode = await main({
   argv: process.argv.slice(2),
   cwd: process.cwd(),
@@ -24,4 +36,6 @@ process.exitCode = await main({
   runTaskwire: createTaskwire(taskwireCommand),
   runCommand,
   now: () => Date.now(),
+  sleep,
+  stopped: () => stop.signal.aborted,
 });
