@@ -17,13 +17,19 @@ export const readKeychain: KeychainReader = () => {
   }
 };
 
-export function resolveToken(readKc: KeychainReader, env: Record<string, string | undefined>): string {
+export function resolveToken(
+  readKc: KeychainReader,
+  env: Record<string, string | undefined>,
+  platform: NodeJS.Platform = process.platform,
+): string {
   const fromKeychain = readKc()?.trim();
   if (fromKeychain) return fromKeychain;
   const fromEnv = env.TASKWIRE_API_TOKEN?.trim();
   if (fromEnv) return fromEnv;
-  throw configError(
-    'No ClickUp token found',
-    `Save it in the Keychain with: security add-generic-password -a "$USER" -s ${KEYCHAIN_SERVICE} -w (or set TASKWIRE_API_TOKEN)`,
-  );
+  // The Keychain is read only on macOS, so elsewhere the environment variable is the only way.
+  const hint =
+    platform === 'darwin'
+      ? `Save it in the Keychain with: security add-generic-password -a "$USER" -s ${KEYCHAIN_SERVICE} -w (or set TASKWIRE_API_TOKEN)`
+      : 'Set the TASKWIRE_API_TOKEN environment variable';
+  throw configError('No ClickUp token found', hint);
 }

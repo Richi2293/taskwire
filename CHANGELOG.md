@@ -7,6 +7,7 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 ### Fixed
 
 - `taskwire task get` returns comments in markdown, with the formatting they were written with (quotes, bold, headings, lists, code, links, dividers). Before, it returned them as plain text, so an agent editing a comment with `comment update` lost its formatting.
+- On Linux and Windows, the error for a missing token suggests setting `TASKWIRE_API_TOKEN` instead of a macOS Keychain command.
 
 ## [0.1.4] - 2026-09-27
 
