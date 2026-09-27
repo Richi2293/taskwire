@@ -23,6 +23,10 @@ export interface RunRecord {
   needs: string | null;
   status: string | null;
   summary: string;
+  // Result of the project tests run by the orchestrator, null without a test command or when nothing was checked.
+  tests: 'pass' | 'fail' | null;
+  // What the verifier agent concluded, null when it did not run or gave no verdict.
+  verdict: 'pass' | 'manual' | 'fail' | null;
   worktree: string;
   log: string;
 }

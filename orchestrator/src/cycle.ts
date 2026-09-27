@@ -11,6 +11,8 @@ import { markPrompt, workPrompt } from './prompts.ts';
 import { appendRun, readClaims, writeClaims } from './state.ts';
 import type { RunRecord } from './state.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
+import { addCost, verifyWork } from './verify.ts';
+import type { Verification } from './verify.ts';
 import { createWorktree, worktreePath } from './worktree.ts';
 
 export interface CycleDeps {
@@ -60,16 +62,35 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     failure = error instanceof Error ? error.message : String(error);
   }
 
+  let costUsd = agent?.costUsd ?? null;
   let after = await readTask(deps, project.path, task.id);
   if (after.needs === null && failure === null && agent?.sessionId) {
     const nudge = await runClaude(deps.runCommand, { prompt: markPrompt(task), cwd: worktree, resume: agent.sessionId }, agentOptions);
     outputs.push(nudge.output);
+    costUsd = addCost(costUsd, nudge.costUsd);
+    after = await readTask(deps, project.path, task.id);
+  }
+  // Only work the agent says is done gets checked: a decision or a failed run goes straight to a person.
+  let verification: Verification | null = null;
+  if (failure === null && (after.needs === 'review' || after.needs === 'test')) {
+    verification = await verifyWork(deps.runCommand, {
+      task,
+      worktree,
+      testCommand: project.testCommand,
+      authorSession: agent?.sessionId ?? null,
+      agentOptions,
+    });
+    outputs.push(...verification.outputs);
+    costUsd = addCost(costUsd, verification.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
   writeLog(log, outputs, failure);
-  if (after.needs === null) {
-    const reason = failure === null ? 'the agent stopped without marking the task' : `the agent run failed: ${failure}`;
-    await markForReview(deps, project.path, task.id, `${reason}.`, worktree, log);
+  let problem = verification?.problem ?? null;
+  if (problem === null && after.needs === null) {
+    problem = failure === null ? 'the agent stopped without marking the task' : `the agent run failed: ${failure}`;
+  }
+  if (problem !== null) {
+    await markForReview(deps, project.path, task.id, `${problem}.`, worktree, log);
     after = { ...after, needs: 'review' };
   }
 
@@ -81,10 +102,12 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     startedAt,
     finishedAt: new Date(deps.now()).toISOString(),
     durationMs: agent?.durationMs ?? null,
-    costUsd: agent?.costUsd ?? null,
+    costUsd,
     needs: after.needs,
     status: after.status,
-    summary: failure ?? agent?.summary ?? '',
+    summary: problem ?? agent?.summary ?? '',
+    tests: verification?.tests ?? null,
+    verdict: verification?.verdict ?? null,
     worktree,
     log,
   };

@@ -25,8 +25,13 @@ For each project, `run-once`:
 1. picks the next task and moves it to `in progress` (`workStatus`);
 2. creates a git worktree for it, outside the project, in `~/.config/taskwire-orchestrator/worktrees/`, on the latest remote default branch (or the current `HEAD` without a remote), and copies `.taskwire.json` into it;
 3. runs Claude Code there without interaction (`claude -p`), with instructions to work only on that task, follow `taskwire rules` and the project's `AGENTS.md`, mark the task with `needs` for a person, and never merge or close it;
-4. reads the task again: if the agent did not mark it, asks it once in the same session, then marks it `needs-review` itself with a comment;
-5. appends the run to `runs.jsonl` (task, times, cost, outcome, worktree, log) and keeps the agent output in `logs/`.
+4. reads the task again: if the agent did not mark it, asks it once in the same session;
+5. when the agent marked the work as done (`needs-review` or `needs-test`), checks it without trusting it:
+   - runs the project `testCommand` in the worktree; if the tests fail, sends the output to the author once and runs them again;
+   - starts a separate verifier agent that checks each acceptance criterion as a person would, keeps checked only what it verified, and marks the task `needs-review` (all verified) or `needs-test` (with steps for the criteria only a person can check);
+   - if the verifier finds a problem, sends it to the author once, then runs the tests and the verifier again;
+6. marks the task `needs-review` itself, with a comment, when something could not end well: no mark from the agent, a failed run, tests that still fail, a verifier with no verdict or still finding problems;
+7. appends the run to `runs.jsonl` (task, times, cost of every agent session, tests, verdict, outcome, worktree, log) and keeps the output in `logs/`.
 
 Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
 
