@@ -114,3 +114,25 @@ test('start working and pause need the token, and switch the run control', async
   assert.deepEqual(JSON.parse((await send('pause', 'secret-token')).body), { ok: true, mode: 'paused' });
   assert.equal((await send('fly', 'secret-token')).status, 400);
 });
+
+test('every action from the page is reported with its outcome, without the text the person wrote', async () => {
+  const events: unknown[] = [];
+  const act = async (body: unknown) => {
+    const { task } = body as { task: string };
+    if (task === 'refused') throw new OrchestratorError('Task refused does not wait for a person any more', 2);
+    if (task === 'failed') throw new OrchestratorError('taskwire comment: Network error calling ClickUp', 1);
+  };
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', act, onAction: (event) => events.push(event) });
+  const body = (task: string) => JSON.stringify({ project: '/p', task, action: 'answer', text: 'private words' });
+  await post(handle, body('ok'), 'secret-token');
+  await post(handle, body('refused'), 'secret-token');
+  await post(handle, body('failed'), 'secret-token');
+  await post(handle, body('ok'), 'wrong-token');
+  assert.deepEqual(events, [
+    { project: '/p', task: 'ok', action: 'answer', outcome: 'done' },
+    { project: '/p', task: 'refused', action: 'answer', outcome: 'refused', error: 'Task refused does not wait for a person any more' },
+    { project: '/p', task: 'failed', action: 'answer', outcome: 'failed', error: 'taskwire comment: Network error calling ClickUp' },
+    { project: null, task: null, action: null, outcome: 'refused', error: 'Reload the dashboard: this page is from an earlier start' },
+  ]);
+  assert.ok(!JSON.stringify(events).includes('private words'));
+});

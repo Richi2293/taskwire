@@ -28,6 +28,16 @@ export interface HandlerDeps {
   act?: (body: unknown) => Promise<void>;
   // Play and pause of the agents.
   control?: RunControl;
+  // Told about every action the page sends, with its outcome; never with the text the person wrote.
+  onAction?: (event: ActionEvent) => void;
+}
+
+export interface ActionEvent {
+  project: string | null;
+  task: string | null;
+  action: string | null;
+  outcome: 'done' | 'refused' | 'failed';
+  error?: string;
 }
 
 // The dashboard listens on the loopback only; a page from another site that resolves its own name to
@@ -46,7 +56,7 @@ export function createHandler(deps: HandlerDeps): Handler {
       return { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS }, body: JSON.stringify(await deps.snapshot()) };
     }
     if (request.method === 'POST' && path === '/api/action' && deps.act !== undefined) {
-      return runAction(deps.act, deps.token, request);
+      return runAction(deps.act, deps.token, request, deps.onAction ?? (() => {}));
     }
     if (request.method === 'POST' && path === '/api/control' && deps.control !== undefined) {
       return switchControl(deps.control, deps.token, request);
@@ -55,24 +65,46 @@ export function createHandler(deps: HandlerDeps): Handler {
   };
 }
 
-async function runAction(act: (body: unknown) => Promise<void>, token: string, request: DashboardRequest): Promise<DashboardResponse> {
+async function runAction(
+  act: (body: unknown) => Promise<void>,
+  token: string,
+  request: DashboardRequest,
+  report: (event: ActionEvent) => void,
+): Promise<DashboardResponse> {
+  const unknown = { project: null, task: null, action: null };
   const sent = request.headers['x-action-token'] ?? '';
-  if (!sameSecret(sent, token)) return json(403, { error: 'Reload the dashboard: this page is from an earlier start' });
+  if (!sameSecret(sent, token)) {
+    const error = 'Reload the dashboard: this page is from an earlier start';
+    report({ ...unknown, outcome: 'refused', error });
+    return json(403, { error });
+  }
   let body: unknown;
   try {
     body = JSON.parse(request.body);
   } catch {
-    return json(400, { error: 'The action is not valid JSON' });
+    const error = 'The action is not valid JSON';
+    report({ ...unknown, outcome: 'refused', error });
+    return json(400, { error });
   }
+  const what = describe(body);
   try {
     await act(body);
+    report({ ...what, outcome: 'done' });
     return json(200, { ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // A refused action is the page's problem; anything else is taskwire or the task system failing.
     const refused = error instanceof OrchestratorError && error.exitCode === EXIT.usage;
+    report({ ...what, outcome: refused ? 'refused' : 'failed', error: message });
     return json(refused ? 400 : 502, { error: message });
   }
+}
+
+// The fields of an action worth logging: which task and which action, not the text.
+function describe(body: unknown): { project: string | null; task: string | null; action: string | null } {
+  const fields = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  const text = (value: unknown) => (typeof value === 'string' ? value : null);
+  return { project: text(fields.project), task: text(fields.task), action: text(fields.action) };
 }
 
 function switchControl(control: RunControl, token: string, request: DashboardRequest): DashboardResponse {
