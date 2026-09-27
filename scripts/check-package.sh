@@ -19,4 +19,6 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 "$bin" --help > /dev/null
+# setup reads rules/ from the package, so it fails when those files are not shipped.
+(cd "$work" && "$bin" setup > /dev/null)
 echo "Package check passed: $tarball"

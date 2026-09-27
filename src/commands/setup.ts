@@ -2,7 +2,7 @@ import type { CommandInput } from '../args.ts';
 import { flag, optString, optStrings, reqString } from '../args.ts';
 import type { RawUser } from '../clickup-types.ts';
 import { readConventions, readListIds, writeConfig } from '../config.ts';
-import type { ProjectConfig } from '../config.ts';
+import type { ProjectConfig, TaskConventions } from '../config.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder } from '../guard.ts';
 import { findWorkspaceId, projectConfig } from './context.ts';
@@ -47,6 +47,7 @@ export async function init(ctx: Context, input: CommandInput): Promise<InitResul
   if (!/^\d+$/.test(folderId)) throw usageError(`Invalid folder id "${folderId}"`, 'Run "taskwire folders" to see the ids');
   const listId = optString(input.values, 'list');
   const scopeListIds = readScopeLists(input, listId);
+  const newConventions = readConventionFlags(input);
   const folder = await ctx.client.request<Named & { space: { id: string } }>('GET', `/folder/${folderId}`);
   const workspaceId = await findWorkspaceId(ctx.client, folder.space.id);
 
@@ -62,10 +63,23 @@ export async function init(ctx: Context, input: CommandInput): Promise<InitResul
   const config: ProjectConfig = { provider: 'clickup', workspaceId, folderId };
   if (listIds !== undefined) config.listIds = listIds;
   if (defaultListId !== undefined) config.defaultListId = defaultListId;
-  const conventions = readConventions(ctx.cwd);
-  if (conventions !== undefined) config.conventions = conventions;
+  // --force keeps the conventions already there; --language and --instructions replace only their own field.
+  const conventions: TaskConventions = { ...readConventions(ctx.cwd), ...newConventions };
+  if (Object.keys(conventions).length > 0) config.conventions = conventions;
   const path = writeConfig(ctx.cwd, config, flag(input.values, 'force'));
   return { path, workspaceId, folderId, folderName: folder.name, listIds: listIds ?? null, defaultListId: defaultListId ?? null };
+}
+
+// The --language and --instructions values, checked before any network call.
+function readConventionFlags(input: CommandInput): TaskConventions {
+  const found: TaskConventions = {};
+  for (const name of ['language', 'instructions'] as const) {
+    const value = optString(input.values, name);
+    if (value === undefined) continue;
+    if (value.trim() === '') throw usageError(`--${name} cannot be empty`);
+    found[name] = value.trim();
+  }
+  return found;
 }
 
 // The --scope-list values, checked before any network call.

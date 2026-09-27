@@ -43,14 +43,13 @@ security add-generic-password -a "$USER" -s taskwire -w
 taskwire whoami
 ```
 
-**3. Connect the project** to its place in the task system, from the project root:
+**3. Let your agent set up the project.** From the project root, tell it:
 
 ```
-taskwire folders
-taskwire init --folder <id>
+Set up taskwire in this project: run `taskwire setup` and follow it.
 ```
 
-**4. Tell your agents.** Paste the short block from [docs/agent-rules.md](docs/agent-rules.md) into the project's `AGENTS.md`. It makes agents run `taskwire rules` first, so they always follow the rules of the installed version.
+It asks you which folder, lists and language to use, connects the project and adds a short block to its `AGENTS.md`, so every agent runs `taskwire rules` first. To do it by hand instead, see [docs/agent-rules.md](docs/agent-rules.md).
 
 Next session, ask your agent: *"What was I doing yesterday?"*
 
@@ -70,7 +69,7 @@ Next session, ask your agent: *"What was I doing yesterday?"*
 
 | Area | Commands |
 |---|---|
-| Setup | `whoami`, `folders`, `init`, `rules`, `conventions` |
+| Setup | `setup`, `whoami`, `folders`, `init`, `rules`, `conventions` |
 | Tasks | `tasks`, `task get`, `task create`, `task update`, `task delete --yes` |
 | Lists and tags | `lists`, `list create`, `tags` |
 | Comments | `comment add`, `comment update` |
@@ -87,7 +86,7 @@ Run `taskwire --help` for every option. A few things worth knowing:
 
 ## Configuration
 
-Each project has a `.taskwire.json` at its root, written by `taskwire init`. Commit it: it holds only ids, useless without the token.
+Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--language` and `--instructions` set the conventions). Commit it: it holds only ids, useless without the token. In a public repository you may prefer to keep it local, in `.git/info/exclude`.
 
 ```json
 {

@@ -1,7 +1,7 @@
 import type { Client, Warn } from '../client.ts';
 import type { RawList, RawTask, RawUser } from '../clickup-types.ts';
 import type { ProjectConfig } from '../config.ts';
-import { configError, usageError } from '../errors.ts';
+import { MISSING_CONFIG_HINT, configError, usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
 import type { UpdateNotice } from '../update-check.ts';
 
@@ -19,7 +19,7 @@ export interface Context {
 const userIdCache = new WeakMap<Context, number>();
 
 export function projectConfig(ctx: Context): ProjectConfig {
-  if (ctx.config === null) throw configError('No .taskwire.json found for this project');
+  if (ctx.config === null) throw configError('No .taskwire.json found for this project', MISSING_CONFIG_HINT);
   return ctx.config;
 }
 

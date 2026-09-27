@@ -6,25 +6,23 @@ The rules cover only task management (tasks, comments, checklists, dependencies,
 
 ## Project setup
 
-Paste the block below into the `AGENTS.md` of every project that uses taskwire. If the project also has a `CLAUDE.md`, make it reference `AGENTS.md`. The block is short on purpose and should not need updates.
+The simplest way is to let an agent do it. From the project root, tell it:
 
-```markdown
-## Project tasks (taskwire)
-
-This project's tasks are managed with the `taskwire` CLI. Before reading or writing tasks, run `taskwire rules` and follow it: those rules apply only to task management (tasks, comments, checklists, statuses), not to the code.
-
-- If `taskwire` is not installed, ask the user before installing it with `npm install --global @richi2293/taskwire` (Node >= 24.7).
-- Before starting a piece of work, look for a related task with `taskwire tasks --search <words>`.
-- Never put secrets, tokens or personal data in tasks or comments.
+```
+Set up taskwire in this project: run `taskwire setup` and follow it.
 ```
 
-Projects set up before `taskwire rules` existed have a longer block copied from this page, and projects set up with taskwire 0.1.2 lack the install line: replace the block with the one above.
+`taskwire setup` prints a guide for the agent ([rules/setup.md](../rules/setup.md)) and the block for the project's `AGENTS.md`. The agent checks the token, asks which folder, lists and language to use, runs `taskwire init`, adds the block to `AGENTS.md` and asks whether to commit `.taskwire.json`.
+
+To do it by hand, paste the block from [rules/agents-block.md](../rules/agents-block.md) into the `AGENTS.md` of the project. If the project also has a `CLAUDE.md`, make it reference `AGENTS.md`. The block is short on purpose and should not need updates.
+
+Projects set up before `taskwire rules` existed have a longer block copied from this page, and projects set up with taskwire 0.1.2 lack the install line: replace the block with the one in [rules/agents-block.md](../rules/agents-block.md).
 
 ## Project overrides
 
 The defaults apply unless the project chooses otherwise, in the `conventions` of `.taskwire.json`:
 
-- `language` and `instructions` are added on top of the default rules and win when they conflict. Use `instructions` for project habits, for example a status flow or a naming rule.
+- `language` and `instructions` are added on top of the default rules and win when they conflict. Use `instructions` for project habits, for example a status flow or a naming rule. `taskwire init --language <l> --instructions <text>` writes them.
 - `rulesFile` replaces the default rules entirely with a markdown file, given as a path relative to `.taskwire.json`. The project then no longer gets rule updates from taskwire, so use it only when the defaults do not fit at all.
 
 ```json
