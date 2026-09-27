@@ -11,12 +11,14 @@ orchestrator/bin/taskwire-orchestrator add <folder> [--test-command <command>]
 orchestrator/bin/taskwire-orchestrator list
 orchestrator/bin/taskwire-orchestrator next
 orchestrator/bin/taskwire-orchestrator run-once
+orchestrator/bin/taskwire-orchestrator start
 ```
 
 - `add` follows a project already set up with taskwire (it has a `.taskwire.json`). `--test-command` is the command that runs the project tests, from the project folder.
 - `list` shows the projects it follows.
 - `next` shows, for each project, the task an agent would work on next. It changes nothing.
 - `run-once` makes one pass: for each project, an agent works on the next task (see below).
+- `start` keeps working until you press Ctrl+C: every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`start`, `interrupted`, `run`, `error`, `stop`); an error in a project is logged and the others go on. After Ctrl+C it starts nothing new and waits for the running passes.
 
 ## One pass
 
@@ -65,6 +67,8 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 ```json
 {
   "taskwireCommand": "/path/to/taskwire/bin/taskwire",
+  "maxAgents": 2,
+  "intervalMinutes": 5,
   "projects": [
     { "path": "/Users/jane/code/website", "testCommand": "npm test", "startStatuses": ["to do"], "blockTag": "manual" }
   ]
@@ -73,6 +77,8 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 
 | Field | Meaning |
 |---|---|
+| `maxAgents` | how many agents may work at once, across projects (default 2) |
+| `intervalMinutes` | minutes between two looks at the projects in `start` (default 5) |
 | `taskwireCommand` | the taskwire command to run; defaults to `taskwire` on the PATH. Point it to a clone to try an unreleased taskwire |
 | `projects[].path` | absolute path of the project folder |
 | `projects[].testCommand` | command that runs the project tests |

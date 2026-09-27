@@ -22,12 +22,18 @@ export interface ProjectEntry {
 export interface OrchestratorConfig {
   // The taskwire command to run; defaults to "taskwire" on the PATH.
   taskwireCommand?: string;
+  // How many agents may work at once, across projects (one per project at most); defaults to DEFAULT_MAX_AGENTS.
+  maxAgents?: number;
+  // Minutes between two looks at the projects in "start"; defaults to DEFAULT_INTERVAL_MINUTES.
+  intervalMinutes?: number;
   projects: ProjectEntry[];
 }
 
 export const DEFAULT_START_STATUSES = ['backlog', 'to do'];
 export const DEFAULT_BLOCK_TAG = 'no-agent';
 export const DEFAULT_WORK_STATUS = 'in progress';
+export const DEFAULT_MAX_AGENTS = 2;
+export const DEFAULT_INTERVAL_MINUTES = 5;
 
 const CONFIG_FILE = 'config.json';
 
@@ -51,14 +57,23 @@ export function saveConfig(home: string, config: OrchestratorConfig): void {
 function parseConfig(data: unknown, path: string): OrchestratorConfig {
   const invalid = (reason: string) => configError(`${path}: ${reason}`, 'Fix the file, or remove it and add the projects again');
   if (typeof data !== 'object' || data === null || Array.isArray(data)) throw invalid('must contain a JSON object');
-  const { taskwireCommand, projects } = data as Record<string, unknown>;
+  const { taskwireCommand, maxAgents, intervalMinutes, projects } = data as Record<string, unknown>;
   if (!Array.isArray(projects)) throw invalid('"projects" must be an array');
   const config: OrchestratorConfig = { projects: projects.map((entry: unknown) => parseProject(entry, invalid)) };
   if (taskwireCommand !== undefined) {
     if (typeof taskwireCommand !== 'string' || taskwireCommand.trim() === '') throw invalid('"taskwireCommand" must be a non empty string');
     config.taskwireCommand = taskwireCommand;
   }
+  if (maxAgents !== undefined) config.maxAgents = positive(maxAgents, '"maxAgents"', invalid, true);
+  if (intervalMinutes !== undefined) config.intervalMinutes = positive(intervalMinutes, '"intervalMinutes"', invalid, false);
   return config;
+}
+
+function positive(value: unknown, what: string, invalid: (reason: string) => Error, whole: boolean): number {
+  if (typeof value !== 'number' || value <= 0 || (whole && !Number.isInteger(value))) {
+    throw invalid(`${what} must be a ${whole ? 'whole ' : ''}number greater than 0`);
+  }
+  return value;
 }
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {

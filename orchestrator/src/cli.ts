@@ -9,6 +9,7 @@ import type { RunCommand } from './commands.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
 import { pickTask } from './picker.ts';
+import { runLoop } from './scheduler.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 
 export interface Writer {
@@ -25,6 +26,9 @@ export interface CliDeps {
   runTaskwire: RunTaskwire;
   runCommand: RunCommand;
   now: () => number;
+  // For "start": waits between ticks (returning early when stopped), and tells when to stop.
+  sleep: (ms: number) => Promise<void>;
+  stopped: () => boolean;
 }
 
 interface Input {
@@ -43,6 +47,7 @@ export const HELP = `taskwire-orchestrator: let agents work on the tasks of your
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
   taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
+  taskwire-orchestrator start                                     keep working on the projects until Ctrl+C (one JSON event per line)
 
 Output is JSON on stdout; errors are JSON lines on stderr.
 Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration error.
@@ -53,7 +58,13 @@ const COMMANDS: Record<string, CommandSpec> = {
   list: { options: {}, run: async (deps) => loadConfig(deps.home).projects },
   next: { options: {}, run: nextTasks },
   'run-once': { options: {}, run: runOnce },
+  start: { options: {}, run: start },
 };
+
+async function start(deps: CliDeps): Promise<undefined> {
+  await runLoop({ ...deps, log: (event) => deps.stdout.write(`${JSON.stringify(event)}\n`) });
+  return undefined;
+}
 
 async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
   const { projects, taskwireCommand } = loadConfig(deps.home);
@@ -120,7 +131,8 @@ export async function main(deps: CliDeps): Promise<number> {
     const spec = COMMANDS[name];
     if (spec === undefined) throw usageError(`Unknown command "${name}"`, 'Run "taskwire-orchestrator --help"');
     const result = await spec.run(deps, parseInput(spec, rest));
-    deps.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    // "start" prints its events as they happen, so it has no result.
+    if (result !== undefined) deps.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return EXIT.ok;
   } catch (error) {
     const known = error instanceof OrchestratorError
