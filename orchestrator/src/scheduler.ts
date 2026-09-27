@@ -14,6 +14,8 @@ export interface LoopDeps extends CycleDeps {
   cycle?: (deps: CycleDeps, project: ProjectEntry) => Promise<CycleResult>;
   // Play and pause from the dashboard; without it the loop always works.
   control?: RunControl;
+  // Told before each wait: when the loop looks for new tasks next, or null while paused.
+  onWait?: (until: number | null) => void;
 }
 
 // Runs cycles until stopped: at most maxAgents at once, one per project, taking projects in turn.
@@ -41,7 +43,8 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     const maxAgents = config.maxAgents ?? DEFAULT_MAX_AGENTS;
     const cycleDeps: CycleDeps = { ...deps, taskwireCommand: config.taskwireCommand };
     // While paused nothing new starts; agents already at work finish their task.
-    const projects = deps.control === undefined || deps.control.working() ? config.projects : [];
+    const working = deps.control === undefined || deps.control.working();
+    const projects = working ? config.projects : [];
     const first = turn;
     for (let offset = 0; offset < projects.length && running.size < maxAgents; offset++) {
       const index = (first + offset) % projects.length;
@@ -58,6 +61,7 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
         .finally(() => running.delete(project.path));
       running.set(project.path, work);
     }
+    deps.onWait?.(working ? deps.now() + intervalMs : null);
     // A play or a pause cuts the wait short, so the person sees the change at once.
     await Promise.race([deps.sleep(intervalMs), ...(deps.control === undefined ? [] : [deps.control.changed()])]);
   }

@@ -19,7 +19,7 @@ function fakeServe(): { serve: ServeDashboard; served: { port: number; handler: 
 
 async function stateFrom(handler: Handler): Promise<{ mode: string }> {
   const response = await handler({ method: 'GET', url: '/api/state', headers: { host: '127.0.0.1' }, body: '' });
-  return JSON.parse(response.body) as { mode: string };
+  return (JSON.parse(response.body) as { control: { mode: string } }).control;
 }
 
 test('start serves the dashboard on port 4777 by default, paused: no agent works until play', async () => {

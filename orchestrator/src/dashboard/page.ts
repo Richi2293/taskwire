@@ -15,28 +15,44 @@ export function renderPage(state: DashboardState, token: string): string {
 <style>${STYLE}</style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>taskwire orchestrator</h1>
-    <div class="control">
-      <p id="status" class="status"></p>
+<main class="page">
+  <header class="panel control" aria-label="Agents">
+    <div class="control-row">
+      <div class="control-state">
+        <p class="brand"><strong>taskwire</strong> <span>orchestrator</span></p>
+        <p class="state-line"><span id="state-dot" class="dot"></span><span id="state" class="state"></span><span id="state-hint" class="state-hint"></span></p>
+        <button id="details-toggle" class="link" type="button" aria-expanded="false" aria-controls="details"></button>
+      </div>
       <button id="switch" type="button"></button>
     </div>
+    <div id="details" class="details" hidden>
+      <p id="details-title" class="section-label"></p>
+      <div id="details-cols" class="details-cols"></div>
+    </div>
   </header>
-  <section aria-labelledby="waiting-title">
-    <h2 id="waiting-title">Waiting for you <span id="waiting-count" class="count"></span></h2>
-    <ol id="waiting" class="waiting"></ol>
+
+  <section aria-labelledby="projects-title">
+    <div class="section-head">
+      <h2 id="projects-title">Projects</h2>
+      <span id="projects-count" class="muted small"></span>
+    </div>
+    <div id="projects" class="panel projects"></div>
   </section>
-  <section id="problems-section" aria-labelledby="problems-title" hidden>
-    <h2 id="problems-title">Projects that could not be read</h2>
-    <ul id="problems" class="problems"></ul>
-  </section>
-  <section aria-labelledby="working-title">
-    <h2 id="working-title">At work now</h2>
-    <ul id="working" class="working"></ul>
-  </section>
+
+  <div class="work">
+    <section class="queue" aria-labelledby="queue-title">
+      <div class="section-head start">
+        <h2 id="queue-title">Waiting for you</h2>
+        <span id="queue-count" class="count"></span>
+      </div>
+      <div id="filters" class="filters" role="group" aria-label="Show"></div>
+      <div id="queue" class="panel queue-list"></div>
+    </section>
+    <section id="detail" class="panel detail" aria-live="polite"></section>
+  </div>
+
   <section aria-labelledby="history-title">
-    <h2 id="history-title">History</h2>
+    <div class="section-head"><h2 id="history-title">Done recently</h2></div>
     <div id="history"></div>
   </section>
 </main>
@@ -50,277 +66,477 @@ export function renderPage(state: DashboardState, token: string): string {
 const STYLE = `
 :root {
   color-scheme: light dark;
-  --bg: #f5f7f9; --panel: #ffffff; --ink: #0d1117; --muted: #56606d; --line: #d8dde4;
-  --decision: #a35f00; --test: #0a6aa1; --review: #067a4b; --alive: #067a4b; --problem: #b42318; --code: #eaeef2;
+  --bg: #f4f6f8; --panel: #ffffff; --raised: #ffffff; --ink: #0d1117; --muted: #5a6470; --line: #dde2e8; --line-strong: #c4cbd3;
+  --decision: #a35f00; --decision-soft: #fff3e0; --test: #0a6aa1; --test-soft: #e6f3fa; --review: #067a4b; --review-soft: #e4f5ec;
+  --alive: #067a4b; --problem: #b42318; --primary-bg: #0d1117; --primary-ink: #ffffff; --code: #eaeef2;
   --mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #07090d; --panel: #0e131a; --ink: #e8edf2; --muted: #93a0ae; --line: #1f2833;
-    --decision: #ffc46b; --test: #6ad8ff; --review: #3dffa8; --alive: #3dffa8; --problem: #ff8a7a; --code: #1a222c;
+    --bg: #07090d; --panel: #0e131a; --raised: #131a23; --ink: #e8edf2; --muted: #8f9ba8; --line: #1e2731; --line-strong: #2b3643;
+    --decision: #ffc46b; --decision-soft: #2a2012; --test: #6ad8ff; --test-soft: #0f2330; --review: #3dffa8; --review-soft: #0e2a1e;
+    --alive: #3dffa8; --problem: #ff8a7a; --primary-bg: #3dffa8; --primary-ink: #07090d; --code: #1a222c;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
-header { margin-bottom: 36px; }
-h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
-.control { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; }
-.status { margin: 0; color: var(--muted); }
-.status .alive { color: var(--alive); font-weight: 600; }
-h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin: 40px 0 16px; }
-h3 { font-size: 0.95rem; font-weight: 600; color: var(--muted); margin: 24px 0 8px; }
-.count { color: var(--muted); font-weight: 400; }
-a { color: inherit; text-decoration-color: var(--line); text-underline-offset: 3px; }
-a:hover { text-decoration-color: currentColor; }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--test); outline-offset: 2px; border-radius: 2px; }
-ol, ul { list-style: none; margin: 0; padding: 0; }
-.empty { color: var(--muted); margin: 0; }
-
-.waiting > li { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--kind); border-radius: 6px; padding: 14px 16px; margin-bottom: 12px; }
-.waiting > li[data-needs="decision"] { --kind: var(--decision); }
-.waiting > li[data-needs="test"] { --kind: var(--test); }
-.waiting > li[data-needs="review"] { --kind: var(--review); }
-.kind { color: var(--kind); font-weight: 600; font-size: 0.9rem; margin: 0 0 2px; }
-.kind .project { color: var(--muted); font-weight: 400; }
-.task { font-size: 1.05rem; font-weight: 600; margin: 0 0 6px; }
-.note { margin: 0; padding: 0; color: var(--ink); }
-.note li { margin: 2px 0; overflow-wrap: anywhere; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.page { max-width: 1344px; margin: 0 auto; padding: 28px 24px 64px; display: flex; flex-direction: column; gap: 28px; }
+h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+p { margin: 0; }
+a { color: inherit; text-underline-offset: 3px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--test); outline-offset: 2px; }
 code { font-family: var(--mono); font-size: 0.88em; background: var(--code); border-radius: 3px; padding: 0 3px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.section-head.start { justify-content: flex-start; }
+.section-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+.count { font-family: var(--mono); color: var(--muted); font-size: 1.1rem; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); flex: none; }
+.dot.alive { background: var(--alive); }
 
-.actions { margin-top: 12px; }
-.buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-button { font: inherit; font-size: 0.92rem; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
-button:hover:not(:disabled) { border-color: var(--muted); }
-button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-button.quiet { border-color: transparent; background: transparent; color: var(--muted); padding-left: 6px; padding-right: 6px; }
-button:disabled { opacity: 0.55; cursor: default; }
-.action-form { margin-top: 12px; }
-.action-form label { display: block; margin-bottom: 8px; }
-.action-form label span { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 4px; }
-textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; resize: vertical; }
-textarea:focus-visible { outline: 2px solid var(--test); outline-offset: 1px; }
-.result { margin: 8px 0 0; color: var(--muted); min-height: 0; }
+.btn { border-radius: 8px; padding: 9px 18px; border: 1px solid var(--line-strong); background: transparent; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; }
+.btn.primary { background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); font-weight: 600; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.link { background: none; border: 0; padding: 0; color: var(--test); font-size: 13px; text-align: left; }
+.quiet { background: none; border: 0; padding: 0; color: var(--muted); font-size: 13px; }
+
+.control-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 24px; flex-wrap: wrap; }
+.control-state { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.brand { font-size: 15px; }
+.brand span { color: var(--muted); margin-left: 4px; }
+.state-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.state { font-size: 22px; font-weight: 600; }
+.state.alive { color: var(--alive); }
+.state-hint { color: var(--muted); }
+#switch { padding: 12px 20px; font-size: 15px; }
+.details { border-top: 1px solid var(--line); padding: 16px 24px 20px; }
+.details-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.details-cols div { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
+.details-cols strong { display: block; margin-bottom: 4px; }
+.details-cols p { color: var(--muted); font-size: 13px; }
+
+.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.projects .row:last-child { border-bottom: 0; }
+.projects .name { font-weight: 600; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+.chip b { font-family: var(--mono); font-weight: 600; margin-right: 5px; }
+.chip.decision { background: var(--decision-soft); color: var(--decision); }
+.chip.test { background: var(--test-soft); color: var(--test); }
+.chip.review { background: var(--review-soft); color: var(--review); }
+.at-work { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.at-work.error { color: var(--problem); }
+.done { font-size: 13px; color: var(--muted); text-align: right; }
+
+.work { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.filters { display: inline-flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 12px; flex-wrap: wrap; }
+.filters button { border: 1px solid transparent; background: none; border-radius: 6px; padding: 5px 12px; font-size: 13px; color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--raised); border-color: var(--line-strong); color: var(--ink); font-weight: 600; }
+.filters small { font-family: var(--mono); margin-left: 6px; color: var(--muted); }
+.queue-list { overflow: hidden; padding-bottom: 6px; }
+.group { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; font-size: 12px; font-weight: 600; }
+.group i { width: 8px; height: 8px; border-radius: 2px; }
+.group small { font-family: var(--mono); color: var(--muted); font-weight: 400; }
+.group.decision { color: var(--decision); } .group.decision i { background: var(--decision); }
+.group.test { color: var(--test); } .group.test i { background: var(--test); }
+.group.review { color: var(--review); } .group.review i { background: var(--review); }
+.item { display: flex; width: 100%; gap: 12px; align-items: center; text-align: left; background: none; border: 0; border-left: 3px solid transparent; padding: 10px 16px 10px 13px; }
+.item:hover { background: var(--bg); }
+.item[aria-pressed="true"] { font-weight: 600; }
+.item[aria-pressed="true"].decision { background: var(--decision-soft); border-left-color: var(--decision); }
+.item[aria-pressed="true"].test { background: var(--test-soft); border-left-color: var(--test); }
+.item[aria-pressed="true"].review { background: var(--review-soft); border-left-color: var(--review); }
+.item span { flex: 1; min-width: 0; }
+.item small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+.item time { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+.more { padding: 6px 16px 10px; }
+.empty { padding: 20px 16px; color: var(--muted); }
+
+.detail { padding: 24px 28px; display: flex; flex-direction: column; gap: 22px; }
+.meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.pill { border-radius: 999px; padding: 4px 10px; font-weight: 600; }
+.pill.decision { background: var(--decision-soft); color: var(--decision); }
+.pill.test { background: var(--test-soft); color: var(--test); }
+.pill.review { background: var(--review-soft); color: var(--review); }
+.detail h3 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 6px; font-weight: 600; }
+.detail h3 a { text-decoration: none; }
+.goal { color: var(--muted); }
+.numbered { margin: 0; padding: 0; list-style: none; counter-reset: n; display: flex; flex-direction: column; gap: 10px; }
+.numbered li { counter-increment: n; display: flex; gap: 12px; }
+.numbered li::before { content: counter(n); font-family: var(--mono); font-size: 13px; width: 16px; flex: none; padding-top: 2px; }
+.numbered.decision li::before { color: var(--decision); }
+.numbered.test li::before { color: var(--test); }
+.checked { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.checked li::before { content: "\\2713"; color: var(--review); margin-right: 10px; }
+.note { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.proposal { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+textarea { width: 100%; min-height: 104px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 12px 14px; resize: vertical; }
+.actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.actions .main, .actions .side { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.actions .side { gap: 18px; }
+.actions .side a { color: var(--muted); font-size: 13px; }
+details.menu { position: relative; font-size: 13px; color: var(--muted); }
+details.menu summary { cursor: pointer; list-style: none; }
+details.menu summary::-webkit-details-marker { display: none; }
+details.menu div { position: absolute; right: 0; top: 24px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; z-index: 2; white-space: nowrap; }
+details.menu div button { background: none; border: 0; padding: 6px 10px; border-radius: 6px; width: 100%; text-align: left; }
+details.menu div button:hover { background: var(--bg); }
+.after { font-size: 13px; color: var(--muted); }
+.result { font-size: 14px; }
 .result:empty { display: none; }
 .result.failed { color: var(--problem); }
 
-.working li, .problems li { padding: 8px 0; border-bottom: 1px solid var(--line); }
-.working .since, .problems .error { color: var(--muted); }
-.problems .error { color: var(--problem); }
-
-.timeline { border-left: 2px solid var(--line); margin-left: 3.2rem; }
-.timeline li { position: relative; padding: 0 0 16px 18px; }
-.timeline li::before { content: ""; position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); border: 2px solid var(--muted); }
+.timeline { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); margin-left: 3.4rem; }
+.timeline li { position: relative; padding: 0 0 14px 18px; }
+.timeline li::before { content: ""; position: absolute; left: -6px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); border: 2px solid var(--muted); }
 .timeline li[data-needs="review"]::before { border-color: var(--review); }
 .timeline li[data-needs="test"]::before { border-color: var(--test); }
 .timeline li[data-needs="decision"]::before { border-color: var(--decision); }
-.timeline time { position: absolute; left: -3.6rem; top: 1px; width: 3rem; text-align: right; font-family: var(--mono); font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.timeline .outcome { margin: 2px 0 0; color: var(--muted); }
-.timeline .cost { font-family: var(--mono); font-size: 0.85rem; }
+.timeline time { position: absolute; left: -3.8rem; top: 1px; width: 3.2rem; text-align: right; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.timeline p { color: var(--muted); font-size: 13px; }
+.day { font-size: 13px; color: var(--muted); font-weight: 600; margin: 18px 0 8px; }
 
+@media (max-width: 900px) {
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .details-cols { grid-template-columns: minmax(0, 1fr); }
+  .projects .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .done { text-align: left; }
+  .control-row { align-items: flex-start; }
+  .detail { padding: 20px; }
+}
 @media (max-width: 520px) {
-  main { padding-top: 24px; }
-  h2 { font-size: 1.35rem; }
+  .page { padding: 16px 12px 48px; }
   .timeline { margin-left: 0; border-left: 0; }
   .timeline li { padding-left: 0; }
   .timeline li::before { display: none; }
-  .timeline time { position: static; display: block; width: auto; text-align: left; }
+  .timeline time { position: static; display: block; text-align: left; }
 }
 `;
 
 // Runs in the browser. Builds every element with createElement and textContent only.
 const SCRIPT = `
-const KIND = { decision: 'Decision', test: 'Test by hand', review: 'Review' };
+const TOKEN = document.querySelector('meta[name="action-token"]').content;
+const KIND = {
+  decision: { pill: 'Your decision', group: 'Decide', filter: 'Decide' },
+  test: { pill: 'Try it by hand', group: 'Try by hand', filter: 'Try by hand' },
+  review: { pill: 'Review and merge', group: 'Review and merge', filter: 'Review' },
+};
+const ORDER = ['decision', 'test', 'review'];
+const GROUP_LIMIT = 3;
 const REFRESH_MS = 30000;
+const DONE = {
+  answer: 'Answer sent. An agent takes the task up at the next check.',
+  'accept-proposal': 'Proposal accepted. An agent takes the task up at the next check.',
+  approve: 'Done. The task left your queue.',
+  'send-back': 'Sent back. An agent takes the task up again at the next check.',
+  block: 'Agents will keep away from this task.',
+};
+
+const ui = { state: null, selected: null, filter: 'all', open: new Set(), details: false };
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === undefined || value === null) continue;
     if (key === 'text') node.textContent = value;
-    else if (key.startsWith('data-')) node.setAttribute(key, value);
+    else if (key.startsWith('data-') || key.startsWith('aria-') || key === 'role') node.setAttribute(key, value);
     else node[key] = value;
   }
-  for (const child of children) if (child) node.append(child);
+  for (const child of children.flat()) if (child !== null && child !== undefined && child !== false) node.append(child);
   return node;
 }
 
-// Text with \`code\` spans, as agents write in comments, turned into text and code nodes.
+// Text with \\\`code\\\` spans, as agents write, turned into text and code nodes.
 function inline(text) {
-  return text.split(/\`([^\`]+)\`/).map((part, index) => (index % 2 ? el('code', { text: part }) : part));
+  return text.split(/\\\`([^\\\`]+)\\\`/).map((part, index) => (index % 2 ? el('code', { text: part }) : part));
 }
 
-function time(iso) {
+function clock(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function dayLabel(iso) {
-  const day = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (day.toDateString() === today.toDateString()) return 'Today';
-  if (day.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+function duration(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 1) return 'less than a minute';
+  if (minutes < 60) return minutes + (minutes === 1 ? ' minute' : ' minutes');
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours + (hours === 1 ? ' hour' : ' hours');
+  const days = Math.round(hours / 24);
+  return days + (days === 1 ? ' day' : ' days');
 }
 
-function minutesSince(iso, now) {
-  const minutes = Math.max(0, Math.round((now - new Date(iso)) / 60000));
-  return minutes < 60 ? minutes + ' min' : Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
+function short(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return minutes + ' min';
+  if (minutes < 60 * 24) return Math.round(minutes / 60) + ' h';
+  return Math.round(minutes / 1440) + ' d';
 }
 
-function outcome(run) {
-  const parts = [];
-  if (run.needs === 'decision') parts.push('Waiting for your decision.');
-  else if (run.needs === 'test') parts.push('Waiting for your check by hand.');
-  else if (run.needs === 'review' && run.verdict === 'pass') parts.push('Ready for your review, every criterion verified.');
-  else if (run.needs === 'review') parts.push('Waiting for your review.');
-  if (run.tests === 'pass') parts.push('Tests passed.');
-  if (run.tests === 'fail') parts.push('Tests failed.');
-  return parts.join(' ');
+function plural(n, word) {
+  return n + ' ' + word + (n === 1 ? '' : 's');
 }
 
-const TOKEN = document.querySelector('meta[name="action-token"]').content;
-const DONE = { answer: 'Answer sent.', approve: 'Approved.', 'send-back': 'Sent back to the agent.', block: 'Agents will keep away from it.' };
+// A goal that only repeats the task name adds nothing.
+function sameText(a, b) {
+  const plain = (text) => text.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim();
+  return plain(a) === plain(b);
+}
 
-async function send(item, action, text, box) {
-  for (const button of box.querySelectorAll('button, textarea')) button.disabled = true;
-  const result = box.querySelector('.result');
+function keyOf(item) {
+  return item.project + '#' + item.id;
+}
+
+function renderControl(state) {
+  const c = state.control;
+  const now = new Date(state.generatedAt);
+  const working = c.mode === 'working';
+  document.getElementById('state-dot').className = working ? 'dot alive' : 'dot';
+  const title = document.getElementById('state');
+  title.textContent = working ? 'Working' : 'Paused';
+  title.className = working ? 'state alive' : 'state';
+  let hint;
+  if (working) {
+    const next = c.nextCheckAt ? ' Next check for new tasks at ' + clock(c.nextCheckAt) + ', in ' + duration(new Date(c.nextCheckAt) - now) + '.' : ' Looking for tasks now.';
+    hint = (c.agentsAtWork ? plural(c.agentsAtWork, 'agent') + ' at work.' : 'No agent at work right now.') + next;
+  } else if (c.agentsAtWork) {
+    hint = plural(c.agentsAtWork, 'agent') + ' finishing a task. No new task starts until you press Start agents.';
+  } else {
+    hint = 'No agent is working, and none will start until you press Start agents.';
+  }
+  document.getElementById('state-hint').textContent = hint;
+
+  const button = document.getElementById('switch');
+  button.className = working ? 'btn' : 'btn primary';
+  button.replaceChildren(working ? 'Pause' : 'Start agents');
+  button.disabled = false;
+  button.onclick = () => switchMode(working ? 'pause' : 'play', button);
+
+  const toggle = document.getElementById('details-toggle');
+  toggle.textContent = (working ? 'What is happening' : 'What happens when I start') + (ui.details ? ' \\u25B4' : ' \\u25BE');
+  toggle.setAttribute('aria-expanded', String(ui.details));
+  toggle.onclick = () => { ui.details = !ui.details; renderControl(ui.state); };
+  document.getElementById('details').hidden = !ui.details;
+  document.getElementById('details-title').textContent = working ? 'What is happening' : 'When you press Start agents';
+
+  const col = (title, body) => el('div', {}, el('strong', { text: title }), el('p', { text: body }));
+  let cols;
+  if (working) {
+    const first = state.working[0];
+    const free = state.projects.filter((p) => !p.working).map((p) => p.projectName);
+    const room = c.maxAgents - c.agentsAtWork;
+    cols = [
+      col('Now', first
+        ? 'An agent works on "' + first.name + '" in ' + first.projectName + ', for ' + duration(now - new Date(first.startedAt)) + '. When it is done, the project tests and an independent check run.' + (state.working.length > 1 ? ' ' + plural(state.working.length - 1, 'more agent') + ' at work.' : '')
+        : 'No agent is working right now.'),
+      col(c.nextCheckAt ? 'Next check at ' + clock(c.nextCheckAt) : 'Checking now',
+        (c.nextCheckAt ? 'In ' + duration(new Date(c.nextCheckAt) - now) + ' the' : 'The') + ' orchestrator looks for new tasks' + (free.length ? ' in ' + free.join(', ') : '') + '.'
+        + (c.busyProjects.length ? ' ' + c.busyProjects.join(', ') + (c.busyProjects.length === 1 ? ' is' : ' are') + ' busy until its agent finishes.' : '')),
+      col(c.agentsAtWork + ' of ' + c.maxAgents + ' agents in use',
+        (room > 0 ? plural(room, 'more agent') + ' can start at the next check. ' : 'No room for another agent until one finishes. ') + 'Pause stops new work; an agent at work finishes its task first.'),
+    ];
+  } else {
+    cols = [
+      col('Right away', c.firstTask ? 'An agent takes "' + c.firstTask.name + '" in ' + c.firstTask.projectName + ', the next task with nothing waiting.' : 'No task is ready now: an agent starts as soon as one appears.'),
+      col('Then every ' + c.intervalMinutes + ' minutes', 'The orchestrator looks for new tasks in your ' + plural(state.projects.length, 'project') + ' and starts an agent where there is room.'),
+      col('At most ' + c.maxAgents + ' agents at once', 'One agent per project. Pause stops new work; an agent at work finishes its task first.'),
+    ];
+  }
+  document.getElementById('details-cols').replaceChildren(...cols);
+}
+
+function renderProjects(state) {
+  const now = new Date(state.generatedAt);
+  document.getElementById('projects-count').textContent = plural(state.projects.length, 'project') + ' followed';
+  const label = { decision: 'to decide', test: 'to try', review: 'to review' };
+  const rows = state.projects.map((p) => {
+    const chips = ORDER.filter((k) => p.waiting[k]).map((k) => el('span', { className: 'chip ' + k }, el('b', { text: String(p.waiting[k]) }), label[k]));
+    const work = p.error
+      ? el('div', { className: 'at-work error', text: 'Cannot read this project: ' + p.error })
+      : el('div', { className: 'at-work' }, el('span', { className: p.working ? 'dot alive' : 'dot' }),
+        p.working ? 'Agent at work: ' + p.working.name + ', for ' + duration(now - new Date(p.working.startedAt)) : 'No agent at work');
+    return el('div', { className: 'row' },
+      el('span', { className: 'name', text: p.projectName }),
+      el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: 'Nothing waits for you' })),
+      work,
+      el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }));
+  });
+  const box = document.getElementById('projects');
+  box.replaceChildren(...rows);
+  if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Add one with: taskwire-orchestrator add <folder>' }));
+}
+
+function renderQueue(state) {
+  const now = new Date(state.generatedAt);
+  const items = state.waiting;
+  document.getElementById('queue-count').textContent = String(items.length);
+  const counts = { all: items.length };
+  for (const k of ORDER) counts[k] = items.filter((i) => i.needs === k).length;
+  document.getElementById('filters').replaceChildren(...['all', ...ORDER].map((f) =>
+    el('button', { type: 'button', 'aria-pressed': String(ui.filter === f), onclick: () => { ui.filter = f; renderQueue(ui.state); } },
+      f === 'all' ? 'All' : KIND[f].filter, el('small', { text: String(counts[f]) }))));
+
+  if (!items.find((i) => keyOf(i) === ui.selected)) ui.selected = items.length ? keyOf(items[0]) : null;
+  const kinds = ui.filter === 'all' ? ORDER : [ui.filter];
+  const blocks = [];
+  for (const kind of kinds) {
+    const group = items.filter((i) => i.needs === kind);
+    if (!group.length) continue;
+    const limited = ui.filter === 'all' && !ui.open.has(kind);
+    const selectedIndex = group.findIndex((i) => keyOf(i) === ui.selected);
+    const shown = limited ? group.filter((_, index) => index < GROUP_LIMIT || index === selectedIndex) : group;
+    blocks.push(el('p', { className: 'group ' + kind }, el('i'), KIND[kind].group, el('small', { text: String(group.length) })));
+    for (const item of shown) {
+      blocks.push(el('button', {
+        type: 'button', className: 'item ' + kind, 'aria-pressed': String(keyOf(item) === ui.selected),
+        onclick: () => {
+          ui.selected = keyOf(item);
+          renderQueue(ui.state);
+          renderDetail(ui.state);
+          // On a narrow screen the detail is below the list: bring it into view.
+          if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('detail').scrollIntoView();
+        },
+      }, el('span', {}, item.name, el('small', { text: item.projectName })), item.since ? el('time', { text: short(now - new Date(item.since)) }) : null));
+    }
+    if (shown.length < group.length) {
+      blocks.push(el('p', { className: 'more' }, el('button', { type: 'button', className: 'link', text: 'Show ' + (group.length - shown.length) + ' more', onclick: () => { ui.open.add(kind); renderQueue(ui.state); } })));
+    }
+  }
+  const list = document.getElementById('queue');
+  list.replaceChildren(...blocks);
+  if (!blocks.length) list.replaceChildren(el('p', { className: 'empty', text: items.length ? 'Nothing of this kind waits for you.' : 'Nothing waits for you.' }));
+}
+
+function renderDetail(state) {
+  const box = document.getElementById('detail');
+  const item = state.waiting.find((i) => keyOf(i) === ui.selected);
+  if (!item) {
+    box.replaceChildren(el('p', { className: 'muted', text: state.control.mode === 'working'
+      ? 'Nothing waits for you. Agents keep working, and new questions or checks show up here.'
+      : 'Nothing waits for you. Press Start agents to let agents work on your projects.' }));
+    return;
+  }
+  const now = new Date(state.generatedAt);
+  const result = el('p', { className: 'result', role: 'status' });
+  const parts = [
+    el('div', { className: 'meta' }, el('span', { className: 'pill ' + item.needs, text: KIND[item.needs].pill }), item.projectName + (item.since ? ', waiting for ' + duration(now - new Date(item.since)) : '')),
+    el('div', {}, el('h3', {}, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })), item.goal && !sameText(item.goal, item.name) ? el('p', { className: 'goal' }, ...inline(item.goal)) : null),
+  ];
+  const note = item.note.length ? el('div', {}, el('p', { className: 'section-label', text: 'The agent says' }), el('ul', { className: 'note' }, item.note.map((line) => el('li', {}, ...inline(line))))) : null;
+  const field = (label, placeholder) => el('textarea', { 'aria-label': label, placeholder });
+  const side = el('div', { className: 'side' },
+    el('a', { href: item.url, target: '_blank', rel: 'noopener', text: 'Open in ClickUp' }),
+    el('details', { className: 'menu' }, el('summary', { text: 'More' }),
+      el('div', {}, el('button', { type: 'button', text: 'Keep agents away from this task', onclick: () => send(item, 'block', undefined, box, result) }))));
+
+  if (item.needs === 'decision') {
+    if (item.questions.length) parts.push(el('div', {}, el('p', { className: 'section-label', text: 'The agent asks' }), el('ol', { className: 'numbered decision' }, item.questions.map((q) => el('li', {}, el('span', {}, ...inline(q)))))));
+    else if (note) parts.push(note);
+    if (item.proposal) parts.push(el('div', { className: 'proposal' }, el('p', { className: 'section-label', text: 'The agent proposes' }), el('p', {}, ...inline(item.proposal))));
+    const answer = field('Your answer', 'Answer the questions in your words. The agent reads it and continues.');
+    parts.push(el('div', {}, el('p', { className: 'section-label', text: 'Your answer' }), answer));
+    parts.push(el('div', { className: 'actions' },
+      el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: 'Send answer', onclick: () => (answer.value.trim() ? send(item, 'answer', answer.value, box, result) : answer.focus()) }),
+        item.proposal ? el('button', { type: 'button', className: 'btn', text: 'Accept the proposal', onclick: () => send(item, 'accept-proposal', undefined, box, result) }) : null),
+      side));
+    parts.push(el('p', { className: 'after', text: 'After you answer, the task leaves your queue and an agent takes it up at the next check.' }));
+  } else {
+    if (item.needs === 'test' && item.checked.length) parts.push(el('div', {}, el('p', { className: 'section-label', text: 'Already checked by the agents' }), el('ul', { className: 'checked' }, item.checked.map((c) => el('li', {}, ...inline(c))))));
+    if (item.needs === 'test' && item.byHand.length) parts.push(el('div', {}, el('p', { className: 'section-label', text: 'What only you can check' }), el('ol', { className: 'numbered test' }, item.byHand.map((s) => el('li', {}, el('span', {}, ...inline(s)))))));
+    else if (note) parts.push(note);
+    const ok = item.needs === 'test' ? 'It works' : 'Approve';
+    const wrong = item.needs === 'test' ? 'Something is wrong' : 'Request changes';
+    const text = field('What should change', 'What should the agent fix? It reads this and continues on the same branch.');
+    const feedback = el('div', { hidden: true }, el('p', { className: 'section-label', text: 'What should change' }), text,
+      el('div', { className: 'actions' }, el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: 'Send to the agent', onclick: () => (text.value.trim() ? send(item, 'send-back', text.value, box, result) : text.focus()) }),
+        el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { feedback.hidden = true; } }))));
+    parts.push(el('div', { className: 'actions' },
+      el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: ok, onclick: () => send(item, 'approve', undefined, box, result) }),
+        el('button', { type: 'button', className: 'btn', text: wrong, onclick: () => { feedback.hidden = false; text.focus(); } })),
+      side));
+    parts.push(feedback);
+    parts.push(el('p', { className: 'after', text: ok + ' takes the task out of your queue; ' + (item.needs === 'test' ? 'merging the branch stays with you. ' : 'merging and closing it stay with you. ') + wrong + ' sends your note back to the agent.' }));
+  }
+  parts.push(result);
+  box.replaceChildren(...parts);
+}
+
+function renderHistory(state) {
+  const days = new Map();
+  for (const run of state.history.slice(0, 30)) {
+    const day = new Date(run.finishedAt).toDateString();
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push(run);
+  }
+  const today = new Date(state.generatedAt).toDateString();
+  const outcome = (run) => {
+    if (run.needs === 'decision') return 'Waiting for your decision.';
+    if (run.needs === 'test') return 'Waiting for your check by hand.';
+    if (run.needs === 'review' && run.verdict === 'pass') return 'Ready for your review, every criterion verified.';
+    if (run.needs === 'review') return 'Waiting for your review.';
+    return 'Finished.';
+  };
+  const box = document.getElementById('history');
+  box.replaceChildren(...[...days].flatMap(([day, runs]) => [
+    el('p', { className: 'day', text: day === today ? 'Today' : new Date(runs[0].finishedAt).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }) }),
+    el('ol', { className: 'timeline' }, runs.map((run) => el('li', { 'data-needs': run.needs || '' },
+      el('time', { dateTime: run.finishedAt, text: clock(run.finishedAt) }),
+      el('a', { href: run.url, target: '_blank', rel: 'noopener', text: run.name }),
+      el('p', { text: run.projectName + '. ' + outcome(run) + (run.tests === 'fail' ? ' Tests failed.' : '') + (run.costUsd === null ? '' : ' ' + run.costUsd.toFixed(2) + ' USD.') })))),
+  ]));
+  if (!days.size) box.replaceChildren(el('p', { className: 'muted', text: 'No agent has finished a task yet.' }));
+}
+
+function render(state) {
+  ui.state = state;
+  renderControl(state);
+  renderProjects(state);
+  renderQueue(state);
+  renderDetail(state);
+  renderHistory(state);
+}
+
+async function post(path, body) {
+  const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-action-token': TOKEN }, body: JSON.stringify(body) });
+  const answer = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(answer.error || 'The orchestrator answered ' + response.status + '.');
+  return answer;
+}
+
+async function send(item, action, text, box, result) {
+  for (const control of box.querySelectorAll('button, textarea')) control.disabled = true;
   result.className = 'result';
   result.textContent = 'Sending.';
   try {
-    const response = await fetch('/api/action', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-action-token': TOKEN },
-      body: JSON.stringify({ project: item.project, task: item.id, action, text }),
-    });
-    const answer = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(answer.error || 'The orchestrator answered ' + response.status + '.');
+    await post('/api/action', { project: item.project, task: item.id, action, text });
     result.textContent = DONE[action];
-    for (const form of box.querySelectorAll('form')) form.hidden = true;
-    setTimeout(refresh, 1200);
+    setTimeout(() => refresh(true), 1500);
   } catch (error) {
     result.className = 'result failed';
     result.textContent = error.message;
-    for (const button of box.querySelectorAll('button, textarea')) button.disabled = false;
+    for (const control of box.querySelectorAll('button, textarea')) control.disabled = false;
   }
-}
-
-// A form that asks the person for a text before sending the action.
-function textForm(item, action, label, submit, box) {
-  const area = el('textarea', { rows: 3, required: true });
-  const form = el('form', { className: 'action-form', hidden: true },
-    el('label', {}, el('span', { text: label }), area),
-    el('div', { className: 'buttons' },
-      el('button', { type: 'submit', className: 'primary', text: submit }),
-      el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { form.hidden = true; } })));
-  form.onsubmit = (event) => {
-    event.preventDefault();
-    if (area.value.trim()) send(item, action, area.value, box);
-  };
-  return { form, open: () => { form.hidden = false; area.focus(); } };
-}
-
-function actionsFor(item) {
-  const box = el('div', { className: 'actions' });
-  const buttons = el('div', { className: 'buttons' });
-  const forms = [];
-  if (item.needs === 'decision') {
-    const answer = textForm(item, 'answer', 'Your answer for the agent', 'Send answer', box);
-    forms.push(answer.form);
-    buttons.append(el('button', { type: 'button', className: 'primary', text: 'Answer', onclick: answer.open }));
-  } else {
-    const back = textForm(item, 'send-back', 'What the agent should fix', 'Send back to the agent', box);
-    forms.push(back.form);
-    buttons.append(
-      el('button', { type: 'button', className: 'primary', text: 'Approve', onclick: () => send(item, 'approve', undefined, box) }),
-      el('button', { type: 'button', text: 'Send back', onclick: back.open }));
-  }
-  buttons.append(el('button', { type: 'button', className: 'quiet', text: 'Keep agents away', onclick: () => send(item, 'block', undefined, box) }));
-  box.append(buttons, ...forms, el('p', { className: 'result', role: 'status' }));
-  return box;
 }
 
 async function switchMode(action, button) {
   button.disabled = true;
   try {
-    const response = await fetch('/api/control', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-action-token': TOKEN },
-      body: JSON.stringify({ action }),
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'The orchestrator answered ' + response.status + '.');
+    await post('/api/control', { action });
   } catch (error) {
-    document.getElementById('status').textContent = error.message;
+    document.getElementById('state-hint').textContent = error.message;
   }
-  button.disabled = false;
   refresh(true);
 }
 
 // Someone is typing or waiting for an answer: a refresh would throw that away.
 function busy() {
-  return [...document.querySelectorAll('.action-form')].some((form) => !form.hidden) || Boolean(document.querySelector('.actions button:disabled'));
+  return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '') || Boolean(document.querySelector('#detail button:disabled'));
 }
-
-function render(state) {
-  const now = new Date(state.generatedAt);
-  const status = document.getElementById('status');
-  const finishing = state.mode === 'paused' && state.working.length ? ' Agents at work finish their task.' : '';
-  status.replaceChildren(
-    state.mode === 'working'
-      ? el('span', { className: 'alive', text: 'Working: agents take the next tasks.' })
-      : 'Paused: no agent takes a new task until you start.' + finishing,
-    ' Updated ' + time(state.generatedAt) + '.',
-  );
-  const button = document.getElementById('switch');
-  button.textContent = state.mode === 'working' ? 'Pause' : 'Start working';
-  button.className = state.mode === 'working' ? '' : 'primary';
-  button.disabled = false;
-  button.onclick = () => switchMode(state.mode === 'working' ? 'pause' : 'play', button);
-
-  const waiting = document.getElementById('waiting');
-  document.getElementById('waiting-count').textContent = state.waiting.length ? String(state.waiting.length) : '';
-  waiting.replaceChildren(...state.waiting.map((item) =>
-    el('li', { 'data-needs': item.needs },
-      el('p', { className: 'kind' }, KIND[item.needs] || item.needs, el('span', { className: 'project', text: ' in ' + item.projectName })),
-      el('p', { className: 'task' }, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })),
-      item.note.length ? el('ul', { className: 'note' }, ...item.note.map((line) => el('li', {}, ...inline(line)))) : null,
-      actionsFor(item),
-    )));
-  if (!state.waiting.length) waiting.replaceChildren(el('li', { className: 'empty', text: 'Nothing waits for you.' }));
-
-  const problems = document.getElementById('problems');
-  document.getElementById('problems-section').hidden = !state.problems.length;
-  problems.replaceChildren(...state.problems.map((problem) =>
-    el('li', {}, el('strong', { text: problem.projectName }), el('span', { className: 'error', text: ': ' + problem.error }))));
-
-  const working = document.getElementById('working');
-  working.replaceChildren(...state.working.map((item) =>
-    el('li', {}, el('strong', { text: item.name }), el('span', { className: 'since', text: ' in ' + item.projectName + ', for ' + minutesSince(item.startedAt, now) })),
-  ));
-  if (!state.working.length) working.replaceChildren(el('li', { className: 'empty', text: 'No agent is working right now.' }));
-
-  const history = document.getElementById('history');
-  const days = new Map();
-  for (const run of state.history) {
-    const label = dayLabel(run.finishedAt);
-    if (!days.has(label)) days.set(label, []);
-    days.get(label).push(run);
-  }
-  history.replaceChildren(...[...days].flatMap(([label, runs]) => [
-    el('h3', { text: label }),
-    el('ol', { className: 'timeline' }, ...runs.map((run) =>
-      el('li', { 'data-needs': run.needs || '' },
-        el('time', { dateTime: run.finishedAt, text: time(run.finishedAt) }),
-        el('a', { href: run.url, target: '_blank', rel: 'noopener', text: run.name }),
-        el('p', { className: 'outcome' },
-          run.projectName + '. ' + outcome(run),
-          run.costUsd === null ? null : el('span', { className: 'cost', text: ' ' + run.costUsd.toFixed(2) + ' USD' })),
-      ))),
-  ]));
-  if (!state.history.length) history.replaceChildren(el('p', { className: 'empty', text: 'No agent has worked on a task yet.' }));
-}
-
-render(JSON.parse(document.getElementById('initial-state').textContent));
 
 async function refresh(force) {
   if (!force && busy()) return;
@@ -331,5 +547,7 @@ async function refresh(force) {
     // The orchestrator is stopped or restarting: keep showing the last state.
   }
 }
+
+render(JSON.parse(document.getElementById('initial-state').textContent));
 setInterval(refresh, REFRESH_MS);
 `;

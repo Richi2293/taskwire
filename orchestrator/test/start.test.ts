@@ -164,3 +164,17 @@ test('with a run control, no agent starts until play, and pause stops new work',
   assert.deepEqual(startedAtTick, [0, 1, 1]);
   assert.deepEqual(h.started, ['/p/a']);
 });
+
+test('the loop tells when it looks for new tasks next, and nothing while paused', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { intervalMinutes: 5, projects: [] });
+  const control = createRunControl();
+  const waits: (number | null)[] = [];
+  const h = harness(home, 2, (tick) => {
+    if (tick === 1) control.play();
+  });
+  h.deps.control = control;
+  h.deps.onWait = (until) => waits.push(until);
+  await runLoop(h.deps);
+  assert.deepEqual(waits, [null, Date.UTC(2026, 8, 27, 10, 5, 0)]);
+});

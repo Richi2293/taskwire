@@ -77,3 +77,13 @@ test('refuses actions that do not fit, before writing anything', async () => {
   }
   assert.deepEqual(writes(taskwire.calls), []);
 });
+
+test('accept the proposal tells the agent to go ahead with it, then clears the decision mark', async () => {
+  const { project, taskwire, act } = setup();
+  await act({ project, task: 'd1', action: 'accept-proposal' });
+  assert.deepEqual(writes(taskwire.calls), [
+    ['comment', 'add', 'd1', '--text', 'Answer from the person, via the dashboard:\n\nGo ahead with your proposal.'],
+    ['task', 'update', 'd1', '--needs', 'none'],
+  ]);
+  await assert.rejects(act({ project, task: 'r1', action: 'accept-proposal' }), (error: unknown) => error instanceof OrchestratorError);
+});
