@@ -84,6 +84,22 @@ ol, ul { list-style: none; margin: 0; padding: 0; }
 .note li { margin: 2px 0; overflow-wrap: anywhere; }
 code { font-family: var(--mono); font-size: 0.88em; background: var(--code); border-radius: 3px; padding: 0 3px; }
 
+.actions { margin-top: 12px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: inherit; font-size: 0.92rem; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+button.quiet { border-color: transparent; background: transparent; color: var(--muted); padding-left: 6px; padding-right: 6px; }
+button:disabled { opacity: 0.55; cursor: default; }
+.action-form { margin-top: 12px; }
+.action-form label { display: block; margin-bottom: 8px; }
+.action-form label span { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 4px; }
+textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; resize: vertical; }
+textarea:focus-visible { outline: 2px solid var(--test); outline-offset: 1px; }
+.result { margin: 8px 0 0; color: var(--muted); min-height: 0; }
+.result:empty { display: none; }
+.result.failed { color: var(--problem); }
+
 .working li, .problems li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .working .since, .problems .error { color: var(--muted); }
 .problems .error { color: var(--problem); }
@@ -159,6 +175,72 @@ function outcome(run) {
   return parts.join(' ');
 }
 
+const TOKEN = document.querySelector('meta[name="action-token"]').content;
+const DONE = { answer: 'Answer sent.', approve: 'Approved.', 'send-back': 'Sent back to the agent.', block: 'Agents will keep away from it.' };
+
+async function send(item, action, text, box) {
+  for (const button of box.querySelectorAll('button, textarea')) button.disabled = true;
+  const result = box.querySelector('.result');
+  result.className = 'result';
+  result.textContent = 'Sending.';
+  try {
+    const response = await fetch('/api/action', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-action-token': TOKEN },
+      body: JSON.stringify({ project: item.project, task: item.id, action, text }),
+    });
+    const answer = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(answer.error || 'The orchestrator answered ' + response.status + '.');
+    result.textContent = DONE[action];
+    for (const form of box.querySelectorAll('form')) form.hidden = true;
+    setTimeout(refresh, 1200);
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+    for (const button of box.querySelectorAll('button, textarea')) button.disabled = false;
+  }
+}
+
+// A form that asks the person for a text before sending the action.
+function textForm(item, action, label, submit, box) {
+  const area = el('textarea', { rows: 3, required: true });
+  const form = el('form', { className: 'action-form', hidden: true },
+    el('label', {}, el('span', { text: label }), area),
+    el('div', { className: 'buttons' },
+      el('button', { type: 'submit', className: 'primary', text: submit }),
+      el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { form.hidden = true; } })));
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    if (area.value.trim()) send(item, action, area.value, box);
+  };
+  return { form, open: () => { form.hidden = false; area.focus(); } };
+}
+
+function actionsFor(item) {
+  const box = el('div', { className: 'actions' });
+  const buttons = el('div', { className: 'buttons' });
+  const forms = [];
+  if (item.needs === 'decision') {
+    const answer = textForm(item, 'answer', 'Your answer for the agent', 'Send answer', box);
+    forms.push(answer.form);
+    buttons.append(el('button', { type: 'button', className: 'primary', text: 'Answer', onclick: answer.open }));
+  } else {
+    const back = textForm(item, 'send-back', 'What the agent should fix', 'Send back to the agent', box);
+    forms.push(back.form);
+    buttons.append(
+      el('button', { type: 'button', className: 'primary', text: 'Approve', onclick: () => send(item, 'approve', undefined, box) }),
+      el('button', { type: 'button', text: 'Send back', onclick: back.open }));
+  }
+  buttons.append(el('button', { type: 'button', className: 'quiet', text: 'Keep agents away', onclick: () => send(item, 'block', undefined, box) }));
+  box.append(buttons, ...forms, el('p', { className: 'result', role: 'status' }));
+  return box;
+}
+
+// Someone is typing or waiting for an answer: a refresh would throw that away.
+function busy() {
+  return [...document.querySelectorAll('.action-form')].some((form) => !form.hidden) || Boolean(document.querySelector('.actions button:disabled'));
+}
+
 function render(state) {
   const now = new Date(state.generatedAt);
   const status = document.getElementById('status');
@@ -174,6 +256,7 @@ function render(state) {
       el('p', { className: 'kind' }, KIND[item.needs] || item.needs, el('span', { className: 'project', text: ' in ' + item.projectName })),
       el('p', { className: 'task' }, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })),
       item.note.length ? el('ul', { className: 'note' }, ...item.note.map((line) => el('li', {}, ...inline(line)))) : null,
+      actionsFor(item),
     )));
   if (!state.waiting.length) waiting.replaceChildren(el('li', { className: 'empty', text: 'Nothing waits for you.' }));
 
@@ -212,6 +295,7 @@ function render(state) {
 render(JSON.parse(document.getElementById('initial-state').textContent));
 
 async function refresh() {
+  if (busy()) return;
   try {
     const response = await fetch('/api/state', { cache: 'no-store' });
     if (response.ok) render(await response.json());

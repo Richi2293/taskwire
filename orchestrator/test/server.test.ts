@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHandler } from '../src/dashboard/server.ts';
+import { OrchestratorError } from '../src/errors.ts';
 import type { DashboardState } from '../src/dashboard/snapshot.ts';
 
 const state: DashboardState = {
@@ -45,4 +46,45 @@ test('requests for another host are refused, against DNS rebinding', async () =>
 
 test('an unknown path is a 404', async () => {
   assert.equal((await get('/nope')).status, 404);
+});
+
+function withActions(act: (body: unknown) => Promise<void>) {
+  return createHandler({ snapshot: async () => state, token: 'secret-token', act });
+}
+
+const post = (handle: ReturnType<typeof withActions>, body: string, token?: string) =>
+  handle({
+    method: 'POST',
+    url: '/api/action',
+    headers: { host: '127.0.0.1:4777', 'content-type': 'application/json', ...(token === undefined ? {} : { 'x-action-token': token }) },
+    body,
+  });
+
+test('an action needs the token of this start, so another page cannot send one', async () => {
+  const received: unknown[] = [];
+  const handle = withActions(async (body) => { received.push(body); });
+  assert.equal((await post(handle, '{"project":"/p","task":"t1","action":"approve"}')).status, 403);
+  assert.equal((await post(handle, '{"project":"/p","task":"t1","action":"approve"}', 'guess')).status, 403);
+  assert.deepEqual(received, []);
+  const ok = await post(handle, '{"project":"/p","task":"t1","action":"approve"}', 'secret-token');
+  assert.equal(ok.status, 200);
+  assert.deepEqual(JSON.parse(ok.body), { ok: true });
+  assert.deepEqual(received, [{ project: '/p', task: 't1', action: 'approve' }]);
+});
+
+test('an action that is not JSON, or that is refused, answers 400 with the reason', async () => {
+  const handle = withActions(async () => {
+    throw new OrchestratorError('Task t1 does not wait for a decision', 2);
+  });
+  assert.equal((await post(handle, 'not json', 'secret-token')).status, 400);
+  const refused = await post(handle, '{"project":"/p","task":"t1","action":"answer","text":"x"}', 'secret-token');
+  assert.equal(refused.status, 400);
+  assert.deepEqual(JSON.parse(refused.body), { error: 'Task t1 does not wait for a decision' });
+});
+
+test('a failure of taskwire during an action answers 502', async () => {
+  const handle = withActions(async () => {
+    throw new OrchestratorError('taskwire task: Network error calling ClickUp', 1);
+  });
+  assert.equal((await post(handle, '{"project":"/p","task":"t1","action":"approve"}', 'secret-token')).status, 502);
 });

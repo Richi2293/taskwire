@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { claudeResult, fakeCommands, fakeTaskwire, projectDir, runOrchestrator, task, tempDir } from './helpers.ts';
 import type { CommandCall, FakeReply } from './helpers.ts';
@@ -162,4 +162,16 @@ test('with a taskwireCommand, the agent finds that taskwire first on its PATH', 
   const bin = join(home, 'bin');
   assert.equal(agent.env.PATH?.split(':')[0], bin);
   assert.equal(readlinkSync(join(bin, 'taskwire')), '/opt/taskwire/bin/taskwire');
+});
+
+test('a task sent back to the agent continues in its existing worktree', async () => {
+  const { home, project } = setup();
+  const worktree = join(home, 'worktrees', `website-${basename(join(project, '..'))}`, 't1');
+  mkdirSync(worktree, { recursive: true });
+  const commands = fakeCommands({ claude: () => claudeResult() });
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: commands.run });
+  assert.equal(run.code, 0, run.stderr);
+  assert.ok(!commands.calls.some((call) => call.args[0] === 'worktree'), 'no new worktree');
+  assert.equal(claudeCalls(commands.calls)[0].cwd, worktree);
+  assert.ok(existsSync(join(worktree, '.taskwire.json')));
 });

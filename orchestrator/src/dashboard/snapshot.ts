@@ -60,8 +60,13 @@ const CACHE_MS = 60_000;
 const HISTORY_LIMIT = 200;
 const NEEDS_ORDER = { decision: 0, test: 1, review: 2 } as const;
 
+export type Snapshot = (() => Promise<DashboardState>) & {
+  // Forgets the cached reads, after a change made from the dashboard.
+  clear: () => void;
+};
+
 // Returns a function that builds the dashboard state, reading the task system through a short cache.
-export function createSnapshot(deps: SnapshotDeps): () => Promise<DashboardState> {
+export function createSnapshot(deps: SnapshotDeps): Snapshot {
   const cache = new Map<string, { at: number; value: unknown }>();
   const cached = async (args: string[], cwd: string): Promise<unknown> => {
     const key = `${cwd}\n${args.join(' ')}`;
@@ -72,7 +77,7 @@ export function createSnapshot(deps: SnapshotDeps): () => Promise<DashboardState
     return value;
   };
 
-  return async () => {
+  const read = async (): Promise<DashboardState> => {
     const config = loadConfig(deps.home);
     const waiting: WaitingItem[] = [];
     const problems: DashboardState['problems'] = [];
@@ -129,6 +134,7 @@ export function createSnapshot(deps: SnapshotDeps): () => Promise<DashboardState
       problems,
     };
   };
+  return Object.assign(read, { clear: () => cache.clear() });
 }
 
 // taskwire comments open with a quote for people ("> **Next:** ..."): that is what the dashboard shows.
