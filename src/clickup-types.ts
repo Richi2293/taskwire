@@ -58,9 +58,19 @@ export interface RawList {
   statuses?: RawStatus[];
 }
 
+// One block of a comment in the Quill Delta format: text with inline attributes, where the attributes
+// of a "\n" apply to the whole line it ends. Other blocks (divider, mentions) carry a `type`.
+export interface RawCommentBlock {
+  text?: string;
+  type?: string;
+  attributes?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface RawComment {
   id: string;
   comment_text: string;
+  comment?: RawCommentBlock[];
   user: RawUser;
   date: string;
   assignee?: RawUser | null;
