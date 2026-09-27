@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-27
+
 ### Changed
 
 - The README is rewritten: shorter, with a quick start, a before and after demo, a diagram of how taskwire works, a command overview and the whole configuration in one place. New logo and images live in `docs/assets/`.
@@ -67,7 +69,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/Richi2293/taskwire/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Richi2293/taskwire/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Richi2293/taskwire/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Richi2293/taskwire/compare/v0.1.0...v0.1.1
