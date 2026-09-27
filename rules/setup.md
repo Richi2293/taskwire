@@ -10,6 +10,7 @@ Ask the user only for the real choices (folder, lists, language, commit of the c
    - Elsewhere, in the `TASKWIRE_API_TOKEN` environment variable.
    - Where to create it: https://github.com/Richi2293/taskwire/blob/main/docs/providers/clickup.md#token
    - Never ask the user to paste the token in the chat, and never print, store or log it yourself.
+   - **Several accounts.** If the user has more than one account of the task system (for example one per company), ask which one this project uses and a short name for it: lowercase letters, digits and dashes, such as `acme`. Its token goes in the Keychain service `taskwire:<name>` (`security add-generic-password -a "$USER" -s taskwire:<name> -w`) or in `TASKWIRE_API_TOKEN_<NAME>` (uppercase, `-` becomes `_`). Add `--account <name>` to every command until the end of the setup, `init` included.
 3. **Folder.** Run `taskwire folders` and show the user the folders (name, space, workspace). Ask which one holds this project's tasks.
 4. **Lists.** Ask whether the folder belongs to this project only, or is shared with other projects (for example one folder per company and one list per project).
    - If it is shared, run `taskwire lists --folder <id>`, show the lists and ask which ones belong to this project. These become `--scope-list`.
@@ -18,7 +19,7 @@ Ask the user only for the real choices (folder, lists, language, commit of the c
 6. **Init.** Run one command with every choice:
 
    ```
-   taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <language>] [--instructions <text>]
+   taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <language>] [--instructions <text>] [--account <name>]
    ```
 
    If it fails with exit code 2 because the config exists and the user asked to replace it, add `--force`.

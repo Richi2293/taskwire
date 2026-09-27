@@ -92,6 +92,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
 ```json
 {
   "provider": "clickup",
+  "account": "acme",
   "workspaceId": "9012345",
   "folderId": "901234567",
   "listIds": ["901234890"],
@@ -108,15 +109,18 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
 | Field | Meaning |
 |---|---|
 | `provider` | the task system; defaults to `clickup` |
+| `account` | a name for the account of the task system this project uses, when you have more than one; its token is read from the Keychain service `taskwire:<account>` or from `TASKWIRE_API_TOKEN_<ACCOUNT>`. Leave it out to use the default token |
 | `workspaceId`, `folderId`, `listIds`, `defaultListId` | where the project lives in the task system, and its default list. `listIds` lets several projects share one container, each limited to its own lists. The exact fields depend on the provider: see [its page](docs/providers/clickup.md). |
 | `needsTags` | other tag names for the needs kinds (`decision`, `test`, `review`), for example in the project language; the others keep their default name |
 | `conventions.language` | language of task names, descriptions, comments and checklists (default English) |
 | `conventions.instructions` | any other rule for agents, added on top of the defaults and winning when they conflict |
 | `conventions.rulesFile` | a markdown file, relative to `.taskwire.json`, that replaces the default rules entirely |
 
-`taskwire init --force` rewrites the ids and keeps the conventions.
+`taskwire init --force` rewrites the ids and keeps the conventions and the account.
 
-**Environment variables:** `TASKWIRE_API_TOKEN` (the token, when the Keychain is not available), `TASKWIRE_NO_UPDATE_CHECK=1` (turns off the update check), `TZ` (time zone for due dates).
+**Several accounts.** Give each account a name, store its token under that name, and set it in the project with `taskwire init --account <name>`. `--account <name>` also works on any command, for example `taskwire folders --account acme` before `init`. With an account, taskwire never falls back to the default token.
+
+**Environment variables:** `TASKWIRE_API_TOKEN` (the token, when the Keychain is not available), `TASKWIRE_API_TOKEN_<ACCOUNT>` (the token of a named account, uppercase with `-` as `_`), `TASKWIRE_NO_UPDATE_CHECK=1` (turns off the update check), `TZ` (time zone for due dates).
 
 ### Updating
 

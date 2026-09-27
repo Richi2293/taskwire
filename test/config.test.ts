@@ -131,3 +131,14 @@ test('rejects needsTags with an unknown kind, an empty name or two kinds on the 
     assert.throws(() => parseConfig(text, '/x'), (e: unknown) => e instanceof TaskwireError && e.exitCode === 3, text);
   }
 });
+
+test('reads the account of the project', () => {
+  assert.deepEqual(parseConfig('{"folderId":"1","account":"acme-corp"}', '/x'), { provider: 'clickup', folderId: '1', account: 'acme-corp' });
+});
+
+test('rejects an account name that is not lowercase letters, digits and dashes', () => {
+  for (const account of ['"Acme"', '"acme corp"', '""', '"-acme"', '7']) {
+    const text = `{"folderId":"1","account":${account}}`;
+    assert.throws(() => parseConfig(text, '/x'), (e: unknown) => e instanceof TaskwireError && e.exitCode === 3, text);
+  }
+});

@@ -13,9 +13,11 @@ interface Named {
   name: string;
 }
 
-export async function whoami(ctx: Context): Promise<{ id: number; username: string | null; email: string | null }> {
+export async function whoami(
+  ctx: Context,
+): Promise<{ id: number; username: string | null; email: string | null; account: string | null }> {
   const { user } = await ctx.client.request<{ user: RawUser }>('GET', '/user');
-  return { id: user.id, username: user.username, email: user.email ?? null };
+  return { id: user.id, username: user.username, email: user.email ?? null, account: ctx.account };
 }
 
 export async function folders(ctx: Context): Promise<{ id: string; name: string; space: string; workspace: string }[]> {
@@ -61,6 +63,8 @@ export async function init(ctx: Context, input: CommandInput): Promise<InitResul
   const defaultListId = listId ?? (listIds?.length === 1 ? listIds[0] : undefined);
 
   const config: ProjectConfig = { provider: 'clickup', workspaceId, folderId };
+  // The account is --account, or the one already in the config when --force rewrites it.
+  if (ctx.account !== null) config.account = ctx.account;
   if (listIds !== undefined) config.listIds = listIds;
   if (defaultListId !== undefined) config.defaultListId = defaultListId;
   // --force keeps the conventions already there; --language and --instructions replace only their own field.

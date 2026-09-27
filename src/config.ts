@@ -20,6 +20,8 @@ export interface TaskConventions {
 
 export interface ProjectConfig {
   provider: Provider;
+  // Name of the task system account whose token this project uses; missing means the default token.
+  account?: string;
   workspaceId?: string;
   folderId: string;
   // Lists of the folder that belong to this project, for folders shared by several projects. Missing means the whole folder.
@@ -31,6 +33,14 @@ export interface ProjectConfig {
 }
 
 const NUMERIC_ID = /^\d+$/;
+
+// Account names end up in a Keychain service and an environment variable name, so they stay simple.
+const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]*$/;
+export const ACCOUNT_NAME_HINT = 'Use lowercase letters, digits and dashes, for example "acme"';
+
+export function isAccountName(value: string): boolean {
+  return ACCOUNT_NAME.test(value);
+}
 
 export function findConfig(startDir: string): { path: string; config: ProjectConfig } | null {
   const path = findConfigPath(startDir);
@@ -59,11 +69,14 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw configError(`${path} must contain a JSON object`);
   }
-  const { provider, workspaceId, folderId, listIds, defaultListId, needsTags, conventions } = data as Record<string, unknown>;
+  const { provider, account, workspaceId, folderId, listIds, defaultListId, needsTags, conventions } = data as Record<string, unknown>;
   const config: ProjectConfig = {
     provider: parseProvider(provider, path),
     folderId: checkId(folderId, 'folderId', path, 'Run "taskwire folders" to find the folder id'),
   };
+  if (account !== undefined) {
+    config.account = parseAccount(account, path);
+  }
   if (workspaceId !== undefined) {
     config.workspaceId = checkId(workspaceId, 'workspaceId', path, 'Run "taskwire init --force" to rewrite it');
   }
@@ -98,6 +111,13 @@ function parseListIds(value: unknown, path: string): string[] {
     ids.push(id);
   }
   return ids;
+}
+
+function parseAccount(value: unknown, path: string): string {
+  if (typeof value !== 'string' || !isAccountName(value)) {
+    throw configError(`${path}: "account" must be a simple name`, ACCOUNT_NAME_HINT);
+  }
+  return value;
 }
 
 function parseNeedsTags(value: unknown, path: string): Partial<NeedsTags> {
@@ -162,6 +182,20 @@ export function readConventions(dir: string): TaskConventions | undefined {
     if (typeof data !== 'object' || data === null || !('conventions' in data)) return undefined;
     const conventions = parseConventions(data.conventions, path);
     return Object.keys(conventions).length > 0 ? conventions : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The account of the config file in dir, read leniently like readConventions, so that commands run before
+// or without a valid config (whoami, init --force) still use the project's token.
+export function readAccount(dir: string): string | undefined {
+  const path = join(dir, CONFIG_FILE);
+  if (!existsSync(path)) return undefined;
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (typeof data !== 'object' || data === null || !('account' in data)) return undefined;
+    return parseAccount(data.account, path);
   } catch {
     return undefined;
   }

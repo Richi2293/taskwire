@@ -1,10 +1,10 @@
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
 import type { CommandInput } from './args.ts';
-import { flag } from './args.ts';
+import { flag, optString } from './args.ts';
 import { createClient } from './client.ts';
 import type { Client, FetchFn } from './client.ts';
-import { CONFIG_FILE, findConfig } from './config.ts';
+import { ACCOUNT_NAME_HINT, CONFIG_FILE, findConfig, isAccountName, readAccount } from './config.ts';
 import { EXIT, MISSING_CONFIG_HINT, TaskwireError, configError, usageError } from './errors.ts';
 import { printError, printResult, printWarning } from './output.ts';
 import type { Writer } from './output.ts';
@@ -98,7 +98,8 @@ Comments, checklists, dependencies:
   taskwire dependency add <task-id> --blocked-by <task-id>
   taskwire dependency remove <task-id> --blocked-by <task-id>
 
-Global options: --pretty (human readable output), --help, --version
+Global options: --pretty (human readable output), --help, --version,
+                --account <name> (use the token of that account instead of the project's)
 Output is JSON on stdout; errors and warnings are JSON lines on stderr.
 Exit codes: 0 ok, 1 ClickUp or network error, 2 usage error, 3 configuration error.
 `;
@@ -106,6 +107,7 @@ Exit codes: 0 ok, 1 ClickUp or network error, 2 usage error, 3 configuration err
 const GLOBAL_OPTIONS: ParseArgsOptionsConfig = {
   pretty: { type: 'boolean' },
   help: { type: 'boolean' },
+  account: { type: 'string' },
 };
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -317,6 +319,13 @@ function parseInput(spec: CommandSpec, rest: string[]): CommandInput {
   return input;
 }
 
+// --account wins; otherwise the project's account. Commands that skip the config read it leniently from configDir.
+function readAccountChoice(input: CommandInput, projectAccount: string | undefined, configDir: string | null): string | undefined {
+  const chosen = optString(input.values, 'account');
+  if (chosen !== undefined && !isAccountName(chosen)) throw usageError(`Invalid --account "${chosen}"`, ACCOUNT_NAME_HINT);
+  return chosen ?? projectAccount ?? (configDir === null ? undefined : readAccount(configDir));
+}
+
 export async function main(deps: CliDeps): Promise<number> {
   let token: string | undefined;
   try {
@@ -339,7 +348,8 @@ export async function main(deps: CliDeps): Promise<number> {
     if (resolved.spec.needsConfig === true && found === null) {
       throw configError(`No ${CONFIG_FILE} found in ${deps.cwd} or its parents`, MISSING_CONFIG_HINT);
     }
-    token = resolved.spec.needsToken === false ? undefined : resolveToken(deps.readKeychain, deps.env);
+    const account = readAccountChoice(input, found?.config.account, resolved.spec.needsConfig === false ? deps.cwd : null);
+    token = resolved.spec.needsToken === false ? undefined : resolveToken(deps.readKeychain, deps.env, process.platform, account);
     const secrets = token === undefined ? [] : [token];
     const warn = (message: string, hint?: string) => printWarning(deps.stderr, message, hint, secrets);
     const client = token === undefined ? NO_TOKEN_CLIENT : createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
@@ -348,6 +358,7 @@ export async function main(deps: CliDeps): Promise<number> {
       config: found?.config ?? null,
       configPath: found?.path ?? null,
       cwd: deps.cwd,
+      account: account ?? null,
       warn,
       checkUpdate: () => checkForUpdate({ fetch: deps.fetch, now: deps.now, env: deps.env }, packageInfo()),
     };

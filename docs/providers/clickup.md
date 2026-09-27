@@ -6,6 +6,8 @@ taskwire talks to the ClickUp REST API v2 with a personal token. Moving a task t
 
 In ClickUp: avatar > Settings > Apps > API Token. Store it as described in the README, then run `taskwire whoami`.
 
+A ClickUp token belongs to one user and gives access to that user's workspaces. For a second ClickUp user (for example the account of another company), create a token there and store it as a named account: `security add-generic-password -a "$USER" -s taskwire:<account> -w`, then `taskwire whoami --account <account>`. Several workspaces of the same user need no second token.
+
 ## How a project maps to ClickUp
 
 One project is one ClickUp folder. taskwire reads and writes only the lists and tasks inside that folder, and checks it before every write.

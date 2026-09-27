@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FOLDER_ID, LIST_ID, rawList, runCli } from './helpers.ts';
 
-test('whoami returns id, username and email', async () => {
+test('whoami returns id, username, email and the account used', async () => {
   const run = await runCli(['whoami'], { config: null, routes: {
     'GET /user': { body: { user: { id: 7, username: 'jane', email: 'jane@example.com' } } },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), { id: 7, username: 'jane', email: 'jane@example.com' });
+  assert.deepEqual(run.json(), { id: 7, username: 'jane', email: 'jane@example.com', account: null });
 });
 
 test('folders flattens workspaces, spaces and folders', async () => {
