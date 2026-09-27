@@ -11,6 +11,12 @@ export interface ProjectEntry {
   startStatuses?: string[];
   // Tag that keeps the orchestrator away from a task; defaults to DEFAULT_BLOCK_TAG.
   blockTag?: string;
+  // Status a task moves to when an agent takes it; defaults to DEFAULT_WORK_STATUS.
+  workStatus?: string;
+  // Runs agents in the Claude Code sandbox. Safer, but the agent cannot reach the git remote over SSH or use gh.
+  sandbox?: boolean;
+  // Extra domains the sandboxed agent may reach, besides the task system API.
+  allowedDomains?: string[];
 }
 
 export interface OrchestratorConfig {
@@ -21,6 +27,7 @@ export interface OrchestratorConfig {
 
 export const DEFAULT_START_STATUSES = ['backlog', 'to do'];
 export const DEFAULT_BLOCK_TAG = 'no-agent';
+export const DEFAULT_WORK_STATUS = 'in progress';
 
 const CONFIG_FILE = 'config.json';
 
@@ -56,11 +63,20 @@ function parseConfig(data: unknown, path: string): OrchestratorConfig {
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, sandbox, allowedDomains } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
   if (blockTag !== undefined) project.blockTag = text(blockTag, `"blockTag" of ${path}`, invalid).toLowerCase();
+  if (workStatus !== undefined) project.workStatus = text(workStatus, `"workStatus" of ${path}`, invalid);
+  if (sandbox !== undefined) {
+    if (typeof sandbox !== 'boolean') throw invalid(`"sandbox" of ${path} must be true or false`);
+    project.sandbox = sandbox;
+  }
+  if (allowedDomains !== undefined) {
+    if (!Array.isArray(allowedDomains)) throw invalid(`"allowedDomains" of ${path} must be an array`);
+    project.allowedDomains = allowedDomains.map((domain: unknown) => text(domain, `"allowedDomains" of ${path}`, invalid));
+  }
   if (startStatuses !== undefined) {
     if (!Array.isArray(startStatuses) || startStatuses.length === 0) throw invalid(`"startStatuses" of ${path} must be a non empty array`);
     project.startStatuses = startStatuses.map((status: unknown) => text(status, `"startStatuses" of ${path}`, invalid));

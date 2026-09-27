@@ -10,11 +10,37 @@ It is at an early stage and not published: run it from a clone of this repositor
 orchestrator/bin/taskwire-orchestrator add <folder> [--test-command <command>]
 orchestrator/bin/taskwire-orchestrator list
 orchestrator/bin/taskwire-orchestrator next
+orchestrator/bin/taskwire-orchestrator run-once
 ```
 
 - `add` follows a project already set up with taskwire (it has a `.taskwire.json`). `--test-command` is the command that runs the project tests, from the project folder.
 - `list` shows the projects it follows.
 - `next` shows, for each project, the task an agent would work on next. It changes nothing.
+- `run-once` makes one pass: for each project, an agent works on the next task (see below).
+
+## One pass
+
+For each project, `run-once`:
+
+1. picks the next task and moves it to `in progress` (`workStatus`);
+2. creates a git worktree for it, outside the project, in `~/.config/taskwire-orchestrator/worktrees/`, on the latest remote default branch (or the current `HEAD` without a remote), and copies `.taskwire.json` into it;
+3. runs Claude Code there without interaction (`claude -p`), with instructions to work only on that task, follow `taskwire rules` and the project's `AGENTS.md`, mark the task with `needs` for a person, and never merge or close it;
+4. reads the task again: if the agent did not mark it, asks it once in the same session, then marks it `needs-review` itself with a comment;
+5. appends the run to `runs.jsonl` (task, times, cost, outcome, worktree, log) and keeps the agent output in `logs/`.
+
+Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
+
+The orchestrator needs a taskwire with `needs` (newer than 0.1.6): set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
+
+## Permissions and sandbox
+
+By default the agent runs with every permission (`--dangerously-skip-permissions`) inside its worktree, so it can push and open pull requests when the project rules ask for it.
+
+With `"sandbox": true` the agent runs in the Claude Code sandbox (`--permission-mode auto`, no prompts): it cannot write outside the worktree and reaches only the task system API and the `allowedDomains` of the project. Checked on 2026-09-27 with Claude Code 2.1.283 on macOS:
+
+- taskwire works in the sandbox, Keychain included, because the orchestrator sets `NODE_USE_ENV_PROXY=1`: the sandbox routes the network through a proxy, and Node's `fetch` uses it only with that variable;
+- tests, branches and commits work;
+- `git` over SSH and `gh` do not reach GitHub, even with `github.com` allowed or with `excludedCommands`: a sandboxed agent can only commit locally.
 
 ## Which task comes next
 
@@ -47,6 +73,9 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].testCommand` | command that runs the project tests |
 | `projects[].startStatuses` | statuses tasks are picked from |
 | `projects[].blockTag` | tag that keeps agents away from a task |
+| `projects[].workStatus` | status a task moves to when an agent takes it (default `in progress`) |
+| `projects[].sandbox` | `true` to run agents in the Claude Code sandbox |
+| `projects[].allowedDomains` | extra domains a sandboxed agent may reach |
 
 ## Development
 
