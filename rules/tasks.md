@@ -16,6 +16,10 @@ These rules cover only task management. The project conventions that come with t
   - `decision`: a choice that changes the behaviour is not yours to make; ask before writing code and leave the status as it is;
   - `test`: the work is done but can be verified only by hand; move the task to the status the project uses for work to check;
   - `review`: the work is done and verified, only a review or a merge is missing; move the task to the same status.
+- In that comment, open the details with fixed sections that tools such as a dashboard read, so these headings stay in English whatever the project language (their content follows the project language):
+  - for `decision`, `### Questions` with a numbered list of the questions, one per item, and `### Proposal` with what you would do if the person agrees, in one or two sentences;
+  - for `test`, `### Checked` with a bullet list of what you verified yourself, and `### By hand` with the numbered steps a person must follow;
+  - then the usual details (branch, commits, files) under `### Details`.
 - Do not work on a task that waits for a person (`needs` in the output of `taskwire tasks` and `taskwire task get`). The person clears it as the go-ahead. Never clear it yourself (`--needs none`) unless the user asks. When you take up such a task again, read first the comments the person wrote after your last one.
 - Edit an existing comment (`taskwire comment update`) only when the user asks, for example to align it with the conventions, and change only the comments that need it. The one exception is a small update to the last comment of the task, when you wrote it in this session (see below).
 - Delete a task or remove a checklist item only when the user explicitly asks. Otherwise move the task to a closed status, or check the item. `taskwire task delete` and `taskwire checklist remove-item` require `--yes`.

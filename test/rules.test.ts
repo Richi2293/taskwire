@@ -149,3 +149,11 @@ test('the default rules say how to mark a task that waits for a person, and that
   assert.match(DEFAULT_RULES, /Never clear it yourself \(`--needs none`\) unless the user asks/);
   assert.match(DEFAULT_RULES, /read first the comments the person wrote after your last one/);
 });
+
+test('the default rules give fixed English headings to the comment of a task waiting for a person, for tools to read', () => {
+  assert.match(DEFAULT_RULES, /`### Questions`/);
+  assert.match(DEFAULT_RULES, /`### Proposal`/);
+  assert.match(DEFAULT_RULES, /`### Checked`/);
+  assert.match(DEFAULT_RULES, /`### By hand`/);
+  assert.match(DEFAULT_RULES, /stay in English whatever the project language/);
+});
