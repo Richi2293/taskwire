@@ -1,0 +1,51 @@
+import { execFile } from 'node:child_process';
+import { EXIT, OrchestratorError } from './errors.ts';
+
+// The fields of a task in the output of "taskwire tasks" that the orchestrator uses.
+export interface TaskSummary {
+  id: string;
+  name: string;
+  status: string;
+  priority: string | null;
+  tags: string[];
+  needs: 'decision' | 'test' | 'review' | null;
+  parent: string | null;
+  url: string;
+}
+
+// Runs a taskwire command in a project folder and returns its JSON output.
+export type RunTaskwire = (args: string[], cwd: string) => Promise<unknown>;
+
+// The orchestrator talks to taskwire only through its CLI, like any agent, so every taskwire check applies to it too.
+export function createTaskwire(command: string): RunTaskwire {
+  return (args, cwd) =>
+    new Promise((resolve, reject) => {
+      execFile(command, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) {
+          const exitCode = typeof error.code === 'number' ? error.code : EXIT.external;
+          reject(new OrchestratorError(`taskwire ${args[0] ?? ''}: ${describeFailure(stderr, error.message)}`, exitCode));
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout));
+        } catch {
+          reject(new OrchestratorError(`taskwire ${args[0] ?? ''} did not print JSON`, EXIT.external));
+        }
+      });
+    });
+}
+
+// taskwire prints errors as a JSON line with "error" and an optional "hint".
+function describeFailure(stderr: string, fallback: string): string {
+  const line = stderr.trim().split('\n').at(-1) ?? '';
+  try {
+    const parsed: unknown = JSON.parse(line);
+    if (typeof parsed === 'object' && parsed !== null && 'error' in parsed && typeof parsed.error === 'string') {
+      const hint = 'hint' in parsed && typeof parsed.hint === 'string' ? ` (${parsed.hint})` : '';
+      return `${parsed.error}${hint}`;
+    }
+  } catch {
+    // Not JSON: fall back to the process error below.
+  }
+  return line || fallback;
+}

@@ -144,7 +144,7 @@ Ideas, not promises:
 
 - **More task systems**, driven by what people ask for.
 - **An MCP server** as a second way in, next to the CLI.
-- **Orchestration:** several agents sharing a backlog and handing work to each other.
+- **Orchestration:** agents that work on the backlog of several projects on their own, and leave you only decisions, reviews and manual checks. An experimental first piece lives in [orchestrator/](orchestrator/README.md).
 
 ## Development
 

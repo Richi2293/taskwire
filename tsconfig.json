@@ -10,5 +10,5 @@
     "erasableSyntaxOnly": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "orchestrator/src", "orchestrator/test"]
 }
