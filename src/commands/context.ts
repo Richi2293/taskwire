@@ -3,6 +3,8 @@ import type { RawList, RawTask, RawUser } from '../clickup-types.ts';
 import type { ProjectConfig } from '../config.ts';
 import { MISSING_CONFIG_HINT, configError, usageError } from '../errors.ts';
 import { loadListInFolder, loadTaskInFolder } from '../guard.ts';
+import { DEFAULT_NEEDS_TAGS, NEEDS_KINDS, isNeedsKind } from '../needs.ts';
+import type { NeedsKind, NeedsTags } from '../needs.ts';
 import type { UpdateNotice } from '../update-check.ts';
 
 export interface Context {
@@ -87,4 +89,18 @@ export function parsePriority(value: string): number {
 // ClickUp stores tag names in lowercase: any other spelling finds no task and removes nothing, without an error.
 export function tagNames(values: string[]): string[] {
   return values.map((value) => value.toLowerCase());
+}
+
+// The needs tags of this project: the defaults, with the names renamed in .taskwire.json.
+export function projectNeedsTags(ctx: Context): NeedsTags {
+  return { ...DEFAULT_NEEDS_TAGS, ...projectConfig(ctx).needsTags };
+}
+
+// Reads --needs; "none" (task update) or "any" (tasks) is accepted only when the command allows it.
+export function parseNeeds<Extra extends string = never>(value: string, extra?: Extra): NeedsKind | Extra {
+  const wanted = value.trim().toLowerCase();
+  if (isNeedsKind(wanted)) return wanted;
+  if (extra !== undefined && wanted === extra) return extra;
+  const choices = extra === undefined ? `${NEEDS_KINDS.slice(0, -1).join(', ')} or ${NEEDS_KINDS.at(-1)}` : `${NEEDS_KINDS.join(', ')} or ${extra}`;
+  throw usageError(`Invalid --needs "${value}"`, `Use ${choices}`);
 }

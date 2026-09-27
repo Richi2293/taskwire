@@ -1,5 +1,7 @@
 import type { RawChecklist, RawComment, RawCommentBlock, RawList, RawTask } from './clickup-types.ts';
 import { msToIso, msToLocalIso } from './dates.ts';
+import { DEFAULT_NEEDS_TAGS, needsFromTags } from './needs.ts';
+import type { NeedsKind, NeedsTags } from './needs.ts';
 
 export interface TaskSummary {
   id: string;
@@ -7,6 +9,8 @@ export interface TaskSummary {
   status: string;
   priority: string | null;
   tags: string[];
+  // Why the task waits for a person, read from its needs tag; null when it waits for nobody.
+  needs: NeedsKind | null;
   assignees: { id: number; username: string | null }[];
   due: string | null;
   list: { id: string; name: string };
@@ -42,13 +46,15 @@ export interface ListOut {
   statuses: string[];
 }
 
-export function toTask(raw: RawTask): TaskSummary {
+export function toTask(raw: RawTask, needsTags: NeedsTags = DEFAULT_NEEDS_TAGS): TaskSummary {
+  const tags = raw.tags.map((tag) => tag.name);
   return {
     id: raw.id,
     name: raw.name,
     status: raw.status.status,
     priority: raw.priority?.priority ?? null,
-    tags: raw.tags.map((tag) => tag.name),
+    tags,
+    needs: needsFromTags(tags, needsTags),
     assignees: raw.assignees.map((user) => ({ id: user.id, username: user.username })),
     due: msToLocalIso(raw.due_date),
     list: { id: raw.list.id, name: raw.list.name },
@@ -66,13 +72,13 @@ export function toChecklist(raw: RawChecklist): ChecklistOut {
   };
 }
 
-export function toTaskDetail(raw: RawTask, comments: RawComment[]): TaskDetail {
+export function toTaskDetail(raw: RawTask, comments: RawComment[], needsTags: NeedsTags = DEFAULT_NEEDS_TAGS): TaskDetail {
   const dependencies = raw.dependencies ?? [];
   return {
-    ...toTask(raw),
+    ...toTask(raw, needsTags),
     description: raw.markdown_description ?? raw.description ?? '',
     subtasks: (raw.subtasks ?? []).map((subtask) =>
-      toTask({ ...subtask, list: subtask.list ?? raw.list, folder: subtask.folder ?? raw.folder, priority: subtask.priority ?? null }),
+      toTask({ ...subtask, list: subtask.list ?? raw.list, folder: subtask.folder ?? raw.folder, priority: subtask.priority ?? null }, needsTags),
     ),
     checklists: (raw.checklists ?? []).map(toChecklist),
     dependencies: {

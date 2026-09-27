@@ -111,3 +111,23 @@ test('rejects a defaultListId outside listIds', () => {
   assert.throws(() => parseConfig('{"folderId":"1","listIds":["2"],"defaultListId":"3"}', '/x'), (e: unknown) =>
     e instanceof TaskwireError && e.exitCode === 3 && e.message.includes('defaultListId'));
 });
+
+test('reads needsTags that rename some needs tags', () => {
+  assert.deepEqual(parseConfig('{"folderId":"1","needsTags":{"test":"da-provare"}}', '/x'), {
+    provider: 'clickup',
+    folderId: '1',
+    needsTags: { test: 'da-provare' },
+  });
+});
+
+test('rejects needsTags with an unknown kind, an empty name or two kinds on the same tag', () => {
+  const invalid = [
+    '{"folderId":"1","needsTags":{"approval":"x"}}',
+    '{"folderId":"1","needsTags":{"test":" "}}',
+    '{"folderId":"1","needsTags":["needs-test"]}',
+    '{"folderId":"1","needsTags":{"test":"Needs-Review"}}',
+  ];
+  for (const text of invalid) {
+    assert.throws(() => parseConfig(text, '/x'), (e: unknown) => e instanceof TaskwireError && e.exitCode === 3, text);
+  }
+});

@@ -4,10 +4,12 @@ import type { QueryValue } from '../client.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
 import { usageError } from '../errors.ts';
 import { localMidnightMs, nextLocalMidnightMs } from '../dates.ts';
+import { needsFromTags } from '../needs.ts';
+import type { NeedsKind, NeedsTags } from '../needs.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
 import { loadComments } from './comments.ts';
-import { loadProjectList, loadProjectTask, projectConfig, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
+import { loadProjectList, loadProjectTask, parseNeeds, projectConfig, projectNeedsTags, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import { loadProjectLists } from './lists.ts';
 import type { Context } from './context.ts';
 
@@ -26,6 +28,9 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
   const limit = readLimit(input);
   const dueBefore = optString(input.values, 'due-before');
   const dueAfter = optString(input.values, 'due-after');
+  const needsValue = optString(input.values, 'needs');
+  const needs = needsValue === undefined ? undefined : parseNeeds(needsValue, 'any');
+  const needsTags = projectNeedsTags(ctx);
   const filters: Record<string, QueryValue | undefined> = {
     statuses: status === undefined ? undefined : [status],
     tags: tagNames(optStrings(input.values, 'tag')),
@@ -61,7 +66,9 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
     read += response.tasks.length;
     // list_ids may also return tasks that only show in a project list, while their home list belongs to another project.
     const owned = listIds === undefined ? response.tasks : response.tasks.filter((task) => listIds.includes(task.list.id));
-    found.push(...(searchWords === undefined ? owned : owned.filter((task) => matchesAllWords(task, searchWords))));
+    const matching = searchWords === undefined ? owned : owned.filter((task) => matchesAllWords(task, searchWords));
+    // Filtered here, like --search, so that "any" and --tag keep their meaning.
+    found.push(...(needs === undefined ? matching : matching.filter((task) => matchesNeeds(task, needs, needsTags))));
     complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
   }
   if (!complete && found.length < limit) {
@@ -73,7 +80,12 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
     const lists = list === undefined ? await loadProjectLists(ctx) : [list];
     if (status !== undefined) assertStatusExists(lists, status);
   }
-  return found.slice(0, limit).map(toTask);
+  return found.slice(0, limit).map((task) => toTask(task, needsTags));
+}
+
+function matchesNeeds(task: RawTask, wanted: NeedsKind | 'any', needsTags: NeedsTags): boolean {
+  const needs = needsFromTags(task.tags.map((tag) => tag.name), needsTags);
+  return wanted === 'any' ? needs !== null : needs === wanted;
 }
 
 // ClickUp returns the most recently created tasks first, so a limit keeps the newest ones.
@@ -113,7 +125,7 @@ export async function getTask(ctx: Context, input: CommandInput): Promise<TaskDe
   const limit = readCommentLimit(input);
   const task = await loadProjectTask(ctx, onePositional(input, 'task id'));
   const comments = limit === 0 ? [] : await loadComments(ctx, task.id, limit);
-  return toTaskDetail(task, comments);
+  return toTaskDetail(task, comments, projectNeedsTags(ctx));
 }
 
 // Comments can cost up to 20 requests, so agents that only need the description can skip or limit them.

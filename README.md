@@ -82,6 +82,7 @@ Run `taskwire --help` for every option. A few things worth knowing:
 - **Search** (`taskwire tasks --search <words>`) matches every word in the name or description, ignoring case and accents.
 - **Due dates** (`--due YYYY-MM-DD`) are midnight in your system time zone. Set `TZ` to use another one.
 - **Descriptions and comments** are markdown.
+- **Waiting for a person:** `taskwire task update <id> --needs decision|test|review` marks why a task waits for you, with a tag (`needs-decision`, `needs-test`, `needs-review`). `taskwire tasks --needs any` lists those tasks, and every task shows it in its `needs` field. You clear it (`--needs none`, or remove the tag) as the go-ahead.
 - **Exit codes:** `0` success, `1` provider or network error, `2` wrong usage, `3` configuration problem.
 
 ## Configuration
@@ -95,6 +96,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
   "folderId": "901234567",
   "listIds": ["901234890"],
   "defaultListId": "901234890",
+  "needsTags": { "test": "to-test" },
   "conventions": {
     "language": "English",
     "instructions": "Task names in the imperative, under 80 characters.",
@@ -107,6 +109,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
 |---|---|
 | `provider` | the task system; defaults to `clickup` |
 | `workspaceId`, `folderId`, `listIds`, `defaultListId` | where the project lives in the task system, and its default list. `listIds` lets several projects share one container, each limited to its own lists. The exact fields depend on the provider: see [its page](docs/providers/clickup.md). |
+| `needsTags` | other tag names for the needs kinds (`decision`, `test`, `review`), for example in the project language; the others keep their default name |
 | `conventions.language` | language of task names, descriptions, comments and checklists (default English) |
 | `conventions.instructions` | any other rule for agents, added on top of the defaults and winning when they conflict |
 | `conventions.rulesFile` | a markdown file, relative to `.taskwire.json`, that replaces the default rules entirely |
