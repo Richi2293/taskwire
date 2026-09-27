@@ -5,6 +5,9 @@ import type { ParseArgsOptionsConfig } from 'node:util';
 import { DEFAULT_BLOCK_TAG, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
 import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
+import type { RunCommand } from './commands.ts';
+import { closeInterruptedClaims, runCycle } from './cycle.ts';
+import type { CycleResult } from './cycle.ts';
 import { pickTask } from './picker.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 
@@ -20,6 +23,8 @@ export interface CliDeps {
   stdout: Writer;
   stderr: Writer;
   runTaskwire: RunTaskwire;
+  runCommand: RunCommand;
+  now: () => number;
 }
 
 interface Input {
@@ -37,6 +42,7 @@ export const HELP = `taskwire-orchestrator: let agents work on the tasks of your
   taskwire-orchestrator add <folder> [--test-command <command>]   follow a project set up with taskwire
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
+  taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
 
 Output is JSON on stdout; errors are JSON lines on stderr.
 Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration error.
@@ -46,7 +52,17 @@ const COMMANDS: Record<string, CommandSpec> = {
   add: { options: { 'test-command': { type: 'string' } }, run: addProject },
   list: { options: {}, run: async (deps) => loadConfig(deps.home).projects },
   next: { options: {}, run: nextTasks },
+  'run-once': { options: {}, run: runOnce },
 };
+
+async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
+  const { projects, taskwireCommand } = loadConfig(deps.home);
+  const cycleDeps = { ...deps, taskwireCommand };
+  await closeInterruptedClaims(cycleDeps);
+  const results: CycleResult[] = [];
+  for (const project of projects) results.push(await runCycle(cycleDeps, project));
+  return results;
+}
 
 async function addProject(deps: CliDeps, input: Input): Promise<ProjectEntry> {
   if (input.positionals.length !== 1) throw usageError('Expected exactly one project folder');

@@ -2,6 +2,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { main } from './cli.ts';
+import { runCommand } from './commands.ts';
 import { loadConfig } from './config.ts';
 import { createTaskwire } from './taskwire.ts';
 
@@ -21,4 +22,6 @@ process.exitCode = await main({
   stdout: process.stdout,
   stderr: process.stderr,
   runTaskwire: createTaskwire(taskwireCommand),
+  runCommand,
+  now: () => Date.now(),
 });
