@@ -18,6 +18,12 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 - `main` is protected: changes reach it only through a pull request, merged with squash once CI passes. The PR title becomes the commit on `main`, so it follows Conventional Commits.
 - The work on taskwire may be tracked with taskwire itself, through a local `.taskwire.json` that is never committed. When it exists, run `taskwire rules` before reading or writing tasks and follow its writing format, instead of copying the format of existing comments.
 
+## Orchestrator
+
+- `orchestrator/` holds an experimental, unpublished package (`taskwire-orchestrator`) that lets agents work on the tasks of several projects. It is not part of the taskwire npm package.
+- It talks to taskwire only through the CLI and its JSON output, never by importing `src/`, so every taskwire check applies to it. When it needs something taskwire lacks, add it to the CLI.
+- The tech constraints below apply to it too. Its tests live in `orchestrator/test/` and never run a real taskwire or a real agent.
+
 ## Tech constraints
 
 - Node >= 24.7, TypeScript executed directly (native type stripping), no build step during development. Only the release workflow compiles `src/` to `dist/` for the npm package (`tsconfig.build.json`), because Node does not strip types inside `node_modules`. Run the CLI from the repo with `./bin/taskwire`.
