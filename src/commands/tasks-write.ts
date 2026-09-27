@@ -7,7 +7,7 @@ import { EXIT, TaskwireError, usageError } from '../errors.ts';
 import { normalizeTaskId } from '../guard.ts';
 import { toTask } from '../shape.ts';
 import type { TaskSummary } from '../shape.ts';
-import { loadProjectList, loadProjectTask, matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { loadProjectList, loadProjectTask, matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import type { Context } from './context.ts';
 
 export function readDescription(input: CommandInput): string | undefined {
@@ -65,7 +65,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
 
   const assignees: number[] = [];
   for (const value of optStrings(input.values, 'assignee')) assignees.push(await resolveAssignee(ctx, value));
-  const tags = optStrings(input.values, 'tag');
+  const tags = tagNames(optStrings(input.values, 'tag'));
 
   const body: Record<string, unknown> = { name };
   if (description !== undefined) body.markdown_content = description;
@@ -106,8 +106,8 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   const status = optString(input.values, 'status');
   const priority = optString(input.values, 'priority');
   const due = optString(input.values, 'due');
-  const addTags = optStrings(input.values, 'add-tag');
-  const removeTags = optStrings(input.values, 'remove-tag');
+  const addTags = tagNames(optStrings(input.values, 'add-tag'));
+  const removeTags = tagNames(optStrings(input.values, 'remove-tag'));
   const addAssignees = optStrings(input.values, 'add-assignee');
   const removeAssignees = optStrings(input.values, 'remove-assignee');
   const { listId, parentId } = readMove(input, taskId);

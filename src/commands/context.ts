@@ -83,3 +83,8 @@ export function parsePriority(value: string): number {
   if (priority === undefined) throw usageError(`Invalid priority "${value}"`, 'Use urgent, high, normal or low');
   return priority;
 }
+
+// ClickUp stores tag names in lowercase: any other spelling finds no task and removes nothing, without an error.
+export function tagNames(values: string[]): string[] {
+  return values.map((value) => value.toLowerCase());
+}

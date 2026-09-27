@@ -7,7 +7,7 @@ import { localMidnightMs, nextLocalMidnightMs } from '../dates.ts';
 import { toTask, toTaskDetail } from '../shape.ts';
 import type { TaskDetail, TaskSummary } from '../shape.ts';
 import { loadComments } from './comments.ts';
-import { loadProjectList, loadProjectTask, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { loadProjectList, loadProjectTask, projectConfig, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import { loadProjectLists } from './lists.ts';
 import type { Context } from './context.ts';
 
@@ -28,7 +28,7 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
   const dueAfter = optString(input.values, 'due-after');
   const filters: Record<string, QueryValue | undefined> = {
     statuses: status === undefined ? undefined : [status],
-    tags: optStrings(input.values, 'tag'),
+    tags: tagNames(optStrings(input.values, 'tag')),
     // Both bounds leave the given day out: before its midnight, or from the next day's midnight.
     due_date_lt: dueBefore === undefined ? undefined : localMidnightMs(dueBefore),
     due_date_gt: dueAfter === undefined ? undefined : nextLocalMidnightMs(dueAfter) - 1,
