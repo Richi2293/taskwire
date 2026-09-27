@@ -1,4 +1,6 @@
+import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
+import { EXIT, OrchestratorError } from '../errors.ts';
 import type { DashboardState } from './snapshot.ts';
 import { renderPage } from './page.ts';
 
@@ -21,6 +23,8 @@ export interface HandlerDeps {
   snapshot: () => Promise<DashboardState>;
   // Changes at every start; the page gets it and must send it back with every action.
   token: string;
+  // Runs an action sent by the page; missing when the dashboard only shows.
+  act?: (body: unknown) => Promise<void>;
 }
 
 // The dashboard listens on the loopback only; a page from another site that resolves its own name to
@@ -38,8 +42,42 @@ export function createHandler(deps: HandlerDeps): Handler {
     if (request.method === 'GET' && path === '/api/state') {
       return { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS }, body: JSON.stringify(await deps.snapshot()) };
     }
+    if (request.method === 'POST' && path === '/api/action' && deps.act !== undefined) {
+      return runAction(deps.act, deps.token, request);
+    }
     return text(404, 'Not found');
   };
+}
+
+async function runAction(act: (body: unknown) => Promise<void>, token: string, request: DashboardRequest): Promise<DashboardResponse> {
+  const sent = request.headers['x-action-token'] ?? '';
+  if (!sameSecret(sent, token)) return json(403, { error: 'Reload the dashboard: this page is from an earlier start' });
+  let body: unknown;
+  try {
+    body = JSON.parse(request.body);
+  } catch {
+    return json(400, { error: 'The action is not valid JSON' });
+  }
+  try {
+    await act(body);
+    return json(200, { ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // A refused action is the page's problem; anything else is taskwire or the task system failing.
+    const refused = error instanceof OrchestratorError && error.exitCode === EXIT.usage;
+    return json(refused ? 400 : 502, { error: message });
+  }
+}
+
+// Compares in constant time, so the token cannot be guessed one character at a time.
+function sameSecret(sent: string, token: string): boolean {
+  const a = Buffer.from(sent);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function json(status: number, value: unknown): DashboardResponse {
+  return { status, headers: { 'content-type': 'application/json; charset=utf-8', ...SECURITY_HEADERS }, body: JSON.stringify(value) };
 }
 
 // Inline style and script only, no framing by other pages, no referrer to the task system links.

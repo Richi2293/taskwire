@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
 import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { createActions } from './dashboard/actions.ts';
 import { createHandler } from './dashboard/server.ts';
 import type { Handler, RunningServer } from './dashboard/server.ts';
 import { createSnapshot } from './dashboard/snapshot.ts';
@@ -96,7 +97,8 @@ async function dashboard(deps: CliDeps): Promise<undefined> {
 async function openDashboard(deps: CliDeps, agentsRunning: boolean): Promise<RunningServer> {
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
   const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, agentsRunning });
-  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex') });
+  const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
+  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex'), act });
   let server: RunningServer;
   try {
     server = await deps.serve(handler, port);

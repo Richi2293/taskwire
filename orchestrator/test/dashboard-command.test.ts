@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Handler } from '../src/dashboard/server.ts';
 import type { ServeDashboard } from '../src/cli.ts';
-import { runOrchestrator, tempDir } from './helpers.ts';
+import { fakeTaskwire, projectDir, runOrchestrator, task, tempDir } from './helpers.ts';
 
 // Records what would be served, without opening a port.
 function fakeServe(): { serve: ServeDashboard; served: { port: number; handler: Handler }[]; closed: () => boolean } {
@@ -55,4 +55,35 @@ test('a port already in use stops the command with a hint', async () => {
   const run = await runOrchestrator(['dashboard'], { home, serve: busy });
   assert.equal(run.code, 3);
   assert.match(JSON.parse(run.stderr).hint, /dashboardPort/);
+});
+
+test('the page carries the token its actions need, and an action shows up at the next read', async () => {
+  const home = tempDir('home');
+  const project = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: project }] }));
+  let waiting = [task({ id: 'r1', needs: 'review', status: 'qa' })];
+  const taskwire = fakeTaskwire({
+    'tasks --needs any': () => waiting,
+    'task get': { ...task(), comments: [] },
+    'task update': () => {
+      waiting = [];
+      return {};
+    },
+  });
+  const fake = fakeServe();
+  await runOrchestrator(['dashboard'], { home, serve: fake.serve, taskwire: taskwire.run });
+  const { handler } = fake.served[0];
+  const page = await handler({ method: 'GET', url: '/', headers: { host: '127.0.0.1' }, body: '' });
+  const token = /<meta name="action-token" content="([0-9a-f]+)">/.exec(page.body)?.[1] ?? '';
+  assert.equal(token.length, 48);
+
+  const action = await handler({
+    method: 'POST',
+    url: '/api/action',
+    headers: { host: '127.0.0.1', 'x-action-token': token },
+    body: JSON.stringify({ project, task: 'r1', action: 'approve' }),
+  });
+  assert.equal(action.status, 200, action.body);
+  const after = await handler({ method: 'GET', url: '/api/state', headers: { host: '127.0.0.1' }, body: '' });
+  assert.deepEqual((JSON.parse(after.body) as { waiting: unknown[] }).waiting, []);
 });

@@ -31,7 +31,16 @@ Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` or `dash
 - **History:** the runs of `runs.jsonl`, by day, with time, outcome, tests, verification and cost.
 - **Projects that could not be read**, when taskwire fails in one of them (for example a missing token).
 
-It reads the task system at most once a minute per query, to stay under the rate limit of the free ClickUp plan. It listens on 127.0.0.1 only and refuses requests for any other host name. Task names and comments are shown as text, never as HTML.
+Each task waiting for you has its actions, all done through taskwire:
+
+- **Answer** (a decision): adds your answer as a comment and clears the mark, so an agent takes the task up again;
+- **Approve** (a review or a test by hand): clears the mark; merging and closing the task stay with you;
+- **Send back**: adds what the agent should fix as a comment, clears the mark and moves the task back to a start status; the agent continues in the same worktree and branch;
+- **Keep agents away**: adds the block tag (`no-agent`).
+
+Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type.
+
+It reads the task system at most once a minute per query, to stay under the rate limit of the free ClickUp plan. It listens on 127.0.0.1 only and refuses requests for any other host name. Actions need a token that changes at every start and is only in the page. Task names and comments are shown as text, never as HTML.
 
 ## One pass
 
