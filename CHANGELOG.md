@@ -4,6 +4,12 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-27
+
+### Changed
+
+- The npm package has the same description and keywords as the repository: "Agents forget. Tasks don't. A CLI-first task board for AI agents."
+
 ### Fixed
 
 - `taskwire task get` returns comments in markdown, with the formatting they were written with (quotes, bold, headings, lists, code, links, dividers). Before, it returned them as plain text, so an agent editing a comment with `comment update` lost its formatting.
@@ -74,7 +80,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/Richi2293/taskwire/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Richi2293/taskwire/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Richi2293/taskwire/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Richi2293/taskwire/compare/v0.1.1...v0.1.2
