@@ -7,7 +7,8 @@ import { EXIT, TaskwireError, usageError } from '../errors.ts';
 import { normalizeTaskId } from '../guard.ts';
 import { toTask } from '../shape.ts';
 import type { TaskSummary } from '../shape.ts';
-import { loadProjectList, loadProjectTask, matchStatus, parsePriority, projectConfig, projectWorkspaceId, resolveAssignee } from './context.ts';
+import { NEEDS_KINDS } from '../needs.ts';
+import { loadProjectList, loadProjectTask, matchStatus, parseNeeds, parsePriority, projectConfig, projectNeedsTags, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import type { Context } from './context.ts';
 
 export function readDescription(input: CommandInput): string | undefined {
@@ -43,6 +44,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   const priority = optString(input.values, 'priority');
   const due = optString(input.values, 'due');
   const parentId = optString(input.values, 'parent');
+  const needsValue = optString(input.values, 'needs');
   let listId = optString(input.values, 'list');
 
   // Validate every local input before the first network call.
@@ -50,6 +52,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   rejectClear('due date', due);
   const priorityValue = priority === undefined ? undefined : parsePriority(priority);
   const dueValue = due === undefined ? undefined : localMidnightMs(due);
+  const needs = needsValue === undefined ? undefined : parseNeeds(needsValue);
   if (listId === undefined && parentId === undefined && config.defaultListId === undefined) {
     throw usageError('No list given', 'Pass --list or set "defaultListId" in .taskwire.json');
   }
@@ -65,7 +68,9 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
 
   const assignees: number[] = [];
   for (const value of optStrings(input.values, 'assignee')) assignees.push(await resolveAssignee(ctx, value));
-  const tags = optStrings(input.values, 'tag');
+  const tags = tagNames(optStrings(input.values, 'tag'));
+  const needsTags = projectNeedsTags(ctx);
+  if (needs !== undefined && !tags.includes(needsTags[needs])) tags.push(needsTags[needs]);
 
   const body: Record<string, unknown> = { name };
   if (description !== undefined) body.markdown_content = description;
@@ -80,7 +85,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   if (parent !== undefined) body.parent = parent.id;
 
   const created = await ctx.client.request<RawTask>('POST', `/list/${list.id}/task`, { body });
-  return toTask(created);
+  return toTask(created, needsTags);
 }
 
 // Checks --list and --parent before any network call and returns the normalized parent id.
@@ -106,17 +111,19 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   const status = optString(input.values, 'status');
   const priority = optString(input.values, 'priority');
   const due = optString(input.values, 'due');
-  const addTags = optStrings(input.values, 'add-tag');
-  const removeTags = optStrings(input.values, 'remove-tag');
+  const addTags = tagNames(optStrings(input.values, 'add-tag'));
+  const removeTags = tagNames(optStrings(input.values, 'remove-tag'));
   const addAssignees = optStrings(input.values, 'add-assignee');
   const removeAssignees = optStrings(input.values, 'remove-assignee');
+  const needsValue = optString(input.values, 'needs');
   const { listId, parentId } = readMove(input, taskId);
+  const needs = needsValue === undefined ? undefined : parseNeeds(needsValue, 'none');
 
   let priorityValue: number | null | undefined;
   if (priority !== undefined) priorityValue = isClear(priority) ? null : parsePriority(priority);
   let dueValue: number | null | undefined;
   if (due !== undefined) dueValue = isClear(due) ? null : localMidnightMs(due);
-  const nothingToDo = [name, description, status, priority, due, listId, parentId].every((v) => v === undefined) &&
+  const nothingToDo = [name, description, status, priority, due, listId, parentId, needs].every((v) => v === undefined) &&
     addTags.length + removeTags.length + addAssignees.length + removeAssignees.length === 0;
   if (nothingToDo) throw usageError('Nothing to update', 'Run "taskwire --help" to see the update options');
 
@@ -164,6 +171,16 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   if (Object.keys(body).length > 0) {
     steps.push({ label: 'fields', apply: () => ctx.client.request('PUT', path, { body }) });
   }
+  const needsTags = projectNeedsTags(ctx);
+  if (needs !== undefined) {
+    // Only one needs tag at a time: the chosen one stays or is added, the others the task has are removed.
+    const current = task.tags.map((tag) => tag.name);
+    for (const kind of NEEDS_KINDS) {
+      const tag = needsTags[kind];
+      if (kind === needs && !current.includes(tag) && !addTags.includes(tag)) addTags.push(tag);
+      if (kind !== needs && current.includes(tag) && !removeTags.includes(tag)) removeTags.push(tag);
+    }
+  }
   for (const tag of addTags) {
     steps.push({ label: `add tag "${tag}"`, apply: () => ctx.client.request('POST', `${path}/tag/${encodeURIComponent(tag)}`) });
   }
@@ -172,7 +189,7 @@ export async function updateTask(ctx: Context, input: CommandInput): Promise<Tas
   }
   await applySteps(task.id, steps);
 
-  return toTask(await loadProjectTask(ctx, task.id));
+  return toTask(await loadProjectTask(ctx, task.id), needsTags);
 }
 
 interface UpdateStep {

@@ -258,3 +258,23 @@ test('task update keeps the plain error when nothing was applied', async () => {
   assert.equal(run.code, 1);
   assert.equal(JSON.parse(run.stderr).error, 'ClickUp API 500: Internal error');
 });
+
+// ClickUp stores tag names in lowercase, and removes a tag only when the name matches that exactly.
+test('task create and task update send tag names in lowercase', async () => {
+  const create = await runCli(['task', 'create', '--name', 'N', '--tag', 'Backend'], { routes: {
+    ...listRoute, [`POST /list/${LIST_ID}/task`]: { body: rawTask() },
+  } });
+  assert.equal(create.code, 0);
+  assert.deepEqual((create.calls.at(-1)?.body as { tags: string[] }).tags, ['backend']);
+
+  const update = await runCli(['task', 'update', 't1', '--add-tag', 'Customer Feedback', '--remove-tag', 'OLD'], { routes: {
+    'GET /task/t1': { body: rawTask() },
+    'POST /task/t1/tag/customer%20feedback': { body: {} },
+    'DELETE /task/t1/tag/old': { body: {} },
+  } });
+  assert.equal(update.code, 0);
+  assert.deepEqual(update.calls.filter((c) => c.method !== 'GET').map((c) => `${c.method} ${c.path}`), [
+    'POST /task/t1/tag/customer%20feedback',
+    'DELETE /task/t1/tag/old',
+  ]);
+});

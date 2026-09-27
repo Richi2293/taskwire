@@ -19,6 +19,7 @@ test('toTask keeps only the useful fields, with the due date in the system time 
     status: 'to do',
     priority: 'high',
     tags: ['backend'],
+    needs: null,
     assignees: [{ id: 7, username: 'jane' }],
     due: '2026-01-01T01:00:00+01:00',
     list: { id: '800', name: 'Backlog' },

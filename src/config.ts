@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { configError, usageError } from './errors.ts';
+import { DEFAULT_NEEDS_TAGS, NEEDS_KINDS, isNeedsKind } from './needs.ts';
+import type { NeedsTags } from './needs.ts';
 
 export const CONFIG_FILE = '.taskwire.json';
 
@@ -23,6 +25,8 @@ export interface ProjectConfig {
   // Lists of the folder that belong to this project, for folders shared by several projects. Missing means the whole folder.
   listIds?: string[];
   defaultListId?: string;
+  // Tag names that replace the default needs tags (needs-decision, needs-test, needs-review), in lowercase like ClickUp.
+  needsTags?: Partial<NeedsTags>;
   conventions?: TaskConventions;
 }
 
@@ -55,7 +59,7 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw configError(`${path} must contain a JSON object`);
   }
-  const { provider, workspaceId, folderId, listIds, defaultListId, conventions } = data as Record<string, unknown>;
+  const { provider, workspaceId, folderId, listIds, defaultListId, needsTags, conventions } = data as Record<string, unknown>;
   const config: ProjectConfig = {
     provider: parseProvider(provider, path),
     folderId: checkId(folderId, 'folderId', path, 'Run "taskwire folders" to find the folder id'),
@@ -71,6 +75,9 @@ export function parseConfig(text: string, path: string): ProjectConfig {
     if (config.listIds !== undefined && !config.listIds.includes(config.defaultListId)) {
       throw configError(`${path}: "defaultListId" must be one of "listIds"`, 'Add it to "listIds" or pick one of them');
     }
+  }
+  if (needsTags !== undefined) {
+    config.needsTags = parseNeedsTags(needsTags, path);
   }
   if (conventions !== undefined) {
     const parsed = parseConventions(conventions, path);
@@ -91,6 +98,23 @@ function parseListIds(value: unknown, path: string): string[] {
     ids.push(id);
   }
   return ids;
+}
+
+function parseNeedsTags(value: unknown, path: string): Partial<NeedsTags> {
+  const invalid = (reason: string) => configError(
+    `${path}: "needsTags" ${reason}`,
+    `Example: "needsTags": { "test": "to-test" }. Kinds: ${NEEDS_KINDS.join(', ')}`,
+  );
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw invalid('must be an object');
+  const renamed: Partial<NeedsTags> = {};
+  for (const [kind, name] of Object.entries(value)) {
+    if (!isNeedsKind(kind)) throw invalid(`has an unknown kind "${kind}"`);
+    if (typeof name !== 'string' || name.trim() === '') throw invalid(`must give a non empty tag name for "${kind}"`);
+    renamed[kind] = name.trim().toLowerCase();
+  }
+  const names = Object.values({ ...DEFAULT_NEEDS_TAGS, ...renamed });
+  if (new Set(names).size !== names.length) throw invalid('must give each kind its own tag');
+  return renamed;
 }
 
 function parseConventions(value: unknown, path: string): TaskConventions {

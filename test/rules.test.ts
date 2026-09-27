@@ -142,3 +142,10 @@ test('rules --pretty shows the update right after the title', async () => {
 test('the default rules say what to do with an update notice', () => {
   assert.match(DEFAULT_RULES, /If `taskwire rules` reports an `update`, tell the user and ask before running its `command`/);
 });
+
+test('the default rules say how to mark a task that waits for a person, and that only the person clears it', () => {
+  assert.match(DEFAULT_RULES, /When the work stops because a person is needed, mark why with `taskwire task update <id> --needs decision\|test\|review`/);
+  assert.match(DEFAULT_RULES, /Do not work on a task that waits for a person/);
+  assert.match(DEFAULT_RULES, /Never clear it yourself \(`--needs none`\) unless the user asks/);
+  assert.match(DEFAULT_RULES, /read first the comments the person wrote after your last one/);
+});

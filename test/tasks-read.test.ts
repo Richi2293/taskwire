@@ -350,3 +350,13 @@ test('tasks --limit with --search counts only the matching tasks', async () => {
   assert.equal(run.calls.length, 3);
   assert.deepEqual((run.json() as { id: string }[]).map((t) => t.id), ['p0-0', 'p0-1', 'p1-0', 'p1-1', 'p2-0']);
 });
+
+// ClickUp filters by the lowercase tag name, and answers any other spelling with no tasks.
+test('tasks --tag filters by the lowercase tag name', async () => {
+  const run = await runCli(['tasks', '--list', LIST_ID, '--tag', 'Backend'], { routes: {
+    [`GET /list/${LIST_ID}`]: { body: rawList() },
+    [`GET /list/${LIST_ID}/task`]: { body: { tasks: [], last_page: true } },
+  } });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.calls[1].url.searchParams.getAll('tags[]'), ['backend']);
+});

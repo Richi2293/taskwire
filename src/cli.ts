@@ -73,15 +73,18 @@ Tasks:
                  [--due-before YYYY-MM-DD] [--due-after YYYY-MM-DD]   the given day excluded
                  [--top-level]        leave out subtasks
                  [--limit <n>]        the n most recently created tasks
+                 [--needs decision|test|review|any]   tasks waiting for a person, for that reason
   taskwire tags                       the tags used in the project, with their number of tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
                        [--assignee <id|me>]... [--due YYYY-MM-DD] [--parent <id>]
+                       [--needs decision|test|review]
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
                        [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
                        [--list <id> | --parent <id>]
+                       [--needs decision|test|review|none]   why the task waits for a person, none clears it
   taskwire task delete <id> --yes
 
 Comments, checklists, dependencies:
@@ -156,6 +159,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'due-after': { type: 'string' },
       'top-level': { type: 'boolean' },
       limit: { type: 'string' },
+      needs: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,
@@ -180,6 +184,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       assignee: { type: 'string', multiple: true },
       due: { type: 'string' },
       parent: { type: 'string' },
+      needs: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,
@@ -199,6 +204,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'remove-assignee': { type: 'string', multiple: true },
       list: { type: 'string' },
       parent: { type: 'string' },
+      needs: { type: 'string' },
     },
     positionals: 1,
     needsConfig: true,

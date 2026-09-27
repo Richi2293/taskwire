@@ -35,6 +35,10 @@ The defaults apply unless the project chooses otherwise, in the `conventions` of
 }
 ```
 
+## Tasks waiting for a person
+
+The rules ask agents to mark a task when the work stops because a person is needed, with `taskwire task update <id> --needs decision|test|review`, and to explain in a comment what the person must do. The mark is a tag, so it also shows and filters in the task system UI. Agents leave these tasks alone and never clear the mark: the person clears it (`--needs none`, or by removing the tag) as the go-ahead. The tag names can be changed with `needsTags` in `.taskwire.json`.
+
 ## Sources of the writing rules
 
 The writing rules follow plain language and web readability guidance: the [inverted pyramid](https://www.nngroup.com/articles/inverted-pyramid/) and [concise, scannable text](https://www.nngroup.com/articles/concise-scannable-and-objective-how-to-write-for-the-web/) (Nielsen Norman Group), the [GOV.UK style guide](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/a-to-z-style-guide/) (sentences over 25 words, bullets, numbered steps) and the [Federal Plain Language Guidelines](https://wid.org/wp-content/uploads/2022/03/FederalPLGuidelines.pdf) (short sentences, active voice).
