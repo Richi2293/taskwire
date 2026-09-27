@@ -1,7 +1,7 @@
 {
   "name": "@richi2293/taskwire",
-  "version": "0.1.4",
-  "description": "CLI for managing project tasks from any AI agent",
+  "version": "0.1.5",
+  "description": "Agents forget. Tasks don't. A CLI-first task board for AI agents.",
   "license": "MIT",
   "type": "module",
   "bin": { "taskwire": "dist/index.js" },
@@ -10,7 +10,7 @@
   "repository": { "type": "git", "url": "git+https://github.com/Richi2293/taskwire.git" },
   "homepage": "https://github.com/Richi2293/taskwire#readme",
   "bugs": { "url": "https://github.com/Richi2293/taskwire/issues" },
-  "keywords": ["cli", "tasks", "ai", "agents", "clickup"],
+  "keywords": ["ai-agents", "cli", "task-management", "developer-tools", "llm", "claude-code", "codex", "agents-md", "clickup"],
   "publishConfig": { "access": "public" },
   "scripts": { "test": "node --test" }
 }
