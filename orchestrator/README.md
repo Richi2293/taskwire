@@ -22,19 +22,19 @@ orchestrator/bin/taskwire-orchestrator start
 
 ## Dashboard
 
-Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, with **Start working** or **Pause** at the top:
+Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds:
 
-- **Waiting for you:** the tasks of every project that wait for a person (decision, test by hand, review), with the part for people of their last comment, in the project language.
-- **At work now:** the agents working at the moment.
-- **History:** the runs of `runs.jsonl`, by day, with time, outcome, tests, verification and cost.
-- **Projects that could not be read**, when taskwire fails in one of them (for example a missing token).
+- **Control bar:** paused or working, with Start agents or Pause. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
+- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read.
+- **Waiting for you:** a compact queue grouped by kind, with filters. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment.
+- **Done recently:** the runs of `runs.jsonl`, by day.
 
 Each task waiting for you has its actions, all done through taskwire:
 
-- **Answer** (a decision): adds your answer as a comment and clears the mark, so an agent takes the task up again;
-- **Approve** (a review or a test by hand): clears the mark; merging and closing the task stay with you;
-- **Send back**: adds what the agent should fix as a comment, clears the mark and moves the task back to a start status; the agent continues in the same worktree and branch;
-- **Keep agents away**: adds the block tag (`no-agent`).
+- **Send answer** (a decision): adds your answer as a comment and clears the mark, so an agent takes the task up again; **Accept the proposal** does the same with "Go ahead with your proposal.";
+- **It works** (a test by hand) or **Approve** (a review): clears the mark; merging and closing the task stay with you;
+- **Something is wrong** or **Request changes**: adds what the agent should fix as a comment, clears the mark and moves the task back to a start status; the agent continues in the same worktree and branch;
+- **Keep agents away from this task**, under More: adds the block tag (`no-agent`).
 
 Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type.
 

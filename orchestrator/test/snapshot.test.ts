@@ -63,13 +63,18 @@ test('a project whose tasks cannot be read shows up as a problem, and the others
 
 test('task system reads are cached for a minute, to stay under the API rate limit', async () => {
   const website = projectDir('website');
-  const taskwire = fakeTaskwire({ 'tasks --needs any': [task({ id: 'r1', needs: 'review' })], 'task get': lastComment('> **Done:** it works.') });
+  const taskwire = fakeTaskwire({
+    'tasks --needs any': [task({ id: 'r1', needs: 'review' })],
+    tasks: [task({ id: 'r1', needs: 'review' })],
+    'task get': lastComment('> **Done:** it works.'),
+  });
   let now = NOW;
   const snapshot = createSnapshot({ home: home([website]), runTaskwire: taskwire.run, now: () => now });
   await snapshot();
   await snapshot();
-  assert.equal(taskwire.calls.length, 2);
+  // The waiting tasks, the detail of the one waiting, and the tasks to find the first one to start.
+  assert.equal(taskwire.calls.length, 3);
   now += 61_000;
   await snapshot();
-  assert.equal(taskwire.calls.length, 4);
+  assert.equal(taskwire.calls.length, 6);
 });

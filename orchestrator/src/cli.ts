@@ -80,9 +80,10 @@ function logTo(deps: CliDeps): (event: Record<string, unknown>) => void {
 async function start(deps: CliDeps): Promise<undefined> {
   const log = logTo(deps);
   const control = createRunControl((working) => log({ event: working ? 'play' : 'pause', at: new Date(deps.now()).toISOString() }));
-  const server = await openDashboard(deps, control);
+  let nextCheckAt: number | null = null;
+  const server = await openDashboard(deps, control, () => nextCheckAt);
   try {
-    await runLoop({ ...deps, log, control });
+    await runLoop({ ...deps, log, control, onWait: (until) => { nextCheckAt = until; } });
   } finally {
     await server.close();
   }
@@ -90,9 +91,9 @@ async function start(deps: CliDeps): Promise<undefined> {
 }
 
 // A new token at every start: the page gets it, and a page from another site cannot know it.
-async function openDashboard(deps: CliDeps, control: RunControl): Promise<RunningServer> {
+async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: () => number | null): Promise<RunningServer> {
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
-  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working });
+  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
   const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
   const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex'), act, control });
   let server: RunningServer;

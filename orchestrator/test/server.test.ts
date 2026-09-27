@@ -7,9 +7,13 @@ import type { DashboardState } from '../src/dashboard/snapshot.ts';
 
 const state: DashboardState = {
   generatedAt: '2026-09-27T15:32:00.000Z',
-  mode: 'paused',
+  control: { mode: 'paused', intervalMinutes: 5, maxAgents: 2, agentsAtWork: 0, nextCheckAt: null, busyProjects: [], firstTask: null },
+  projects: [],
   working: [],
-  waiting: [{ project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog', note: [] }],
+  waiting: [{
+    project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog',
+    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [],
+  }],
   history: [],
   problems: [],
 };
@@ -24,7 +28,7 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /taskwire orchestrator/);
   assert.match(response.body, /"generatedAt":"2026-09-27T15:32:00.000Z"/);
   // The switch between paused and working is on the page.
-  assert.match(response.body, /Start working/);
+  assert.match(response.body, /Start agents/);
   assert.match(response.body, /\/api\/control/);
 });
 

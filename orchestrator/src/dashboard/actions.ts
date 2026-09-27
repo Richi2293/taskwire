@@ -2,7 +2,7 @@ import { DEFAULT_BLOCK_TAG, loadConfig } from '../config.ts';
 import { usageError } from '../errors.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 
-export const ACTIONS = ['answer', 'approve', 'send-back', 'block'] as const;
+export const ACTIONS = ['answer', 'accept-proposal', 'approve', 'send-back', 'block'] as const;
 export type ActionName = (typeof ACTIONS)[number];
 
 export interface ActionRequest {
@@ -22,6 +22,7 @@ export interface ActionDeps {
 // Which kinds of waiting each action fits.
 const FITS: Record<ActionName, readonly string[]> = {
   answer: ['decision'],
+  'accept-proposal': ['decision'],
   approve: ['test', 'review'],
   'send-back': ['test', 'review'],
   block: ['decision', 'test', 'review'],
@@ -55,6 +56,9 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
     const run = (args: string[]) => deps.runTaskwire(args, project.path);
     if (request.action === 'answer') {
       await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\n${text}`]);
+      await run(['task', 'update', task.id, '--needs', 'none']);
+    } else if (request.action === 'accept-proposal') {
+      await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\nGo ahead with your proposal.`]);
       await run(['task', 'update', task.id, '--needs', 'none']);
     } else if (request.action === 'approve') {
       await run(['task', 'update', task.id, '--needs', 'none']);
