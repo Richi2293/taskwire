@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProjectEntry } from '../src/config.ts';
 import type { CycleResult } from '../src/cycle.ts';
+import { createRunControl } from '../src/control.ts';
 import { runLoop } from '../src/scheduler.ts';
 import type { LoopDeps } from '../src/scheduler.ts';
 import { fakeCommands, fakeTaskwire, runOrchestrator, tempDir } from './helpers.ts';
@@ -143,4 +144,23 @@ test('the start command prints one JSON event per line and stops when asked', as
   assert.equal(run.code, 0, run.stderr);
   const events = run.stdout.trim().split('\n').map((line) => (JSON.parse(line) as { event: string }).event);
   assert.deepEqual(events, ['dashboard', 'start', 'stop']);
+});
+
+test('with a run control, no agent starts until play, and pause stops new work', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [{ path: '/p/a' }] });
+  const control = createRunControl();
+  const startedAtTick: number[] = [];
+  const h = harness(home, 3, (tick, harnessRef) => {
+    startedAtTick.push(harnessRef.started.length);
+    if (tick === 1) control.play();
+    if (tick === 2) {
+      harnessRef.finish('/p/a');
+      control.pause();
+    }
+  });
+  h.deps.control = control;
+  await runLoop(h.deps);
+  assert.deepEqual(startedAtTick, [0, 1, 1]);
+  assert.deepEqual(h.started, ['/p/a']);
 });

@@ -12,19 +12,17 @@ orchestrator/bin/taskwire-orchestrator list
 orchestrator/bin/taskwire-orchestrator next
 orchestrator/bin/taskwire-orchestrator run-once
 orchestrator/bin/taskwire-orchestrator start
-orchestrator/bin/taskwire-orchestrator dashboard
 ```
 
 - `add` follows a project already set up with taskwire (it has a `.taskwire.json`). `--test-command` is the command that runs the project tests, from the project folder.
 - `list` shows the projects it follows.
 - `next` shows, for each project, the task an agent would work on next. It changes nothing.
 - `run-once` makes one pass: for each project, an agent works on the next task (see below).
-- `start` keeps working until you press Ctrl+C: every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`start`, `interrupted`, `run`, `error`, `stop`); an error in a project is logged and the others go on. After Ctrl+C it starts nothing new and waits for the running passes. It also serves the dashboard.
-- `dashboard` serves only the dashboard, with no agent working, until Ctrl+C.
+- `start` opens the dashboard and runs until you press Ctrl+C. It starts **paused**: no agent takes a task until you press **Start working** on the dashboard, and **Pause** stops new work while agents already at work finish their task. Every start begins paused. While working, every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project; pressing Start working starts the first pass at once. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`dashboard`, `start`, `interrupted`, `play`, `pause`, `run`, `error`, `stop`); an error in a project is logged and the others go on. After Ctrl+C it starts nothing new and waits for the running passes.
 
 ## Dashboard
 
-Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` or `dashboard` runs. One page, refreshed every 30 seconds:
+Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, with **Start working** or **Pause** at the top:
 
 - **Waiting for you:** the tasks of every project that wait for a person (decision, test by hand, review), with the part for people of their last comment, in the project language.
 - **At work now:** the agents working at the moment.

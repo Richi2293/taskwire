@@ -40,8 +40,8 @@ export interface HistoryItem {
 
 export interface DashboardState {
   generatedAt: string;
-  // True when "start" is running agents, false when only the dashboard runs.
-  agentsRunning: boolean;
+  // Whether agents may take new tasks: "start" begins paused, until play on the dashboard.
+  mode: 'paused' | 'working';
   waiting: WaitingItem[];
   working: WorkingItem[];
   history: HistoryItem[];
@@ -52,7 +52,7 @@ export interface SnapshotDeps {
   home: string;
   runTaskwire: RunTaskwire;
   now: () => number;
-  agentsRunning?: boolean;
+  working?: () => boolean;
 }
 
 // The free ClickUp plan allows 100 requests a minute: the page refreshes often, the task system is read at most once a minute.
@@ -127,7 +127,7 @@ export function createSnapshot(deps: SnapshotDeps): Snapshot {
     }));
     return {
       generatedAt: new Date(deps.now()).toISOString(),
-      agentsRunning: deps.agentsRunning ?? false,
+      mode: deps.working?.() ? 'working' : 'paused',
       waiting,
       working,
       history,
