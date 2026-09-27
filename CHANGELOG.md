@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-27
+
 ### Added
 
 - `taskwire setup` prints a guide for AI agents to set up taskwire in a project, with the block for its `AGENTS.md`. It works without a token or a config: tell your agent "Set up taskwire in this project: run `taskwire setup` and follow it."
@@ -91,7 +93,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/Richi2293/taskwire/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Richi2293/taskwire/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Richi2293/taskwire/compare/v0.1.2...v0.1.3
