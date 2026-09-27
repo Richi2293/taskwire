@@ -25,3 +25,6 @@ export function usageError(message: string, hint?: string): TaskwireError {
 export function configError(message: string, hint?: string): TaskwireError {
   return new TaskwireError(message, EXIT.config, hint);
 }
+
+// Shown whenever a command needs the project config and there is none.
+export const MISSING_CONFIG_HINT = 'Run "taskwire setup" and follow it, or "taskwire init --folder <id>" if you know the folder';

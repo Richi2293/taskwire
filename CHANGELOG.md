@@ -4,6 +4,17 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- `taskwire setup` prints a guide for AI agents to set up taskwire in a project, with the block for its `AGENTS.md`. It works without a token or a config: tell your agent "Set up taskwire in this project: run `taskwire setup` and follow it."
+- `taskwire lists --folder <id>` shows the lists of any folder, also before `init`.
+- `taskwire init --language` and `--instructions` write the project conventions.
+
+### Changed
+
+- Without a `.taskwire.json`, commands suggest `taskwire setup`.
+- The block for the `AGENTS.md` of projects moved to `rules/agents-block.md`; its text is unchanged.
+
 ## [0.1.5] - 2026-09-27
 
 ### Changed

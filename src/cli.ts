@@ -3,9 +3,9 @@ import type { ParseArgsOptionsConfig } from 'node:util';
 import type { CommandInput } from './args.ts';
 import { flag } from './args.ts';
 import { createClient } from './client.ts';
-import type { FetchFn } from './client.ts';
+import type { Client, FetchFn } from './client.ts';
 import { CONFIG_FILE, findConfig } from './config.ts';
-import { EXIT, TaskwireError, configError, usageError } from './errors.ts';
+import { EXIT, MISSING_CONFIG_HINT, TaskwireError, configError, usageError } from './errors.ts';
 import { printError, printResult, printWarning } from './output.ts';
 import type { Writer } from './output.ts';
 import { packageInfo } from './package-info.ts';
@@ -15,6 +15,8 @@ import { checkForUpdate } from './update-check.ts';
 import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
+import { formatSetup, setup } from './commands/setup-guide.ts';
+import type { SetupOut } from './commands/setup-guide.ts';
 import type { RulesOut } from './commands/rules.ts';
 import { createList, listLists } from './commands/lists.ts';
 import { listTags } from './commands/tags.ts';
@@ -28,7 +30,10 @@ export interface CommandSpec {
   options: ParseArgsOptionsConfig;
   // How many positional arguments (ids) the command accepts after its name.
   positionals: 0 | 1;
-  needsConfig: boolean;
+  // "optional": the config is read when there is one, as for "lists --folder" before init.
+  needsConfig: boolean | 'optional';
+  // Only "setup" runs without a token, so it can explain how to store one.
+  needsToken?: false;
   run: (ctx: Context, input: CommandInput) => Promise<unknown>;
   // Replaces the generic --pretty view for commands whose result reads better as text.
   formatPretty?: (result: unknown) => string;
@@ -49,15 +54,17 @@ export interface CliDeps {
 export const HELP = `taskwire: manage the tasks of this project (provider: ClickUp)
 
 Setup:
+  taskwire setup                  how an agent sets up taskwire in this project (guide and AGENTS.md block)
   taskwire whoami
   taskwire folders
-  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--force]
-                  --scope-list limits the project to some lists of the folder, --list is the default list
+  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <l>] [--instructions <text>] [--force]
+                  --scope-list limits the project to some lists of the folder, --list is the default list,
+                  --language and --instructions set the project conventions
   taskwire rules                  how agents must manage tasks in this project (rules and conventions)
   taskwire conventions            the project conventions only (language, instructions)
 
 Lists:
-  taskwire lists
+  taskwire lists [--folder <id>]      --folder shows the lists of any folder, also before init
   taskwire list create --name <name>   not available when the project is limited to some lists
 
 Tasks:
@@ -99,10 +106,25 @@ const GLOBAL_OPTIONS: ParseArgsOptionsConfig = {
 };
 
 export const COMMANDS: Record<string, CommandSpec> = {
+  setup: {
+    options: {},
+    positionals: 0,
+    needsConfig: false,
+    needsToken: false,
+    run: (ctx) => setup(ctx),
+    formatPretty: (result) => formatSetup(result as SetupOut),
+  },
   whoami: { options: {}, positionals: 0, needsConfig: false, run: (ctx) => whoami(ctx) },
   folders: { options: {}, positionals: 0, needsConfig: false, run: (ctx) => folders(ctx) },
   init: {
-    options: { folder: { type: 'string' }, list: { type: 'string' }, 'scope-list': { type: 'string', multiple: true }, force: { type: 'boolean' } },
+    options: {
+      folder: { type: 'string' },
+      list: { type: 'string' },
+      'scope-list': { type: 'string', multiple: true },
+      language: { type: 'string' },
+      instructions: { type: 'string' },
+      force: { type: 'boolean' },
+    },
     positionals: 0,
     needsConfig: false,
     run: (ctx, input) => init(ctx, input),
@@ -115,7 +137,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     formatPretty: (result) => formatRules(result as RulesOut),
   },
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
-  lists: { options: {}, positionals: 0, needsConfig: true, run: (ctx) => listLists(ctx) },
+  lists: { options: { folder: { type: 'string' } }, positionals: 0, needsConfig: 'optional', run: (ctx, input) => listLists(ctx, input) },
   'list create': {
     options: { name: { type: 'string' } },
     positionals: 0,
@@ -247,6 +269,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
 const GLOBAL_FLAGS = ['--pretty', '--help'];
 
 // The command name comes first; only the global flags may precede it.
+// A command that runs without a token never calls the provider; this guards against a mistake.
+const NO_TOKEN_CLIENT: Client = {
+  request: () => Promise.reject(new Error('This command runs without a token and cannot call the provider')),
+};
+
 function resolveCommand(argv: string[]): { spec: CommandSpec; rest: string[] } | null {
   const start = argv.findIndex((arg) => !GLOBAL_FLAGS.includes(arg));
   if (start === -1) return null;
@@ -302,17 +329,14 @@ export async function main(deps: CliDeps): Promise<number> {
       return EXIT.ok;
     }
     // Setup commands never read the config, so a broken file cannot block the commands that repair it.
-    const found = resolved.spec.needsConfig ? findConfig(deps.cwd) : null;
-    if (resolved.spec.needsConfig && found === null) {
-      throw configError(
-        `No ${CONFIG_FILE} found in ${deps.cwd} or its parents`,
-        'Run "taskwire folders" to find the folder id, then "taskwire init --folder <id>"',
-      );
+    const found = resolved.spec.needsConfig === false ? null : findConfig(deps.cwd);
+    if (resolved.spec.needsConfig === true && found === null) {
+      throw configError(`No ${CONFIG_FILE} found in ${deps.cwd} or its parents`, MISSING_CONFIG_HINT);
     }
-    token = resolveToken(deps.readKeychain, deps.env);
-    const secrets = [token];
+    token = resolved.spec.needsToken === false ? undefined : resolveToken(deps.readKeychain, deps.env);
+    const secrets = token === undefined ? [] : [token];
     const warn = (message: string, hint?: string) => printWarning(deps.stderr, message, hint, secrets);
-    const client = createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
+    const client = token === undefined ? NO_TOKEN_CLIENT : createClient({ token, fetch: deps.fetch, sleep: deps.sleep, now: deps.now, warn });
     const ctx: Context = {
       client,
       config: found?.config ?? null,

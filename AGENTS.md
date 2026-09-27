@@ -1,6 +1,6 @@
 # taskwire
 
-Rules for AI agents working on the taskwire codebase. The rules for agents that only use taskwire in other projects are served by `taskwire rules` from `rules/tasks.md`, and `docs/agent-rules.md` explains how projects use them.
+Rules for AI agents working on the taskwire codebase. The rules for agents that only use taskwire in other projects are served by `taskwire rules` from `rules/tasks.md`, the setup guide by `taskwire setup` from `rules/setup.md` and `rules/agents-block.md`, and `docs/agent-rules.md` explains how projects use them.
 
 ## Working on changes
 

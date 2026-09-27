@@ -15,6 +15,7 @@ A project can also be some lists of a folder, set with `listIds`: for example on
 ```
 cd path/to/project
 taskwire folders                                   # every folder with its space and workspace
+taskwire lists --folder <id>                       # lists of a folder, also before init
 taskwire init --folder <id> [--list <id>]          # --list sets defaultListId
 taskwire init --folder <id> --scope-list <id>...   # limits the project to those lists (listIds)
 taskwire lists                                     # lists of the project and their statuses

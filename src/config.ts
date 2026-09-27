@@ -29,12 +29,16 @@ export interface ProjectConfig {
 const NUMERIC_ID = /^\d+$/;
 
 export function findConfig(startDir: string): { path: string; config: ProjectConfig } | null {
+  const path = findConfigPath(startDir);
+  return path === null ? null : { path, config: parseConfig(readFileSync(path, 'utf8'), path) };
+}
+
+// The nearest .taskwire.json in the folder or its parents, without reading it.
+export function findConfigPath(startDir: string): string | null {
   let dir = startDir;
   while (true) {
     const candidate = join(dir, CONFIG_FILE);
-    if (existsSync(candidate)) {
-      return { path: candidate, config: parseConfig(readFileSync(candidate, 'utf8'), candidate) };
-    }
+    if (existsSync(candidate)) return candidate;
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
