@@ -12,13 +12,26 @@ orchestrator/bin/taskwire-orchestrator list
 orchestrator/bin/taskwire-orchestrator next
 orchestrator/bin/taskwire-orchestrator run-once
 orchestrator/bin/taskwire-orchestrator start
+orchestrator/bin/taskwire-orchestrator dashboard
 ```
 
 - `add` follows a project already set up with taskwire (it has a `.taskwire.json`). `--test-command` is the command that runs the project tests, from the project folder.
 - `list` shows the projects it follows.
 - `next` shows, for each project, the task an agent would work on next. It changes nothing.
 - `run-once` makes one pass: for each project, an agent works on the next task (see below).
-- `start` keeps working until you press Ctrl+C: every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`start`, `interrupted`, `run`, `error`, `stop`); an error in a project is logged and the others go on. After Ctrl+C it starts nothing new and waits for the running passes.
+- `start` keeps working until you press Ctrl+C: every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`start`, `interrupted`, `run`, `error`, `stop`); an error in a project is logged and the others go on. After Ctrl+C it starts nothing new and waits for the running passes. It also serves the dashboard.
+- `dashboard` serves only the dashboard, with no agent working, until Ctrl+C.
+
+## Dashboard
+
+Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` or `dashboard` runs. One page, refreshed every 30 seconds:
+
+- **Waiting for you:** the tasks of every project that wait for a person (decision, test by hand, review), with the part for people of their last comment, in the project language.
+- **At work now:** the agents working at the moment.
+- **History:** the runs of `runs.jsonl`, by day, with time, outcome, tests, verification and cost.
+- **Projects that could not be read**, when taskwire fails in one of them (for example a missing token).
+
+It reads the task system at most once a minute per query, to stay under the rate limit of the free ClickUp plan. It listens on 127.0.0.1 only and refuses requests for any other host name. Task names and comments are shown as text, never as HTML.
 
 ## One pass
 
@@ -79,6 +92,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 |---|---|
 | `maxAgents` | how many agents may work at once, across projects (default 2) |
 | `intervalMinutes` | minutes between two looks at the projects in `start` (default 5) |
+| `dashboardPort` | port of the dashboard on 127.0.0.1 (default 4777) |
 | `taskwireCommand` | the taskwire command to run; defaults to `taskwire` on the PATH. Point it to a clone to try an unreleased taskwire |
 | `projects[].path` | absolute path of the project folder |
 | `projects[].testCommand` | command that runs the project tests |

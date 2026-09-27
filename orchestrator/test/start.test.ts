@@ -142,5 +142,5 @@ test('the start command prints one JSON event per line and stops when asked', as
   const run = await runOrchestrator(['start'], { home, stopped: () => true });
   assert.equal(run.code, 0, run.stderr);
   const events = run.stdout.trim().split('\n').map((line) => (JSON.parse(line) as { event: string }).event);
-  assert.deepEqual(events, ['start', 'stop']);
+  assert.deepEqual(events, ['dashboard', 'start', 'stop']);
 });

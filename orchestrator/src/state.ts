@@ -53,3 +53,19 @@ export function appendRun(home: string, record: RunRecord): void {
   mkdirSync(home, { recursive: true });
   appendFileSync(join(home, RUNS_FILE), `${JSON.stringify(record)}\n`);
 }
+
+// The most recent runs, newest first. A line that is not valid JSON (a write cut short) is skipped.
+export function readRuns(home: string, limit: number): RunRecord[] {
+  const path = join(home, RUNS_FILE);
+  if (!existsSync(path)) return [];
+  const records: RunRecord[] = [];
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (line.trim() === '') continue;
+    try {
+      records.push(JSON.parse(line) as RunRecord);
+    } catch {
+      // Skipped: see above.
+    }
+  }
+  return records.slice(-limit).reverse();
+}

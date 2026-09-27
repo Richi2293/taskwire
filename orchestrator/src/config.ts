@@ -26,6 +26,8 @@ export interface OrchestratorConfig {
   maxAgents?: number;
   // Minutes between two looks at the projects in "start"; defaults to DEFAULT_INTERVAL_MINUTES.
   intervalMinutes?: number;
+  // Port of the dashboard on 127.0.0.1; defaults to DEFAULT_DASHBOARD_PORT.
+  dashboardPort?: number;
   projects: ProjectEntry[];
 }
 
@@ -34,6 +36,7 @@ export const DEFAULT_BLOCK_TAG = 'no-agent';
 export const DEFAULT_WORK_STATUS = 'in progress';
 export const DEFAULT_MAX_AGENTS = 2;
 export const DEFAULT_INTERVAL_MINUTES = 5;
+export const DEFAULT_DASHBOARD_PORT = 4777;
 
 const CONFIG_FILE = 'config.json';
 
@@ -57,7 +60,7 @@ export function saveConfig(home: string, config: OrchestratorConfig): void {
 function parseConfig(data: unknown, path: string): OrchestratorConfig {
   const invalid = (reason: string) => configError(`${path}: ${reason}`, 'Fix the file, or remove it and add the projects again');
   if (typeof data !== 'object' || data === null || Array.isArray(data)) throw invalid('must contain a JSON object');
-  const { taskwireCommand, maxAgents, intervalMinutes, projects } = data as Record<string, unknown>;
+  const { taskwireCommand, maxAgents, intervalMinutes, dashboardPort, projects } = data as Record<string, unknown>;
   if (!Array.isArray(projects)) throw invalid('"projects" must be an array');
   const config: OrchestratorConfig = { projects: projects.map((entry: unknown) => parseProject(entry, invalid)) };
   if (taskwireCommand !== undefined) {
@@ -66,6 +69,11 @@ function parseConfig(data: unknown, path: string): OrchestratorConfig {
   }
   if (maxAgents !== undefined) config.maxAgents = positive(maxAgents, '"maxAgents"', invalid, true);
   if (intervalMinutes !== undefined) config.intervalMinutes = positive(intervalMinutes, '"intervalMinutes"', invalid, false);
+  if (dashboardPort !== undefined) {
+    const port = positive(dashboardPort, '"dashboardPort"', invalid, true);
+    if (port > 65535) throw invalid('"dashboardPort" must be a port number, up to 65535');
+    config.dashboardPort = port;
+  }
   return config;
 }
 
