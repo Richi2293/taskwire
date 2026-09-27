@@ -12,6 +12,8 @@ export interface FakeCall {
   path: string;
   url: URL;
   body: unknown;
+  // The Authorization header, to check which token a command used.
+  token: string | null;
 }
 
 export interface FakeReply {
@@ -30,7 +32,8 @@ export function fakeFetch(routes: Record<string, Route>): { fetch: FetchFn; call
     // v2 routes are keyed without a prefix ("/task/t1"), v3 routes keep theirs ("/v3/workspaces/...").
     const path = url.pathname.replace(/^\/api\/v2/, '').replace(/^\/api(?=\/v3\/)/, '');
     const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
-    const call: FakeCall = { method, path, url, body };
+    const token = new Headers(init.headers).get('Authorization');
+    const call: FakeCall = { method, path, url, body, token };
     calls.push(call);
     const route = routes[`${method} ${path}`];
     if (route === undefined) {
@@ -122,6 +125,8 @@ export async function runCli(
     cwd?: string;
     config?: ProjectConfig | null;
     keychain?: string | null;
+    // Tokens by Keychain service, for named accounts ("taskwire:<account>"); replaces keychain when given.
+    keychains?: Record<string, string>;
     env?: Record<string, string>;
   } = {},
 ): Promise<CliRun> {
@@ -146,7 +151,8 @@ export async function runCli(
     fetch,
     sleep: async () => {},
     now: () => 0,
-    readKeychain: () => keychain,
+    readKeychain: (service) =>
+      options.keychains !== undefined ? (options.keychains[service] ?? null) : service === 'taskwire' ? keychain : null,
   });
   const stdout = out.join('');
   return { code, stdout, stderr: err.join(''), calls, cwd, json: () => JSON.parse(stdout) };

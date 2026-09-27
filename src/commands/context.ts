@@ -13,6 +13,8 @@ export interface Context {
   // Where the config was found, to resolve paths written in it; null when the command reads no config.
   configPath: string | null;
   cwd: string;
+  // The account whose token the command uses (--account, or the project's); null for the default token.
+  account: string | null;
   warn: Warn;
   // Looks for a newer taskwire on npm; only the rules command uses it, since agents run it at the start of a session.
   checkUpdate: () => Promise<UpdateNotice | null>;

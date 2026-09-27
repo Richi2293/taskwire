@@ -8,7 +8,7 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 - If the code disagrees with the real API (for example a ClickUp endpoint behaves differently than expected), stop, explain the difference to the user and fix it with a dedicated commit. Record real API facts in the provider page under `docs/providers/`.
 - Do not re-open these design decisions without the user:
   - Model-agnostic: a shell CLI plus `AGENTS.md` rules, nothing specific to one AI tool.
-  - The token lives in the macOS Keychain (service `taskwire`), with `TASKWIRE_API_TOKEN` as fallback. It is never printed or logged.
+  - The token lives in the macOS Keychain (service `taskwire`), with `TASKWIRE_API_TOKEN` as fallback. A named account (`account` in `.taskwire.json`, or `--account`) uses its own service `taskwire:<account>` and `TASKWIRE_API_TOKEN_<ACCOUNT>`, never the default token. It is never printed or logged.
   - Every write checks that the task or list belongs to the project configured in `.taskwire.json`.
   - Deleting requires `--yes`. Everything else may be created and updated freely.
   - Only free-plan features are exposed: no custom fields, sprint points, time estimates, attachments or custom task types.
