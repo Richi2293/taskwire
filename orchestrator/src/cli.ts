@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
 import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { createRunControl } from './control.ts';
+import type { RunControl } from './control.ts';
 import { createActions } from './dashboard/actions.ts';
 import { createHandler } from './dashboard/server.ts';
 import type { Handler, RunningServer } from './dashboard/server.ts';
@@ -56,8 +58,7 @@ export const HELP = `taskwire-orchestrator: let agents work on the tasks of your
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
   taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
-  taskwire-orchestrator start                                     keep working on the projects until Ctrl+C, with the dashboard
-  taskwire-orchestrator dashboard                                 only the dashboard, with no agent working, until Ctrl+C
+  taskwire-orchestrator start                                     open the dashboard until Ctrl+C; agents work once you press play there
 
 Output is JSON on stdout; errors are JSON lines on stderr.
 Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration error.
@@ -69,36 +70,31 @@ const COMMANDS: Record<string, CommandSpec> = {
   next: { options: {}, run: nextTasks },
   'run-once': { options: {}, run: runOnce },
   start: { options: {}, run: start },
-  dashboard: { options: {}, run: dashboard },
 };
 
 function logTo(deps: CliDeps): (event: Record<string, unknown>) => void {
   return (event) => deps.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
+// Starts paused: agents take tasks only after play on the dashboard.
 async function start(deps: CliDeps): Promise<undefined> {
-  const server = await openDashboard(deps, true);
+  const log = logTo(deps);
+  const control = createRunControl((working) => log({ event: working ? 'play' : 'pause', at: new Date(deps.now()).toISOString() }));
+  const server = await openDashboard(deps, control);
   try {
-    await runLoop({ ...deps, log: logTo(deps) });
+    await runLoop({ ...deps, log, control });
   } finally {
     await server.close();
   }
   return undefined;
 }
 
-async function dashboard(deps: CliDeps): Promise<undefined> {
-  const server = await openDashboard(deps, false);
-  while (!deps.stopped()) await deps.sleep(60_000);
-  await server.close();
-  return undefined;
-}
-
 // A new token at every start: the page gets it, and a page from another site cannot know it.
-async function openDashboard(deps: CliDeps, agentsRunning: boolean): Promise<RunningServer> {
+async function openDashboard(deps: CliDeps, control: RunControl): Promise<RunningServer> {
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
-  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, agentsRunning });
+  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working });
   const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
-  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex'), act });
+  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex'), act, control });
   let server: RunningServer;
   try {
     server = await deps.serve(handler, port);

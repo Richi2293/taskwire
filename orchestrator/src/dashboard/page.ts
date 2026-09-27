@@ -18,7 +18,10 @@ export function renderPage(state: DashboardState, token: string): string {
 <main>
   <header>
     <h1>taskwire orchestrator</h1>
-    <p id="status" class="status"></p>
+    <div class="control">
+      <p id="status" class="status"></p>
+      <button id="switch" type="button"></button>
+    </div>
   </header>
   <section aria-labelledby="waiting-title">
     <h2 id="waiting-title">Waiting for you <span id="waiting-count" class="count"></span></h2>
@@ -62,6 +65,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 syste
 main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
 header { margin-bottom: 36px; }
 h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+.control { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; }
 .status { margin: 0; color: var(--muted); }
 .status .alive { color: var(--alive); font-weight: 600; }
 h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin: 40px 0 16px; }
@@ -236,6 +240,22 @@ function actionsFor(item) {
   return box;
 }
 
+async function switchMode(action, button) {
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-action-token': TOKEN },
+      body: JSON.stringify({ action }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'The orchestrator answered ' + response.status + '.');
+  } catch (error) {
+    document.getElementById('status').textContent = error.message;
+  }
+  button.disabled = false;
+  refresh(true);
+}
+
 // Someone is typing or waiting for an answer: a refresh would throw that away.
 function busy() {
   return [...document.querySelectorAll('.action-form')].some((form) => !form.hidden) || Boolean(document.querySelector('.actions button:disabled'));
@@ -244,10 +264,18 @@ function busy() {
 function render(state) {
   const now = new Date(state.generatedAt);
   const status = document.getElementById('status');
+  const finishing = state.mode === 'paused' && state.working.length ? ' Agents at work finish their task.' : '';
   status.replaceChildren(
-    state.agentsRunning ? el('span', { className: 'alive', text: 'Agents are working.' }) : 'Dashboard only: no agent is running.',
+    state.mode === 'working'
+      ? el('span', { className: 'alive', text: 'Working: agents take the next tasks.' })
+      : 'Paused: no agent takes a new task until you start.' + finishing,
     ' Updated ' + time(state.generatedAt) + '.',
   );
+  const button = document.getElementById('switch');
+  button.textContent = state.mode === 'working' ? 'Pause' : 'Start working';
+  button.className = state.mode === 'working' ? '' : 'primary';
+  button.disabled = false;
+  button.onclick = () => switchMode(state.mode === 'working' ? 'pause' : 'play', button);
 
   const waiting = document.getElementById('waiting');
   document.getElementById('waiting-count').textContent = state.waiting.length ? String(state.waiting.length) : '';
@@ -294,8 +322,8 @@ function render(state) {
 
 render(JSON.parse(document.getElementById('initial-state').textContent));
 
-async function refresh() {
-  if (busy()) return;
+async function refresh(force) {
+  if (!force && busy()) return;
   try {
     const response = await fetch('/api/state', { cache: 'no-store' });
     if (response.ok) render(await response.json());

@@ -2,6 +2,7 @@ import { DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, loadConfig } from './conf
 import type { OrchestratorConfig, ProjectEntry } from './config.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleDeps, CycleResult } from './cycle.ts';
+import type { RunControl } from './control.ts';
 
 export interface LoopDeps extends CycleDeps {
   // One event per line: what the loop did, for the terminal and later the dashboard.
@@ -11,6 +12,8 @@ export interface LoopDeps extends CycleDeps {
   stopped: () => boolean;
   // The work on one project; replaced in tests.
   cycle?: (deps: CycleDeps, project: ProjectEntry) => Promise<CycleResult>;
+  // Play and pause from the dashboard; without it the loop always works.
+  control?: RunControl;
 }
 
 // Runs cycles until stopped: at most maxAgents at once, one per project, taking projects in turn.
@@ -37,7 +40,8 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     const intervalMs = (config.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES) * 60_000;
     const maxAgents = config.maxAgents ?? DEFAULT_MAX_AGENTS;
     const cycleDeps: CycleDeps = { ...deps, taskwireCommand: config.taskwireCommand };
-    const projects = config.projects;
+    // While paused nothing new starts; agents already at work finish their task.
+    const projects = deps.control === undefined || deps.control.working() ? config.projects : [];
     const first = turn;
     for (let offset = 0; offset < projects.length && running.size < maxAgents; offset++) {
       const index = (first + offset) % projects.length;
@@ -54,7 +58,8 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
         .finally(() => running.delete(project.path));
       running.set(project.path, work);
     }
-    await deps.sleep(intervalMs);
+    // A play or a pause cuts the wait short, so the person sees the change at once.
+    await Promise.race([deps.sleep(intervalMs), ...(deps.control === undefined ? [] : [deps.control.changed()])]);
   }
   await Promise.all(running.values());
   deps.log({ event: 'stop', at: at() });

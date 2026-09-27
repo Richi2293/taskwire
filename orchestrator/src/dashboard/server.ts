@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
+import type { RunControl } from '../control.ts';
 import { EXIT, OrchestratorError } from '../errors.ts';
 import type { DashboardState } from './snapshot.ts';
 import { renderPage } from './page.ts';
@@ -25,6 +26,8 @@ export interface HandlerDeps {
   token: string;
   // Runs an action sent by the page; missing when the dashboard only shows.
   act?: (body: unknown) => Promise<void>;
+  // Play and pause of the agents.
+  control?: RunControl;
 }
 
 // The dashboard listens on the loopback only; a page from another site that resolves its own name to
@@ -44,6 +47,9 @@ export function createHandler(deps: HandlerDeps): Handler {
     }
     if (request.method === 'POST' && path === '/api/action' && deps.act !== undefined) {
       return runAction(deps.act, deps.token, request);
+    }
+    if (request.method === 'POST' && path === '/api/control' && deps.control !== undefined) {
+      return switchControl(deps.control, deps.token, request);
     }
     return text(404, 'Not found');
   };
@@ -67,6 +73,20 @@ async function runAction(act: (body: unknown) => Promise<void>, token: string, r
     const refused = error instanceof OrchestratorError && error.exitCode === EXIT.usage;
     return json(refused ? 400 : 502, { error: message });
   }
+}
+
+function switchControl(control: RunControl, token: string, request: DashboardRequest): DashboardResponse {
+  if (!sameSecret(request.headers['x-action-token'] ?? '', token)) return json(403, { error: 'Reload the dashboard: this page is from an earlier start' });
+  let action: unknown;
+  try {
+    action = (JSON.parse(request.body) as { action?: unknown }).action;
+  } catch {
+    return json(400, { error: 'The request is not valid JSON' });
+  }
+  if (action === 'play') control.play();
+  else if (action === 'pause') control.pause();
+  else return json(400, { error: 'Use "play" or "pause"' });
+  return json(200, { ok: true, mode: control.working() ? 'working' : 'paused' });
 }
 
 // Compares in constant time, so the token cannot be guessed one character at a time.

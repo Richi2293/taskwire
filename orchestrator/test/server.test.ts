@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHandler } from '../src/dashboard/server.ts';
 import { OrchestratorError } from '../src/errors.ts';
+import { createRunControl } from '../src/control.ts';
 import type { DashboardState } from '../src/dashboard/snapshot.ts';
 
 const state: DashboardState = {
   generatedAt: '2026-09-27T15:32:00.000Z',
-  agentsRunning: true,
+  mode: 'paused',
   working: [],
   waiting: [{ project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog', note: [] }],
   history: [],
@@ -22,6 +23,9 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.headers['content-type'] ?? '', /text\/html/);
   assert.match(response.body, /taskwire orchestrator/);
   assert.match(response.body, /"generatedAt":"2026-09-27T15:32:00.000Z"/);
+  // The switch between paused and working is on the page.
+  assert.match(response.body, /Start working/);
+  assert.match(response.body, /\/api\/control/);
 });
 
 test('task text from the task system is never turned into HTML', async () => {
@@ -87,4 +91,22 @@ test('a failure of taskwire during an action answers 502', async () => {
     throw new OrchestratorError('taskwire task: Network error calling ClickUp', 1);
   });
   assert.equal((await post(handle, '{"project":"/p","task":"t1","action":"approve"}', 'secret-token')).status, 502);
+});
+
+test('start working and pause need the token, and switch the run control', async () => {
+  const control = createRunControl();
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', control });
+  const send = (action: string, token?: string) => handle({
+    method: 'POST',
+    url: '/api/control',
+    headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) },
+    body: JSON.stringify({ action }),
+  });
+  assert.equal((await send('play')).status, 403);
+  assert.equal(control.working(), false);
+  const played = await send('play', 'secret-token');
+  assert.deepEqual(JSON.parse(played.body), { ok: true, mode: 'working' });
+  assert.equal(control.working(), true);
+  assert.deepEqual(JSON.parse((await send('pause', 'secret-token')).body), { ok: true, mode: 'paused' });
+  assert.equal((await send('fly', 'secret-token')).status, 400);
 });
