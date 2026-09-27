@@ -95,7 +95,14 @@ async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: ()
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
   const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
   const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
-  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex'), act, control });
+  const log = logTo(deps);
+  const handler = createHandler({
+    snapshot,
+    token: randomBytes(24).toString('hex'),
+    act,
+    control,
+    onAction: (event) => log({ event: 'action', at: new Date(deps.now()).toISOString(), ...event }),
+  });
   let server: RunningServer;
   try {
     server = await deps.serve(handler, port);
@@ -105,7 +112,7 @@ async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: ()
     }
     throw error;
   }
-  logTo(deps)({ event: 'dashboard', at: new Date(deps.now()).toISOString(), url: server.url });
+  log({ event: 'dashboard', at: new Date(deps.now()).toISOString(), url: server.url });
   return server;
 }
 
