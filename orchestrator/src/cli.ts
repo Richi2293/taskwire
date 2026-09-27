@@ -1,8 +1,12 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
-import { DEFAULT_BLOCK_TAG, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { createHandler } from './dashboard/server.ts';
+import type { Handler, RunningServer } from './dashboard/server.ts';
+import { createSnapshot } from './dashboard/snapshot.ts';
 import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
 import type { RunCommand } from './commands.ts';
@@ -11,6 +15,9 @@ import type { CycleResult } from './cycle.ts';
 import { pickTask } from './picker.ts';
 import { runLoop } from './scheduler.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
+
+// Serves the dashboard on 127.0.0.1; replaced in tests so that no port is opened.
+export type ServeDashboard = (handler: Handler, port: number) => Promise<RunningServer>;
 
 export interface Writer {
   write(chunk: string): unknown;
@@ -29,6 +36,7 @@ export interface CliDeps {
   // For "start": waits between ticks (returning early when stopped), and tells when to stop.
   sleep: (ms: number) => Promise<void>;
   stopped: () => boolean;
+  serve: ServeDashboard;
 }
 
 interface Input {
@@ -47,7 +55,8 @@ export const HELP = `taskwire-orchestrator: let agents work on the tasks of your
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
   taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
-  taskwire-orchestrator start                                     keep working on the projects until Ctrl+C (one JSON event per line)
+  taskwire-orchestrator start                                     keep working on the projects until Ctrl+C, with the dashboard
+  taskwire-orchestrator dashboard                                 only the dashboard, with no agent working, until Ctrl+C
 
 Output is JSON on stdout; errors are JSON lines on stderr.
 Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration error.
@@ -59,11 +68,46 @@ const COMMANDS: Record<string, CommandSpec> = {
   next: { options: {}, run: nextTasks },
   'run-once': { options: {}, run: runOnce },
   start: { options: {}, run: start },
+  dashboard: { options: {}, run: dashboard },
 };
 
+function logTo(deps: CliDeps): (event: Record<string, unknown>) => void {
+  return (event) => deps.stdout.write(`${JSON.stringify(event)}\n`);
+}
+
 async function start(deps: CliDeps): Promise<undefined> {
-  await runLoop({ ...deps, log: (event) => deps.stdout.write(`${JSON.stringify(event)}\n`) });
+  const server = await openDashboard(deps, true);
+  try {
+    await runLoop({ ...deps, log: logTo(deps) });
+  } finally {
+    await server.close();
+  }
   return undefined;
+}
+
+async function dashboard(deps: CliDeps): Promise<undefined> {
+  const server = await openDashboard(deps, false);
+  while (!deps.stopped()) await deps.sleep(60_000);
+  await server.close();
+  return undefined;
+}
+
+// A new token at every start: the page gets it, and a page from another site cannot know it.
+async function openDashboard(deps: CliDeps, agentsRunning: boolean): Promise<RunningServer> {
+  const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
+  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, agentsRunning });
+  const handler = createHandler({ snapshot, token: randomBytes(24).toString('hex') });
+  let server: RunningServer;
+  try {
+    server = await deps.serve(handler, port);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EADDRINUSE') {
+      throw configError(`Port ${port} is already in use`, 'Stop the program that uses it, or set "dashboardPort" in the orchestrator config');
+    }
+    throw error;
+  }
+  logTo(deps)({ event: 'dashboard', at: new Date(deps.now()).toISOString(), url: server.url });
+  return server;
 }
 
 async function runOnce(deps: CliDeps): Promise<CycleResult[]> {

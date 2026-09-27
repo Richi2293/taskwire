@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { main } from './cli.ts';
 import { runCommand } from './commands.ts';
+import { serveDashboard } from './dashboard/server.ts';
 import { loadConfig } from './config.ts';
 import { createTaskwire } from './taskwire.ts';
 
@@ -38,4 +39,5 @@ process.exitCode = await main({
   now: () => Date.now(),
   sleep,
   stopped: () => stop.signal.aborted,
+  serve: serveDashboard,
 });

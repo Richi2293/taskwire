@@ -1,0 +1,58 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Handler } from '../src/dashboard/server.ts';
+import type { ServeDashboard } from '../src/cli.ts';
+import { runOrchestrator, tempDir } from './helpers.ts';
+
+// Records what would be served, without opening a port.
+function fakeServe(): { serve: ServeDashboard; served: { port: number; handler: Handler }[]; closed: () => boolean } {
+  const served: { port: number; handler: Handler }[] = [];
+  let closed = false;
+  const serve: ServeDashboard = async (handler, port) => {
+    served.push({ port, handler });
+    return { url: `http://127.0.0.1:${port}`, close: async () => { closed = true; } };
+  };
+  return { serve, served, closed: () => closed };
+}
+
+async function stateFrom(handler: Handler): Promise<{ agentsRunning: boolean }> {
+  const response = await handler({ method: 'GET', url: '/api/state', headers: { host: '127.0.0.1' }, body: '' });
+  return JSON.parse(response.body) as { agentsRunning: boolean };
+}
+
+test('dashboard serves the page on the configured port, without agents, until stopped', async () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ dashboardPort: 5100, projects: [] }));
+  const fake = fakeServe();
+  const run = await runOrchestrator(['dashboard'], { home, serve: fake.serve });
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(fake.served[0].port, 5100);
+  assert.deepEqual(JSON.parse(run.stdout.trim().split('\n')[0]), { event: 'dashboard', at: '2026-09-27T10:00:00.000Z', url: 'http://127.0.0.1:5100' });
+  assert.equal((await stateFrom(fake.served[0].handler)).agentsRunning, false);
+  assert.ok(fake.closed());
+});
+
+test('start serves the dashboard too, on port 4777 by default, showing that agents are working', async () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [] }));
+  const fake = fakeServe();
+  const run = await runOrchestrator(['start'], { home, serve: fake.serve });
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(fake.served[0].port, 4777);
+  assert.equal((await stateFrom(fake.served[0].handler)).agentsRunning, true);
+  assert.deepEqual(run.stdout.trim().split('\n').map((line) => (JSON.parse(line) as { event: string }).event), ['dashboard', 'start', 'stop']);
+  assert.ok(fake.closed());
+});
+
+test('a port already in use stops the command with a hint', async () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [] }));
+  const busy: ServeDashboard = async () => {
+    throw Object.assign(new Error('listen EADDRINUSE: address already in use 127.0.0.1:4777'), { code: 'EADDRINUSE' });
+  };
+  const run = await runOrchestrator(['dashboard'], { home, serve: busy });
+  assert.equal(run.code, 3);
+  assert.match(JSON.parse(run.stderr).hint, /dashboardPort/);
+});

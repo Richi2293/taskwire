@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { main } from '../src/cli.ts';
+import type { ServeDashboard } from '../src/cli.ts';
 import type { CommandResult, RunCommand } from '../src/commands.ts';
 import type { RunTaskwire } from '../src/taskwire.ts';
 import type { TaskSummary } from '../src/taskwire.ts';
@@ -99,7 +100,15 @@ export interface OrchestratorRun {
 
 export async function runOrchestrator(
   argv: string[],
-  options: { home?: string; cwd?: string; taskwire?: RunTaskwire; commands?: RunCommand; now?: () => number; stopped?: () => boolean } = {},
+  options: {
+    home?: string;
+    cwd?: string;
+    taskwire?: RunTaskwire;
+    commands?: RunCommand;
+    now?: () => number;
+    stopped?: () => boolean;
+    serve?: ServeDashboard;
+  } = {},
 ): Promise<OrchestratorRun> {
   const out: string[] = [];
   const err: string[] = [];
@@ -114,6 +123,8 @@ export async function runOrchestrator(
     now: options.now ?? (() => Date.UTC(2026, 8, 27, 10, 0, 0)),
     sleep: async () => {},
     stopped: options.stopped ?? (() => true),
+    // Never opens a port in tests.
+    serve: options.serve ?? (async (_handler, port) => ({ url: `http://127.0.0.1:${port}`, close: async () => {} })),
   });
   const stdout = out.join('');
   return { code, stdout, stderr: err.join(''), json: () => JSON.parse(stdout) };
