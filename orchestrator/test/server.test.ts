@@ -30,6 +30,11 @@ test('the page is served as HTML, with the current state embedded for the first 
   // The switch between paused and working is on the page.
   assert.match(response.body, /Start agents/);
   assert.match(response.body, /\/api\/control/);
+  // Projects are added and removed from the page too.
+  assert.match(response.body, /Add project/);
+  assert.match(response.body, /\/api\/discover/);
+  assert.match(response.body, /\/api\/projects/);
+  assert.match(response.body, /Stop following/);
 });
 
 test('task text from the task system is never turned into HTML', async () => {
@@ -135,4 +140,46 @@ test('every action from the page is reported with its outcome, without the text 
     { project: null, task: null, action: null, outcome: 'refused', error: 'Reload the dashboard: this page is from an earlier start' },
   ]);
   assert.ok(!JSON.stringify(events).includes('private words'));
+});
+
+test('following and unfollowing a project need the token, and are reported without the test command', async () => {
+  const received: unknown[] = [];
+  const events: unknown[] = [];
+  const handle = createHandler({
+    snapshot: async () => state,
+    token: 'secret-token',
+    projects: async (body) => {
+      received.push(body);
+      if ((body as { project: string }).project === '/busy') throw new OrchestratorError('An agent is working in /busy', 2);
+    },
+    onAction: (event) => events.push(event),
+  });
+  const send = (body: unknown, token?: string) => handle({
+    method: 'POST',
+    url: '/api/projects',
+    headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) },
+    body: JSON.stringify(body),
+  });
+  assert.equal((await send({ action: 'follow', project: '/code/shop' })).status, 403);
+  assert.deepEqual(received, []);
+  const ok = await send({ action: 'follow', project: '/code/shop', testCommand: 'npm test' }, 'secret-token');
+  assert.equal(ok.status, 200);
+  assert.equal((await send({ action: 'unfollow', project: '/busy' }, 'secret-token')).status, 400);
+  assert.deepEqual(received, [{ action: 'follow', project: '/code/shop', testCommand: 'npm test' }, { action: 'unfollow', project: '/busy' }]);
+  assert.deepEqual(events, [
+    { project: null, task: null, action: null, outcome: 'refused', error: 'Reload the dashboard: this page is from an earlier start' },
+    { project: '/code/shop', task: null, action: 'follow', outcome: 'done' },
+    { project: '/busy', task: null, action: 'unfollow', outcome: 'refused', error: 'An agent is working in /busy' },
+  ]);
+  assert.ok(!JSON.stringify(events).includes('npm test'));
+});
+
+test('the search for projects to add needs the token, since it lists folders of the Mac', async () => {
+  const found = { roots: ['/code'], projects: [{ path: '/code/shop', name: 'shop' }], truncated: false };
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', discover: () => found });
+  const ask = (token?: string) => handle({ method: 'GET', url: '/api/discover', headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) }, body: '' });
+  assert.equal((await ask()).status, 403);
+  const response = await ask('secret-token');
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(response.body), found);
 });

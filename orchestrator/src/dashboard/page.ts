@@ -34,9 +34,32 @@ export function renderPage(state: DashboardState, token: string): string {
   <section aria-labelledby="projects-title">
     <div class="section-head">
       <h2 id="projects-title">Projects</h2>
-      <span id="projects-count" class="muted small"></span>
+      <span class="head-side"><span id="projects-count" class="muted small"></span><button id="add-toggle" class="btn small-btn" type="button" aria-expanded="false" aria-controls="add-project">Add project</button></span>
+    </div>
+    <div id="add-project" class="panel add-project" hidden>
+      <div class="add-head">
+        <p class="add-title">Add a project</p>
+        <button id="add-close" class="quiet" type="button">Close</button>
+      </div>
+      <p class="muted small">Only folders set up with taskwire (they have a <code>.taskwire.json</code>) can be added. For a new one, run <code>taskwire setup</code> in it first.</p>
+      <label class="field"><span class="section-label">Test command, optional</span><input id="add-test" type="text" placeholder="npm test" autocomplete="off" spellcheck="false"></label>
+      <div>
+        <p class="section-label">Found on this Mac</p>
+        <p id="add-roots" class="muted small"></p>
+        <div id="add-found" class="found"></div>
+      </div>
+      <div>
+        <p class="section-label">Or paste the folder path</p>
+        <div class="path-row">
+          <input id="add-path" type="text" placeholder="/Users/you/code/website" aria-label="Folder path" autocomplete="off" spellcheck="false">
+          <button id="add-path-follow" class="btn primary" type="button">Follow</button>
+        </div>
+      </div>
+      <p class="after">When agents are working, an agent may take a task in the new project at the next check. To keep agents away from some tasks, tag them <code>no-agent</code> first.</p>
+      <p id="add-result" class="result" role="status"></p>
     </div>
     <div id="projects" class="panel projects"></div>
+    <p id="projects-result" class="result" role="status"></p>
   </section>
 
   <div class="work">
@@ -118,7 +141,23 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 .details-cols strong { display: block; margin-bottom: 4px; }
 .details-cols p { color: var(--muted); font-size: 13px; }
 
-.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.head-side { display: inline-flex; align-items: center; gap: 14px; }
+.small-btn { padding: 5px 12px; font-size: 13px; }
+.add-project { padding: 20px 24px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; }
+.add-head { display: flex; justify-content: space-between; align-items: center; }
+.add-title { font-weight: 600; }
+.field { display: flex; flex-direction: column; max-width: 360px; }
+.field .section-label { margin-bottom: 6px; }
+input[type="text"] { width: 100%; font: inherit; font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 12px; }
+input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offset: 2px; }
+.found { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+.found:empty { display: none; }
+.found .row { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.found .row:last-child { border-bottom: 0; }
+.found .row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.found .row small { display: block; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.path-row { display: flex; gap: 10px; }
+.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .projects .row:last-child { border-bottom: 0; }
 .projects .name { font-weight: 600; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -179,6 +218,8 @@ textarea { width: 100%; min-height: 104px; font: inherit; color: var(--ink); bac
 .actions .side { gap: 18px; }
 .actions .side a { color: var(--muted); font-size: 13px; }
 details.menu { position: relative; font-size: 13px; color: var(--muted); }
+.projects details.menu div { top: 22px; }
+#projects-result { margin-top: 8px; }
 details.menu summary { cursor: pointer; list-style: none; }
 details.menu summary::-webkit-details-marker { display: none; }
 details.menu div { position: absolute; right: 0; top: 24px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; z-index: 2; white-space: nowrap; }
@@ -203,6 +244,8 @@ details.menu div button:hover { background: var(--bg); }
   .work { grid-template-columns: minmax(0, 1fr); }
   .details-cols { grid-template-columns: minmax(0, 1fr); }
   .projects .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .path-row { flex-direction: column; }
+  .projects details.menu div { left: 0; right: auto; }
   .done { text-align: left; }
   .control-row { align-items: flex-start; }
   .detail { padding: 20px; }
@@ -361,12 +404,94 @@ function renderProjects(state) {
       el('span', { className: 'name', text: p.projectName }),
       el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: 'Nothing waits for you' })),
       work,
-      el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }));
+      el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
+      el('details', { className: 'menu' }, el('summary', { text: 'More' }),
+        el('div', {}, el('button', { type: 'button', text: 'Stop following', onclick: () => unfollow(p) }))));
   });
   const box = document.getElementById('projects');
   box.replaceChildren(...rows);
-  if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Add one with: taskwire-orchestrator add <folder>' }));
+  if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Press Add project to follow one.' }));
 }
+
+// The folder and its tasks stay as they are: only the orchestrator stops looking at them.
+async function unfollow(project) {
+  const result = document.getElementById('projects-result');
+  if (!confirm('Stop following ' + project.projectName + '? Its folder and its tasks stay as they are.')) return;
+  result.className = 'result';
+  result.textContent = 'Removing ' + project.projectName + '.';
+  try {
+    await post('/api/projects', { action: 'unfollow', project: project.project });
+    result.textContent = project.projectName + ' is no longer followed.';
+    refresh(true);
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+  }
+}
+
+function openAdd(open) {
+  document.getElementById('add-project').hidden = !open;
+  const toggle = document.getElementById('add-toggle');
+  toggle.setAttribute('aria-expanded', String(open));
+  if (open) findProjects();
+}
+
+// The search runs on the Mac, in the folders set in projectRoots or next to the projects already followed.
+async function findProjects() {
+  const roots = document.getElementById('add-roots');
+  const list = document.getElementById('add-found');
+  roots.textContent = 'Looking for projects.';
+  list.replaceChildren();
+  try {
+    const response = await fetch('/api/discover', { cache: 'no-store', headers: { 'x-action-token': TOKEN } });
+    const found = await response.json();
+    if (!response.ok) throw new Error(found.error || 'The orchestrator answered ' + response.status + '.');
+    if (!found.roots.length) {
+      roots.textContent = 'There is no folder to look in yet: paste the path below. To look in more folders, set projectRoots in the orchestrator config.';
+      return;
+    }
+    const where = 'Looking in ' + found.roots.join(', ') + '.';
+    roots.textContent = found.projects.length
+      ? where + (found.truncated ? ' The search stopped early: paste the path below if a project is missing.' : '')
+      : where + ' No other taskwire project there. Paste the path below, or set projectRoots in the orchestrator config.';
+    list.replaceChildren(...found.projects.map((project) => el('div', { className: 'row' },
+      el('span', {}, project.name, el('small', { text: project.path })),
+      el('button', { type: 'button', className: 'btn', text: 'Follow', onclick: (event) => follow(project.path, event.target) }))));
+  } catch (error) {
+    roots.textContent = error.message;
+  }
+}
+
+async function follow(path, button) {
+  const result = document.getElementById('add-result');
+  const panel = document.getElementById('add-project');
+  for (const control of panel.querySelectorAll('button, input')) control.disabled = true;
+  result.className = 'result';
+  result.textContent = 'Checking that taskwire works in ' + path + '.';
+  try {
+    await post('/api/projects', { action: 'follow', project: path, testCommand: document.getElementById('add-test').value });
+    result.textContent = 'Following ' + path + '.';
+    document.getElementById('add-path').value = '';
+    document.getElementById('add-test').value = '';
+    findProjects();
+    refresh(true);
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+  }
+  for (const control of panel.querySelectorAll('button, input')) control.disabled = false;
+  if (button) button.focus();
+}
+
+document.getElementById('add-toggle').onclick = () => openAdd(document.getElementById('add-project').hidden);
+document.getElementById('add-close').onclick = () => openAdd(false);
+document.getElementById('add-path-follow').onclick = () => {
+  const path = document.getElementById('add-path');
+  if (path.value.trim()) follow(path.value.trim()); else path.focus();
+};
+document.getElementById('add-path').onkeydown = (event) => {
+  if (event.key === 'Enter') document.getElementById('add-path-follow').click();
+};
 
 function renderQueue(state) {
   const now = new Date(state.generatedAt);
