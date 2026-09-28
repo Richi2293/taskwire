@@ -52,7 +52,7 @@ export function renderPage(state: DashboardState, token: string): string {
         <p class="section-label">Or paste the folder path</p>
         <div class="path-row">
           <input id="add-path" type="text" placeholder="/Users/you/code/website" aria-label="Folder path" autocomplete="off" spellcheck="false">
-          <button id="add-path-follow" class="btn primary" type="button">Follow</button>
+          <button id="add-path-follow" class="btn primary" type="button">Add</button>
         </div>
       </div>
       <p class="after">When agents are working, an agent may take a task in the new project at the next check. To keep agents away from some tasks, tag them <code>no-agent</code> first.</p>
@@ -102,6 +102,7 @@ const STYLE = `
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .page { max-width: 1344px; margin: 0 auto; padding: 28px 24px 64px; display: flex; flex-direction: column; gap: 28px; }
 h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
@@ -406,22 +407,22 @@ function renderProjects(state) {
       work,
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
-        el('div', {}, el('button', { type: 'button', text: 'Stop following', onclick: () => unfollow(p) }))));
+        el('div', {}, el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))));
   });
   const box = document.getElementById('projects');
   box.replaceChildren(...rows);
-  if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Press Add project to follow one.' }));
+  if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Press Add project to add one.' }));
 }
 
 // The folder and its tasks stay as they are: only the orchestrator stops looking at them.
 async function unfollow(project) {
   const result = document.getElementById('projects-result');
-  if (!confirm('Stop following ' + project.projectName + '? Its folder and its tasks stay as they are.')) return;
+  if (!confirm('Remove ' + project.projectName + ' from the orchestrator? Agents stop working on it; its folder and its tasks stay as they are.')) return;
   result.className = 'result';
   result.textContent = 'Removing ' + project.projectName + '.';
   try {
     await post('/api/projects', { action: 'unfollow', project: project.project });
-    result.textContent = project.projectName + ' is no longer followed.';
+    result.textContent = 'Removed ' + project.projectName + '. Agents no longer work on it.';
     refresh(true);
   } catch (error) {
     result.className = 'result failed';
@@ -456,7 +457,7 @@ async function findProjects() {
       : where + ' No other taskwire project there. Paste the path below, or set projectRoots in the orchestrator config.';
     list.replaceChildren(...found.projects.map((project) => el('div', { className: 'row' },
       el('span', {}, project.name, el('small', { text: project.path })),
-      el('button', { type: 'button', className: 'btn', text: 'Follow', onclick: (event) => follow(project.path, event.target) }))));
+      el('button', { type: 'button', className: 'btn', text: 'Add', onclick: (event) => follow(project.path, event.target) }))));
   } catch (error) {
     roots.textContent = error.message;
   }
@@ -470,7 +471,7 @@ async function follow(path, button) {
   result.textContent = 'Checking that taskwire works in ' + path + '.';
   try {
     await post('/api/projects', { action: 'follow', project: path, testCommand: document.getElementById('add-test').value });
-    result.textContent = 'Following ' + path + '.';
+    result.textContent = 'Added ' + path.replace(/\\/+$/, '').split('/').pop() + '. It now shows in Projects.';
     document.getElementById('add-path').value = '';
     document.getElementById('add-test').value = '';
     findProjects();

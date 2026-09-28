@@ -34,7 +34,13 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /Add project/);
   assert.match(response.body, /\/api\/discover/);
   assert.match(response.body, /\/api\/projects/);
-  assert.match(response.body, /Stop following/);
+  assert.match(response.body, /Remove project/);
+  assert.match(response.body, /'Added ' \+/);
+});
+
+test('an element with the hidden attribute stays hidden, even when its class sets a display', async () => {
+  const response = await get('/');
+  assert.match(response.body, /\[hidden\] \{ display: none !important; \}/);
 });
 
 test('task text from the task system is never turned into HTML', async () => {
