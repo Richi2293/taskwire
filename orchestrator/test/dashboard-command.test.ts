@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Handler } from '../src/dashboard/server.ts';
 import type { ServeDashboard } from '../src/cli.ts';
@@ -84,4 +84,34 @@ test('the page carries the token its actions need, and an action shows up at the
   assert.equal(action.status, 200, action.body);
   const after = await handler({ method: 'GET', url: '/api/state', headers: { host: '127.0.0.1' }, body: '' });
   assert.deepEqual((JSON.parse(after.body) as { waiting: unknown[] }).waiting, []);
+});
+
+test('from the dashboard, a project found next to the ones followed can be followed, then shows up in the state', async () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = join(website, '..', 'shop');
+  mkdirSync(shop);
+  writeFileSync(join(shop, '.taskwire.json'), '{}');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website }] }));
+  const taskwire = fakeTaskwire({ conventions: { conventions: {} }, 'tasks --needs any': [], tasks: [] });
+  const fake = fakeServe();
+  const events = await runOrchestrator(['start'], { home, serve: fake.serve, taskwire: taskwire.run });
+  const { handler } = fake.served[0];
+  const page = await handler({ method: 'GET', url: '/', headers: { host: '127.0.0.1' }, body: '' });
+  const token = /<meta name="action-token" content="([0-9a-f]+)">/.exec(page.body)?.[1] ?? '';
+
+  const discover = await handler({ method: 'GET', url: '/api/discover', headers: { host: '127.0.0.1', 'x-action-token': token }, body: '' });
+  const found = JSON.parse(discover.body) as { projects: { path: string; name: string }[] };
+  assert.deepEqual(found.projects, [{ path: shop, name: 'shop' }]);
+
+  const follow = await handler({
+    method: 'POST',
+    url: '/api/projects',
+    headers: { host: '127.0.0.1', 'x-action-token': token },
+    body: JSON.stringify({ action: 'follow', project: shop }),
+  });
+  assert.equal(follow.status, 200, follow.body);
+  const after = await handler({ method: 'GET', url: '/api/state', headers: { host: '127.0.0.1' }, body: '' });
+  assert.deepEqual((JSON.parse(after.body) as { projects: { projectName: string }[] }).projects.map((p) => p.projectName), ['website', 'shop']);
+  assert.equal(events.code, 0);
 });

@@ -8,6 +8,7 @@ It is at an early stage and not published: run it from a clone of this repositor
 
 ```
 orchestrator/bin/taskwire-orchestrator add <folder> [--test-command <command>]
+orchestrator/bin/taskwire-orchestrator remove <folder>
 orchestrator/bin/taskwire-orchestrator list
 orchestrator/bin/taskwire-orchestrator next
 orchestrator/bin/taskwire-orchestrator run-once
@@ -15,7 +16,10 @@ orchestrator/bin/taskwire-orchestrator start
 ```
 
 - `add` follows a project already set up with taskwire (it has a `.taskwire.json`). `--test-command` is the command that runs the project tests, from the project folder.
+- `remove` stops following a project. Its folder, worktrees and tasks stay as they are. It is refused while an agent works in the project.
 - `list` shows the projects it follows.
+
+Projects can also be added and removed from the dashboard (see below).
 - `next` shows, for each project, the task an agent would work on next. It changes nothing.
 - `run-once` makes one pass: for each project, an agent works on the next task (see below).
 - `start` opens the dashboard and runs until you press Ctrl+C. It starts **paused**: no agent takes a task until you press **Start working** on the dashboard, and **Pause** stops new work while agents already at work finish their task. Every start begins paused. While working, every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project; pressing Start working starts the first pass at once. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`dashboard`, `start`, `interrupted`, `play`, `pause`, `run`, `action`, `error`, `stop`); an error in a project is logged and the others go on. An `action` event tells which action the dashboard sent on which task and whether it was done, refused or failed, with the reason; it never contains the text you wrote, which is in the task comment. After Ctrl+C it starts nothing new and waits for the running passes.
@@ -25,7 +29,8 @@ orchestrator/bin/taskwire-orchestrator start
 Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds:
 
 - **Control bar:** paused or working, with Start agents or Pause. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
-- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read.
+- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read. **Remove project**, under More, stops following the project, like `remove`.
+- **Add project:** lists the taskwire projects (folders with a `.taskwire.json`) found in `projectRoots`, or, without it, in the folders that hold the projects already followed, up to three levels down. Hidden folders and `node_modules` are skipped, and the search never covers the whole home folder, since macOS would ask for access to Documents, Desktop and Downloads. **Add** follows a project with the same checks as `add`; a project that is not in the list can be added by pasting its path (`~/` works). The optional test command applies to the project you follow.
 - **Waiting for you:** a compact queue grouped by kind, with filters. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment.
 - **Done recently:** the runs of `runs.jsonl`, by day.
 
@@ -35,6 +40,8 @@ Each task waiting for you has its actions, all done through taskwire:
 - **It works** (a test by hand) or **Approve** (a review): clears the mark; merging and closing the task stay with you;
 - **Something is wrong** or **Request changes**: adds what the agent should fix as a comment, clears the mark and moves the task back to a start status; the agent continues in the same worktree and branch;
 - **Keep agents away from this task**, under More: adds the block tag (`no-agent`).
+
+Following and removing a project also need the token of the page, and so does the search, since it lists folders of the Mac. Each one is logged as an `action` event (`follow` or `unfollow`), without the test command. When agents are working, a project added from the dashboard or with `add` joins at the next check.
 
 Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type.
 
@@ -100,6 +107,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `maxAgents` | how many agents may work at once, across projects (default 2) |
 | `intervalMinutes` | minutes between two looks at the projects in `start` (default 5) |
 | `dashboardPort` | port of the dashboard on 127.0.0.1 (default 4777) |
+| `projectRoots` | absolute paths (`~/` works) where Add project looks for taskwire projects; defaults to the folders of the projects followed |
 | `taskwireCommand` | the taskwire command to run; defaults to `taskwire` on the PATH. Point it to a clone to try an unreleased taskwire |
 | `projects[].path` | absolute path of the project folder |
 | `projects[].testCommand` | command that runs the project tests |

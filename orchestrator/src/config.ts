@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { configError } from './errors.ts';
 
@@ -28,6 +29,8 @@ export interface OrchestratorConfig {
   intervalMinutes?: number;
   // Port of the dashboard on 127.0.0.1; defaults to DEFAULT_DASHBOARD_PORT.
   dashboardPort?: number;
+  // Folders where the dashboard looks for taskwire projects to add; defaults to the folders of the projects followed.
+  projectRoots?: string[];
   projects: ProjectEntry[];
 }
 
@@ -60,7 +63,7 @@ export function saveConfig(home: string, config: OrchestratorConfig): void {
 function parseConfig(data: unknown, path: string): OrchestratorConfig {
   const invalid = (reason: string) => configError(`${path}: ${reason}`, 'Fix the file, or remove it and add the projects again');
   if (typeof data !== 'object' || data === null || Array.isArray(data)) throw invalid('must contain a JSON object');
-  const { taskwireCommand, maxAgents, intervalMinutes, dashboardPort, projects } = data as Record<string, unknown>;
+  const { taskwireCommand, maxAgents, intervalMinutes, dashboardPort, projectRoots, projects } = data as Record<string, unknown>;
   if (!Array.isArray(projects)) throw invalid('"projects" must be an array');
   const config: OrchestratorConfig = { projects: projects.map((entry: unknown) => parseProject(entry, invalid)) };
   if (taskwireCommand !== undefined) {
@@ -73,6 +76,14 @@ function parseConfig(data: unknown, path: string): OrchestratorConfig {
     const port = positive(dashboardPort, '"dashboardPort"', invalid, true);
     if (port > 65535) throw invalid('"dashboardPort" must be a port number, up to 65535');
     config.dashboardPort = port;
+  }
+  if (projectRoots !== undefined) {
+    if (!Array.isArray(projectRoots)) throw invalid('"projectRoots" must be an array');
+    config.projectRoots = projectRoots.map((root: unknown) => {
+      const path = typeof root === 'string' ? expandHome(root) : '';
+      if (!path.startsWith('/')) throw invalid('each of "projectRoots" must be an absolute path');
+      return path;
+    });
   }
   return config;
 }
@@ -110,4 +121,11 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
 function text(value: unknown, what: string, invalid: (reason: string) => Error): string {
   if (typeof value !== 'string' || value.trim() === '') throw invalid(`${what} must be a non empty string`);
   return value;
+}
+
+// "~/code" means the code folder in the home folder, as in a shell.
+export function expandHome(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === '~') return homedir();
+  return trimmed.startsWith('~/') ? join(homedir(), trimmed.slice(2)) : trimmed;
 }

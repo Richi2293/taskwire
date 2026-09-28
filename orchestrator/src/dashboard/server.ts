@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { RunControl } from '../control.ts';
 import { EXIT, OrchestratorError } from '../errors.ts';
+import type { Discovered } from '../projects.ts';
 import type { DashboardState } from './snapshot.ts';
 import { renderPage } from './page.ts';
 
@@ -28,6 +29,10 @@ export interface HandlerDeps {
   act?: (body: unknown) => Promise<void>;
   // Play and pause of the agents.
   control?: RunControl;
+  // Follows or unfollows a project, as asked by the page.
+  projects?: (body: unknown) => Promise<void>;
+  // Looks for taskwire projects on the Mac that could be followed.
+  discover?: () => Discovered;
   // Told about every action the page sends, with its outcome; never with the text the person wrote.
   onAction?: (event: ActionEvent) => void;
 }
@@ -39,6 +44,8 @@ export interface ActionEvent {
   outcome: 'done' | 'refused' | 'failed';
   error?: string;
 }
+
+const RELOAD = 'Reload the dashboard: this page is from an earlier start';
 
 // The dashboard listens on the loopback only; a page from another site that resolves its own name to
 // 127.0.0.1 (DNS rebinding) still sends its own Host, so anything but a local host is refused.
@@ -58,6 +65,13 @@ export function createHandler(deps: HandlerDeps): Handler {
     if (request.method === 'POST' && path === '/api/action' && deps.act !== undefined) {
       return runAction(deps.act, deps.token, request, deps.onAction ?? (() => {}));
     }
+    if (request.method === 'POST' && path === '/api/projects' && deps.projects !== undefined) {
+      return runAction(deps.projects, deps.token, request, deps.onAction ?? (() => {}));
+    }
+    if (request.method === 'GET' && path === '/api/discover' && deps.discover !== undefined) {
+      if (!sameSecret(request.headers['x-action-token'] ?? '', deps.token)) return json(403, { error: RELOAD });
+      return json(200, deps.discover());
+    }
     if (request.method === 'POST' && path === '/api/control' && deps.control !== undefined) {
       return switchControl(deps.control, deps.token, request);
     }
@@ -74,7 +88,7 @@ async function runAction(
   const unknown = { project: null, task: null, action: null };
   const sent = request.headers['x-action-token'] ?? '';
   if (!sameSecret(sent, token)) {
-    const error = 'Reload the dashboard: this page is from an earlier start';
+    const error = RELOAD;
     report({ ...unknown, outcome: 'refused', error });
     return json(403, { error });
   }
@@ -100,7 +114,7 @@ async function runAction(
   }
 }
 
-// The fields of an action worth logging: which task and which action, not the text.
+// The fields of an action worth logging: which project, task and action, not the text or the test command.
 function describe(body: unknown): { project: string | null; task: string | null; action: string | null } {
   const fields = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
   const text = (value: unknown) => (typeof value === 'string' ? value : null);
@@ -108,7 +122,7 @@ function describe(body: unknown): { project: string | null; task: string | null;
 }
 
 function switchControl(control: RunControl, token: string, request: DashboardRequest): DashboardResponse {
-  if (!sameSecret(request.headers['x-action-token'] ?? '', token)) return json(403, { error: 'Reload the dashboard: this page is from an earlier start' });
+  if (!sameSecret(request.headers['x-action-token'] ?? '', token)) return json(403, { error: RELOAD });
   let action: unknown;
   try {
     action = (JSON.parse(request.body) as { action?: unknown }).action;

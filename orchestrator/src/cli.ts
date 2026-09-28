@@ -1,17 +1,18 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
-import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, expandHome, loadConfig } from './config.ts';
 import { createRunControl } from './control.ts';
 import type { RunControl } from './control.ts';
 import { createActions } from './dashboard/actions.ts';
+import { createProjectActions } from './dashboard/project-actions.ts';
 import { createHandler } from './dashboard/server.ts';
 import type { Handler, RunningServer } from './dashboard/server.ts';
 import { createSnapshot } from './dashboard/snapshot.ts';
 import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
+import { discoverProjects, followProject, projectSearchRoots, unfollowProject } from './projects.ts';
 import type { RunCommand } from './commands.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
@@ -55,6 +56,7 @@ interface CommandSpec {
 export const HELP = `taskwire-orchestrator: let agents work on the tasks of your projects
 
   taskwire-orchestrator add <folder> [--test-command <command>]   follow a project set up with taskwire
+  taskwire-orchestrator remove <folder>                           stop following a project (its folder and tasks stay)
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
   taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
@@ -66,6 +68,7 @@ Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration er
 
 const COMMANDS: Record<string, CommandSpec> = {
   add: { options: { 'test-command': { type: 'string' } }, run: addProject },
+  remove: { options: {}, run: removeProject },
   list: { options: {}, run: async (deps) => loadConfig(deps.home).projects },
   next: { options: {}, run: nextTasks },
   'run-once': { options: {}, run: runOnce },
@@ -101,6 +104,11 @@ async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: ()
     token: randomBytes(24).toString('hex'),
     act,
     control,
+    projects: createProjectActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear }),
+    discover: () => {
+      const config = loadConfig(deps.home);
+      return discoverProjects({ roots: projectSearchRoots(config), followed: config.projects.map((project) => project.path) });
+    },
     onAction: (event) => log({ event: 'action', at: new Date(deps.now()).toISOString(), ...event }),
   });
   let server: RunningServer;
@@ -126,27 +134,19 @@ async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
 }
 
 async function addProject(deps: CliDeps, input: Input): Promise<ProjectEntry> {
-  if (input.positionals.length !== 1) throw usageError('Expected exactly one project folder');
-  const path = resolve(deps.cwd, input.positionals[0]);
-  if (!existsSync(join(path, '.taskwire.json'))) {
-    throw usageError(`${path} has no .taskwire.json`, 'Set the project up first: run "taskwire setup" in it');
-  }
-  const config = loadConfig(deps.home);
-  if (config.projects.some((project) => project.path === path)) throw usageError(`${path} is already followed`);
-  try {
-    await deps.runTaskwire(['conventions'], path);
-  } catch (error) {
-    throw configError(`taskwire does not work in ${path}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const project: ProjectEntry = { path };
   const testCommand = input.values['test-command'];
-  if (typeof testCommand === 'string') {
-    if (testCommand.trim() === '') throw usageError('--test-command cannot be empty');
-    project.testCommand = testCommand;
-  }
-  config.projects.push(project);
-  saveConfig(deps.home, config);
-  return project;
+  return followProject(deps, projectFolder(deps, input), typeof testCommand === 'string' ? testCommand : undefined);
+}
+
+async function removeProject(deps: CliDeps, input: Input): Promise<{ removed: string }> {
+  const path = projectFolder(deps, input);
+  unfollowProject(deps.home, path);
+  return { removed: path };
+}
+
+function projectFolder(deps: CliDeps, input: Input): string {
+  if (input.positionals.length !== 1) throw usageError('Expected exactly one project folder');
+  return resolve(deps.cwd, expandHome(input.positionals[0]));
 }
 
 async function nextTasks(deps: CliDeps): Promise<{ project: string; task: TaskSummary | null }[]> {

@@ -52,6 +52,23 @@ test('add reports a taskwire failure in the project as a configuration problem',
   assert.match(JSON.parse(run.stderr).error, /No ClickUp token found/);
 });
 
+test('remove stops following a project and keeps the others', async () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website }, { path: shop }] }));
+  const run = await runOrchestrator(['remove', website], { home });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), { removed: website });
+  assert.deepEqual((await runOrchestrator(['list'], { home })).json(), [{ path: shop }]);
+});
+
+test('remove refuses a project that is not followed', async () => {
+  const run = await runOrchestrator(['remove', '/code/website']);
+  assert.equal(run.code, 2);
+  assert.match(JSON.parse(run.stderr).error, /not followed/);
+});
+
 test('a broken config file is a configuration error', async () => {
   const home = tempDir('home');
   writeFileSync(join(home, 'config.json'), '{"projects": "nope"}');
