@@ -33,6 +33,8 @@ export interface HandlerDeps {
   projects?: (body: unknown) => Promise<void>;
   // Looks for taskwire projects on the Mac that could be followed.
   discover?: () => Discovered;
+  // Reads every project from the task system again, in the background (Refresh now).
+  refresh?: () => void;
   // Told about every action the page sends, with its outcome; never with the text the person wrote.
   onAction?: (event: ActionEvent) => void;
 }
@@ -71,6 +73,11 @@ export function createHandler(deps: HandlerDeps): Handler {
     if (request.method === 'GET' && path === '/api/discover' && deps.discover !== undefined) {
       if (!sameSecret(request.headers['x-action-token'] ?? '', deps.token)) return json(403, { error: RELOAD });
       return json(200, deps.discover());
+    }
+    if (request.method === 'POST' && path === '/api/refresh' && deps.refresh !== undefined) {
+      if (!sameSecret(request.headers['x-action-token'] ?? '', deps.token)) return json(403, { error: RELOAD });
+      deps.refresh();
+      return json(200, { ok: true });
     }
     if (request.method === 'POST' && path === '/api/control' && deps.control !== undefined) {
       return switchControl(deps.control, deps.token, request);

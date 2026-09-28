@@ -7,6 +7,7 @@ import type { DashboardState } from '../src/dashboard/snapshot.ts';
 
 const state: DashboardState = {
   generatedAt: '2026-09-27T15:32:00.000Z',
+  sync: { readAt: '2026-09-27T15:31:00.000Z', reading: false },
   control: { mode: 'paused', intervalMinutes: 5, maxAgents: 2, agentsAtWork: 0, nextCheckAt: null, busyProjects: [], firstTask: null },
   projects: [],
   working: [],
@@ -36,6 +37,10 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /\/api\/projects/);
   assert.match(response.body, /Remove project/);
   assert.match(response.body, /'Added ' \+/);
+  // The page tells how old the data is and when it is being read again.
+  assert.match(response.body, /Refresh now/);
+  assert.match(response.body, /Updating from ClickUp/);
+  assert.match(response.body, /\/api\/refresh/);
 });
 
 test('an element with the hidden attribute stays hidden, even when its class sets a display', async () => {
@@ -188,4 +193,15 @@ test('the search for projects to add needs the token, since it lists folders of 
   const response = await ask('secret-token');
   assert.equal(response.status, 200);
   assert.deepEqual(JSON.parse(response.body), found);
+});
+
+test('refresh now needs the token, and starts a read without waiting for it', async () => {
+  let refreshes = 0;
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', refresh: () => { refreshes += 1; } });
+  const send = (token?: string) => handle({ method: 'POST', url: '/api/refresh', headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) }, body: '' });
+  assert.equal((await send()).status, 403);
+  assert.equal(refreshes, 0);
+  const ok = await send('secret-token');
+  assert.equal(ok.status, 200);
+  assert.equal(refreshes, 1);
 });

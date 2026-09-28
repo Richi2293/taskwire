@@ -21,6 +21,7 @@ export function renderPage(state: DashboardState, token: string): string {
       <div class="control-state">
         <p class="brand"><strong>taskwire</strong> <span>orchestrator</span></p>
         <p class="state-line"><span id="state-dot" class="dot"></span><span id="state" class="state"></span><span id="state-hint" class="state-hint"></span></p>
+        <p class="sync" role="status"><span id="sync-spinner" class="spinner" hidden></span><span id="sync-text"></span><button id="refresh" class="link" type="button">Refresh now</button></p>
         <button id="details-toggle" class="link" type="button" aria-expanded="false" aria-controls="details"></button>
       </div>
       <button id="switch" type="button"></button>
@@ -125,6 +126,7 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 .btn.primary { background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); font-weight: 600; }
 .btn:disabled { opacity: 0.55; cursor: default; }
 .link { background: none; border: 0; padding: 0; color: var(--test); font-size: 13px; text-align: left; }
+.link:disabled { color: var(--muted); cursor: default; }
 .quiet { background: none; border: 0; padding: 0; color: var(--muted); font-size: 13px; }
 
 .control-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 24px; flex-wrap: wrap; }
@@ -135,6 +137,11 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 .state { font-size: 22px; font-weight: 600; }
 .state.alive { color: var(--alive); }
 .state-hint { color: var(--muted); }
+.sync { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--line-strong); border-top-color: var(--test); border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-color: var(--test); } }
+.projects .name { display: inline-flex; align-items: center; gap: 8px; }
 #switch { padding: 12px 20px; font-size: 15px; }
 .details { border-top: 1px solid var(--line); padding: 16px 24px 20px; }
 .details-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -271,6 +278,8 @@ const KIND = {
 const ORDER = ['decision', 'test', 'review'];
 const GROUP_LIMIT = 3;
 const REFRESH_MS = 30000;
+// While the orchestrator reads the task system, the page asks more often, to show the new data as soon as it arrives.
+const READING_MS = 3000;
 const DONE = {
   answer: 'Answer sent. An agent takes the task up at the next check.',
   'accept-proposal': 'Proposal accepted. An agent takes the task up at the next check.',
@@ -391,19 +400,44 @@ function renderControl(state) {
   document.getElementById('details-cols').replaceChildren(...cols);
 }
 
+function ago(iso, now) {
+  return duration(now - new Date(iso)) + ' ago';
+}
+
+function renderSync(state) {
+  const now = new Date(state.generatedAt);
+  const sync = state.sync;
+  const failed = state.projects.filter((p) => p.error).length;
+  let text;
+  if (!state.projects.length) text = '';
+  else if (sync.reading && !sync.readAt) text = 'Reading your projects from ClickUp.';
+  else if (sync.reading) text = 'Updating from ClickUp. Showing data from ' + ago(sync.readAt, now) + '.';
+  else if (sync.readAt) text = 'Updated ' + ago(sync.readAt, now) + '.';
+  else text = 'Not read from ClickUp yet.';
+  if (failed && !sync.reading) text += ' ' + (failed === 1 ? 'One project' : failed + ' projects') + ' could not be updated.';
+  document.getElementById('sync-text').textContent = text;
+  document.getElementById('sync-spinner').hidden = !sync.reading;
+  const button = document.getElementById('refresh');
+  button.hidden = !state.projects.length;
+  button.disabled = sync.reading;
+}
+
 function renderProjects(state) {
   const now = new Date(state.generatedAt);
   document.getElementById('projects-count').textContent = plural(state.projects.length, 'project') + ' followed';
   const label = { decision: 'to decide', test: 'to try', review: 'to review' };
   const rows = state.projects.map((p) => {
     const chips = ORDER.filter((k) => p.waiting[k]).map((k) => el('span', { className: 'chip ' + k }, el('b', { text: String(p.waiting[k]) }), label[k]));
+    // A failed read keeps the last data: the row says why it is not up to date.
     const work = p.error
-      ? el('div', { className: 'at-work error', text: 'Cannot read this project: ' + p.error })
+      ? el('div', { className: 'at-work error', text: 'Could not update: ' + p.error.replace(/\\.?$/, '.') + (p.readAt ? ' Data from ' + ago(p.readAt, now) + '.' : '') })
       : el('div', { className: 'at-work' }, el('span', { className: p.working ? 'dot alive' : 'dot' }),
         p.working ? 'Agent at work: ' + p.working.name + ', for ' + duration(now - new Date(p.working.startedAt)) : 'No agent at work');
+    let empty = 'Nothing waits for you';
+    if (!p.readAt) empty = p.reading ? 'Reading from ClickUp' : 'Not read yet';
     return el('div', { className: 'row' },
-      el('span', { className: 'name', text: p.projectName }),
-      el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: 'Nothing waits for you' })),
+      el('span', { className: 'name' }, p.projectName, p.reading ? el('span', { className: 'spinner', title: 'Updating from ClickUp', 'aria-label': 'Updating from ClickUp' }) : null),
+      el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: empty })),
       work,
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
@@ -621,6 +655,7 @@ function renderHistory(state) {
 function render(state) {
   ui.state = state;
   renderControl(state);
+  renderSync(state);
   renderProjects(state);
   renderQueue(state);
   renderDetail(state);
@@ -664,16 +699,37 @@ function busy() {
   return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '') || Boolean(document.querySelector('#detail button:disabled'));
 }
 
+let timer = null;
+
+// The next look at the state: soon while the orchestrator reads the task system, otherwise every 30 seconds.
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(() => refresh(false), ui.state && ui.state.sync.reading ? READING_MS : REFRESH_MS);
+}
+
 async function refresh(force) {
-  if (!force && busy()) return;
   try {
-    const response = await fetch('/api/state', { cache: 'no-store' });
-    if (response.ok) render(await response.json());
+    if (force || !busy()) {
+      const response = await fetch('/api/state', { cache: 'no-store' });
+      if (response.ok) render(await response.json());
+    }
   } catch {
     // The orchestrator is stopped or restarting: keep showing the last state.
   }
+  schedule();
 }
 
+document.getElementById('refresh').onclick = async () => {
+  const button = document.getElementById('refresh');
+  button.disabled = true;
+  try {
+    await post('/api/refresh', {});
+  } catch (error) {
+    document.getElementById('sync-text').textContent = error.message;
+  }
+  refresh(true);
+};
+
 render(JSON.parse(document.getElementById('initial-state').textContent));
-setInterval(refresh, REFRESH_MS);
+schedule();
 `;

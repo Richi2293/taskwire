@@ -15,8 +15,8 @@ export interface ActionRequest {
 export interface ActionDeps {
   home: string;
   runTaskwire: RunTaskwire;
-  // Called after a change, so the dashboard reads the task system again instead of its cache.
-  onChange: () => void;
+  // Called after a change with the project, and the task when it no longer waits, so the dashboard reads that project again.
+  onChange: (project: string, task?: string) => void;
 }
 
 // Which kinds of waiting each action fits.
@@ -68,7 +68,8 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
     } else {
       await run(['task', 'update', task.id, '--add-tag', project.blockTag ?? DEFAULT_BLOCK_TAG]);
     }
-    deps.onChange();
+    // Every action but block clears the mark: the task no longer waits for the person.
+    deps.onChange(project.path, request.action === 'block' ? undefined : task.id);
   };
 }
 

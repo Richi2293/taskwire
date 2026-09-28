@@ -15,9 +15,9 @@ function setup(projectOptions: Record<string, unknown> = {}) {
     'task update': {},
     'comment add': { id: 'c1' },
   });
-  let changes = 0;
-  const act = createActions({ home, runTaskwire: taskwire.run, onChange: () => { changes += 1; } });
-  return { project, taskwire, act, changes: () => changes };
+  const changed: [string, string | undefined][] = [];
+  const act = createActions({ home, runTaskwire: taskwire.run, onChange: (path, task) => { changed.push([path, task]); } });
+  return { project, taskwire, act, changes: () => changed.length, changed };
 }
 
 const writes = (calls: { args: string[] }[]) => calls.filter((call) => call.args[0] !== 'tasks').map((call) => call.args);
@@ -86,4 +86,12 @@ test('accept the proposal tells the agent to go ahead with it, then clears the d
     ['task', 'update', 'd1', '--needs', 'none'],
   ]);
   await assert.rejects(act({ project, task: 'r1', action: 'accept-proposal' }), (error: unknown) => error instanceof OrchestratorError);
+});
+
+test('after an action only its project is read again, and a task whose mark was cleared leaves the queue', async () => {
+  const { project, act, changed } = setup();
+  await act({ project, task: 'r1', action: 'approve' });
+  await act({ project, task: 'd1', action: 'block' });
+  // A blocked task still waits for the person: it stays in the queue until the next read.
+  assert.deepEqual(changed, [[project, 'r1'], [project, undefined]]);
 });

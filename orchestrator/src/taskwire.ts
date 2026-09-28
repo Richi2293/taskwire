@@ -11,6 +11,8 @@ export interface TaskSummary {
   needs: 'decision' | 'test' | 'review' | null;
   parent: string | null;
   url: string;
+  // When the task last changed, comments included; missing in older taskwire versions.
+  updatedAt?: string;
 }
 
 // Runs a taskwire command in a project folder and returns its JSON output.
