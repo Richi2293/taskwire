@@ -15,7 +15,9 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
   - Due dates use midnight in the system time zone. No hardcoded time zone.
   - ClickUp is the only provider. Do not build a provider abstraction until a second provider is actually planned; keep ClickUp code in `client.ts`, `clickup-types.ts` and `shape.ts`.
 - `docs/specs/` and `docs/plans/` are local working notes: they are gitignored and must never be committed (no `git add -f`).
-- `main` is protected: changes reach it only through a pull request, merged with squash once CI passes. The PR title becomes the commit on `main`, so it follows Conventional Commits.
+- Branches: `dev` is for development and testing, `main` holds only what the user has tested, and releases are tagged only on `main`. Both are protected and never deleted.
+  - Each task gets its own branch from the latest `dev`, and its pull request goes to `dev`, merged with squash once CI passes. The PR title becomes the commit on `dev`, so it follows Conventional Commits.
+  - When the user says `dev` is ready, a pull request from `dev` to `main` is merged with a merge commit, not squash, so the two branches keep the same history.
 - The work on taskwire may be tracked with taskwire itself, through a local `.taskwire.json` that is never committed. When it exists, run `taskwire rules` before reading or writing tasks and follow its writing format, instead of copying the format of existing comments.
 
 ## Orchestrator
