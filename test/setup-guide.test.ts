@@ -71,6 +71,10 @@ test('the AGENTS.md block tells agents to run taskwire rules and how to install 
   assert.match(AGENTS_BLOCK, /npm install --global @richi2293\/taskwire/);
 });
 
+test('the AGENTS.md block tells agents to move a task in progress before working on it', () => {
+  assert.match(AGENTS_BLOCK, /move it to in progress as your first step/);
+});
+
 test('a command that needs the config points to taskwire setup when it is missing', async () => {
   const run = await runCli(['rules'], { config: null });
   assert.equal(run.code, 3);
