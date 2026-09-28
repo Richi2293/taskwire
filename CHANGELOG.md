@@ -4,6 +4,10 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- The agent rules ask to move a task to its in-progress status as the first step, before any design, plan or code, and put this rule right after the search for a related task. The block for `AGENTS.md` repeats it.
+
 ## [0.1.6] - 2026-09-27
 
 ### Added

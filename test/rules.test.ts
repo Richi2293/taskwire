@@ -107,9 +107,16 @@ test('the default rules say who checks the acceptance criteria and when', () => 
   assert.match(DEFAULT_RULES, /Before moving a task to a closed status, check every verified acceptance criterion/);
 });
 
-test('the default rules ask to move a task to its in-progress status when the work starts', () => {
-  assert.match(DEFAULT_RULES, /When you start the work a task asks for, move it to the status of its list that means work in progress/);
+test('the default rules ask to move a task to its in-progress status as the first step of the work', () => {
+  assert.match(DEFAULT_RULES, /When the user asks you to work on a task, move it to the status of its list that means work in progress as your first step/);
+  assert.match(DEFAULT_RULES, /before any design, plan, branch or code/);
   assert.match(DEFAULT_RULES, /If the list has no such status, leave the status as it is/);
+});
+
+test('the default rules put the in-progress rule right after the search for a related task', () => {
+  const lines = DEFAULT_RULES.split('\n');
+  const search = lines.findIndex((line) => line.startsWith('- Before starting a piece of work, look for a related task'));
+  assert.match(lines[search + 1], /^- When the user asks you to work on a task/);
 });
 
 test('rules reports a newer version on npm with the command to install it', async () => {

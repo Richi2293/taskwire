@@ -16,7 +16,7 @@ Set up taskwire in this project: run `taskwire setup` and follow it.
 
 To do it by hand, paste the block from [rules/agents-block.md](../rules/agents-block.md) into the `AGENTS.md` of the project. If the project also has a `CLAUDE.md`, make it reference `AGENTS.md`. The block is short on purpose and should not need updates.
 
-Projects set up before `taskwire rules` existed have a longer block copied from this page, and projects set up with taskwire 0.1.2 lack the install line: replace the block with the one in [rules/agents-block.md](../rules/agents-block.md).
+Projects set up before `taskwire rules` existed have a longer block copied from this page, projects set up with taskwire 0.1.2 lack the install line, and projects set up with taskwire 0.1.6 or earlier lack the in-progress line: replace the block with the one in [rules/agents-block.md](../rules/agents-block.md).
 
 ## Project overrides
 
