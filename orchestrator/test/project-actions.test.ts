@@ -8,26 +8,27 @@ import { fakeTaskwire, projectDir, tempDir } from './helpers.ts';
 
 function setup() {
   const home = tempDir('home');
-  let changes = 0;
+  const changed: string[] = [];
   const act = createProjectActions({
     home,
     runTaskwire: fakeTaskwire({ conventions: { conventions: { language: 'English', instructions: null } } }).run,
-    onChange: () => { changes += 1; },
+    onChange: (project) => { changed.push(project); },
   });
   const projects = () => (JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')) as { projects: unknown[] }).projects;
-  return { home, act, projects, changes: () => changes };
+  return { home, act, projects, changed };
 }
 
 const refusedWith = (pattern: RegExp) => (error: unknown) => error instanceof OrchestratorError && error.exitCode === 2 && pattern.test(error.message);
 
 test('follow adds the project with its test command, and unfollow removes it', async () => {
-  const { act, projects, changes } = setup();
+  const { act, projects, changed } = setup();
   const shop = projectDir('shop');
   await act({ action: 'follow', project: shop, testCommand: 'npm test' });
   assert.deepEqual(projects(), [{ path: shop, testCommand: 'npm test' }]);
   await act({ action: 'unfollow', project: shop });
   assert.deepEqual(projects(), []);
-  assert.equal(changes(), 2);
+  // Only the project just followed needs a read.
+  assert.deepEqual(changed, [shop]);
 });
 
 test('an empty test command from the page means no test command', async () => {

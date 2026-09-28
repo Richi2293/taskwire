@@ -9,13 +9,15 @@ import { createActions } from './dashboard/actions.ts';
 import { createProjectActions } from './dashboard/project-actions.ts';
 import { createHandler } from './dashboard/server.ts';
 import type { Handler, RunningServer } from './dashboard/server.ts';
-import { createSnapshot } from './dashboard/snapshot.ts';
+import { createStore } from './dashboard/snapshot.ts';
+import type { Store } from './dashboard/snapshot.ts';
 import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
 import { discoverProjects, followProject, projectSearchRoots, unfollowProject } from './projects.ts';
 import type { RunCommand } from './commands.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
+import { MAX_TASKWIRE_CALLS, limitCalls } from './limit.ts';
 import { pickTask } from './picker.ts';
 import { runLoop } from './scheduler.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
@@ -84,27 +86,37 @@ async function start(deps: CliDeps): Promise<undefined> {
   const log = logTo(deps);
   const control = createRunControl((working) => log({ event: working ? 'play' : 'pause', at: new Date(deps.now()).toISOString() }));
   let nextCheckAt: number | null = null;
-  const server = await openDashboard(deps, control, () => nextCheckAt);
+  const { server, store } = await openDashboard(deps, control, () => nextCheckAt);
   try {
     await runLoop({ ...deps, log, control, onWait: (until) => { nextCheckAt = until; } });
   } finally {
+    await store.idle();
     await server.close();
   }
   return undefined;
 }
 
 // A new token at every start: the page gets it, and a page from another site cannot know it.
-async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: () => number | null): Promise<RunningServer> {
+async function openDashboard(
+  deps: CliDeps,
+  control: RunControl,
+  nextCheckAt: () => number | null,
+): Promise<{ server: RunningServer; store: Store }> {
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
-  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
-  const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
+  const store = createStore({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
+  const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: store.changed });
   const log = logTo(deps);
   const handler = createHandler({
-    snapshot,
+    // The page gets the last data at once; looking at it reads the projects again in the background when needed.
+    snapshot: async () => {
+      store.look();
+      return store.state();
+    },
+    refresh: () => { void store.refresh(); },
     token: randomBytes(24).toString('hex'),
     act,
     control,
-    projects: createProjectActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear }),
+    projects: createProjectActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: (project) => store.changed(project) }),
     discover: () => {
       const config = loadConfig(deps.home);
       return discoverProjects({ roots: projectSearchRoots(config), followed: config.projects.map((project) => project.path) });
@@ -121,7 +133,7 @@ async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: ()
     throw error;
   }
   log({ event: 'dashboard', at: new Date(deps.now()).toISOString(), url: server.url });
-  return server;
+  return { server, store };
 }
 
 async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
@@ -180,7 +192,9 @@ export async function main(deps: CliDeps): Promise<number> {
   try {
     const spec = COMMANDS[name];
     if (spec === undefined) throw usageError(`Unknown command "${name}"`, 'Run "taskwire-orchestrator --help"');
-    const result = await spec.run(deps, parseInput(spec, rest));
+    // Every taskwire call of the orchestrator, from the dashboard or the loop, shares one limit.
+    const limited = { ...deps, runTaskwire: limitCalls(deps.runTaskwire, MAX_TASKWIRE_CALLS) };
+    const result = await spec.run(limited, parseInput(spec, rest));
     // "start" prints its events as they happen, so it has no result.
     if (result !== undefined) deps.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return EXIT.ok;

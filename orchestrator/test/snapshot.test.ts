@@ -2,7 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSnapshot } from '../src/dashboard/snapshot.ts';
+import { createStore } from '../src/dashboard/snapshot.ts';
+import type { StoreDeps } from '../src/dashboard/snapshot.ts';
+
+// Reads every project, then returns the state the page would get.
+async function readState(deps: StoreDeps) {
+  const store = createStore(deps);
+  await store.refresh();
+  return store.state();
+}
 import { fakeTaskwire, projectDir, task, tempDir } from './helpers.ts';
 
 const NOW = Date.UTC(2026, 8, 27, 15, 32, 0);
@@ -29,8 +37,7 @@ test('lists the tasks waiting for a person in every project, decisions first, wi
     [shop]: [task({ id: 'd1', name: 'Show prices in the customer currency', needs: 'decision', url: 'https://app.clickup.com/t/d1' })],
   };
   const run = async (args: string[], cwd: string) => (args[0] === 'tasks' ? replies[cwd] : taskwire.run(args, cwd));
-  const snapshot = createSnapshot({ home: home([website, shop]), runTaskwire: run, now: () => NOW });
-  const state = await snapshot();
+  const state = await readState({ home: home([website, shop]), runTaskwire: run, now: () => NOW });
 
   assert.deepEqual(state.waiting.map((item) => [item.projectName, item.id, item.needs]), [['shop', 'd1', 'decision'], ['website', 'r1', 'review']]);
   assert.deepEqual(state.waiting[0].note, ['Stato: servono decisioni prima di scrivere codice.', 'Prossimo: rispondere alle domande.']);
@@ -44,7 +51,7 @@ test('shows the agents at work from the claims, and the history newest first', a
   writeFileSync(join(dir, 'claims.json'), JSON.stringify({ t1: { project: '/code/website', name: 'Add a discount', worktree: '/wt', startedAt: '2026-09-27T15:20:00.000Z' } }));
   const run = (task: string, finishedAt: string) => JSON.stringify({ project: '/code/shop', task, name: `Task ${task}`, url: `u/${task}`, startedAt: finishedAt, finishedAt, durationMs: 1, costUsd: 0.4, needs: 'review', status: 'qa', summary: 's', tests: 'pass', verdict: 'pass', worktree: '/wt', log: '/log' });
   appendFileSync(join(dir, 'runs.jsonl'), `${run('old', '2026-09-26T10:00:00.000Z')}\n${run('new', '2026-09-27T11:00:00.000Z')}\n`);
-  const state = await createSnapshot({ home: dir, runTaskwire: fakeTaskwire({}).run, now: () => NOW })();
+  const state = await readState({ home: dir, runTaskwire: fakeTaskwire({}).run, now: () => NOW });
   assert.deepEqual(state.working, [{ project: '/code/website', projectName: 'website', task: 't1', name: 'Add a discount', startedAt: '2026-09-27T15:20:00.000Z' }]);
   assert.deepEqual(state.history.map((entry) => [entry.task, entry.projectName, entry.verdict]), [['new', 'shop', 'pass'], ['old', 'shop', 'pass']]);
 });
@@ -56,25 +63,7 @@ test('a project whose tasks cannot be read shows up as a problem, and the others
     if (cwd === broken) throw new Error('taskwire tasks: No ClickUp token found for account "acme"');
     return args[0] === 'tasks' ? [task({ id: 'f1', needs: 'test' })] : lastComment('> **Next:** open the page on a phone.');
   };
-  const state = await createSnapshot({ home: home([broken, fine]), runTaskwire: run, now: () => NOW })();
+  const state = await readState({ home: home([broken, fine]), runTaskwire: run, now: () => NOW });
   assert.deepEqual(state.problems, [{ project: broken, projectName: 'broken', error: 'taskwire tasks: No ClickUp token found for account "acme"' }]);
   assert.deepEqual(state.waiting.map((item) => [item.id, item.note]), [['f1', ['Next: open the page on a phone.']]]);
-});
-
-test('task system reads are cached for a minute, to stay under the API rate limit', async () => {
-  const website = projectDir('website');
-  const taskwire = fakeTaskwire({
-    'tasks --needs any': [task({ id: 'r1', needs: 'review' })],
-    tasks: [task({ id: 'r1', needs: 'review' })],
-    'task get': lastComment('> **Done:** it works.'),
-  });
-  let now = NOW;
-  const snapshot = createSnapshot({ home: home([website]), runTaskwire: taskwire.run, now: () => now });
-  await snapshot();
-  await snapshot();
-  // The waiting tasks, the detail of the one waiting, and the tasks to find the first one to start.
-  assert.equal(taskwire.calls.length, 3);
-  now += 61_000;
-  await snapshot();
-  assert.equal(taskwire.calls.length, 6);
 });

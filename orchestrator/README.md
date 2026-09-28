@@ -26,9 +26,9 @@ Projects can also be added and removed from the dashboard (see below).
 
 ## Dashboard
 
-Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds:
+Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, and every 3 seconds while the task system is being read:
 
-- **Control bar:** paused or working, with Start agents or Pause. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
+- **Control bar:** paused or working, with Start agents or Pause. Below it, when the data was read from the task system ("Updated 2 minutes ago", or "Updating from ClickUp" with a spinner while a read runs), and **Refresh now**. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
 - **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read. **Remove project**, under More, stops following the project, like `remove`.
 - **Add project:** lists the taskwire projects (folders with a `.taskwire.json`) found in `projectRoots`, or, without it, in the folders that hold the projects already followed, up to three levels down. Hidden folders and `node_modules` are skipped, and the search never covers the whole home folder, since macOS would ask for access to Documents, Desktop and Downloads. **Add** follows a project with the same checks as `add`; a project that is not in the list can be added by pasting its path (`~/` works). The optional test command applies to the project you follow.
 - **Waiting for you:** a compact queue grouped by kind, with filters. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment.
@@ -45,7 +45,15 @@ Following and removing a project also need the token of the page, and so does th
 
 Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type.
 
-It reads the task system at most once a minute per query, to stay under the rate limit of the free ClickUp plan. It listens on 127.0.0.1 only and refuses requests for any other host name. Actions need a token that changes at every start and is only in the page. Task names and comments are shown as text, never as HTML.
+The page never waits for the task system: it always shows the last data read, and reads again in the background. To stay well under the rate limit of the free ClickUp plan (100 requests a minute):
+
+- a project is read again only while someone looks at the page, and at most once a minute; with no page open, the dashboard reads nothing;
+- a read takes one task list per project, and the detail of a waiting task (its last comment and goal) only when the task changed since the last read (its `updatedAt`, which a new comment changes too);
+- an action reads again only the project it changed, and a task whose mark it cleared leaves the queue at once;
+- at most 3 taskwire calls run at once, across the dashboard and the loop;
+- the last data read is kept in `snapshot.json`, so after a restart the page shows it at once, with its age, while it reads again. A project whose read fails keeps its last data, with the reason.
+
+It listens on 127.0.0.1 only and refuses requests for any other host name. Actions need a token that changes at every start and is only in the page. Task names and comments are shown as text, never as HTML.
 
 ## One pass
 
