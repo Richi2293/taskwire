@@ -5,8 +5,8 @@ import type { RunTaskwire } from '../taskwire.ts';
 export interface ProjectActionDeps {
   home: string;
   runTaskwire: RunTaskwire;
-  // Called after a change, so the dashboard shows the new list of projects at once.
-  onChange: () => void;
+  // Called with the project after a change, so the dashboard reads a project just followed at once.
+  onChange: (project: string) => void;
 }
 
 const MAX_TEST_COMMAND = 1000;
@@ -23,12 +23,13 @@ export function createProjectActions(deps: ProjectActionDeps): (body: unknown) =
       }
       // The page sends an empty field when the person leaves it blank.
       const command = typeof testCommand === 'string' && testCommand.trim() !== '' ? testCommand : undefined;
-      await followProject(deps, project, command);
+      const entry = await followProject(deps, project, command);
+      deps.onChange(entry.path);
     } else if (action === 'unfollow') {
+      // The state lists only the projects in the config, so there is nothing to read again.
       unfollowProject(deps.home, project);
     } else {
       throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow');
     }
-    deps.onChange();
   };
 }

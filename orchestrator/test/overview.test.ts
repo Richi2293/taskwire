@@ -2,7 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSnapshot } from '../src/dashboard/snapshot.ts';
+import { createStore } from '../src/dashboard/snapshot.ts';
+import type { StoreDeps } from '../src/dashboard/snapshot.ts';
+
+// Reads every project, then returns the state the page would get.
+function reader(deps: StoreDeps) {
+  const store = createStore(deps);
+  return async () => {
+    await store.refresh();
+    return store.state();
+  };
+}
 import { projectDir, task, tempDir } from './helpers.ts';
 
 const NOW = new Date(2026, 8, 27, 18, 21, 0).getTime();
@@ -29,7 +39,7 @@ function setup() {
       comments: [{ id: 'c1', author: 'jane', date: new Date(NOW - 2 * 3600_000).toISOString(), text: '> **Stato:** servono decisioni.\n\n---\n\n### Questions\n\n1. Conversion or symbol only?\n\n### Proposal\n\nSymbol only.' }],
     };
   };
-  return { home, shop, website, calls, snapshot: createSnapshot({ home, runTaskwire, now: () => NOW, working: () => true, nextCheckAt: () => NOW + 3 * 60_000 }) };
+  return { home, shop, website, calls, snapshot: reader({ home, runTaskwire, now: () => NOW, working: () => true, nextCheckAt: () => NOW + 3 * 60_000 }) };
 }
 
 test('the control part says the mode, the timing, the capacity and the task that would start first', async () => {
@@ -71,7 +81,7 @@ test('a project that cannot be read shows its error in its own row', async () =>
   const home = tempDir('home');
   const broken = projectDir('broken');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: broken }] }));
-  const snapshot = createSnapshot({ home, runTaskwire: async () => { throw new Error('No ClickUp token found'); }, now: () => NOW });
+  const snapshot = reader({ home, runTaskwire: async () => { throw new Error('No ClickUp token found'); }, now: () => NOW });
   const state = await snapshot();
   assert.equal(state.projects[0].error, 'No ClickUp token found');
   assert.equal(state.control.firstTask, null);
