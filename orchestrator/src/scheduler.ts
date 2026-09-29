@@ -31,6 +31,8 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
   for (const taskId of await closeInterruptedClaims(deps)) deps.log({ event: 'interrupted', at: at(), task: taskId });
 
   const running = new Map<string, Promise<void>>();
+  // Groups with an analysis at work: two projects of a group share tasks, so they are analysed one at a time.
+  const analysing = new Set<string>();
   // The index, in the project list, where the next pass starts, so every project gets its turn.
   let turn = 0;
   while (!deps.stopped()) {
@@ -61,12 +63,19 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
         deps.log({ event: 'error', at: at(), project: project.path, error: error instanceof Error ? error.message : String(error) });
       };
       // A due analysis comes first, in the same slot, so the task picked next reflects it. A failed analysis does not stop the task.
-      const analysis = analysisDue(deps.home, project.path, deps.now(), analysisHours)
+      // A project whose group is being analysed waits for the next tick for its own analysis, and works meanwhile.
+      const group = project.group;
+      const due = analysisDue(deps.home, project.path, deps.now(), analysisHours) && (group === undefined || !analysing.has(group));
+      if (due && group !== undefined) analysing.add(group);
+      const analysis = due
         ? analyze(cycleDeps, project)
           .then((record) => {
             deps.log({ event: 'analysis', at: at(), project: project.path, ok: record.ok, summary: record.summary, costUsd: record.costUsd });
           })
           .catch(logError)
+          .finally(() => {
+            if (group !== undefined) analysing.delete(group);
+          })
         : Promise.resolve();
       const work = analysis
         .then(() => cycle(cycleDeps, project))

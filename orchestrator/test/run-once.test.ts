@@ -186,3 +186,21 @@ test('a task sent back to the agent continues in its existing worktree', async (
   assert.equal(claudeCalls(commands.calls)[0].cwd, worktree);
   assert.ok(existsSync(join(worktree, '.taskwire.json')));
 });
+
+test('run-once on a project with an area works only on a task of that area, and tells the agent to do only its part', async () => {
+  const { home } = setup({ area: 'fe', group: 'Shop' });
+  const taskwire = fakeTaskwire({
+    tasks: [task({ id: 'b1', name: 'Add the discount API', tags: ['be'] }), task({ id: 'f1', name: 'Show the discount', tags: ['fe'] })],
+    'task update': {},
+    'task get': { ...task({ status: 'qa' }), needs: 'decision' },
+    'comment add': { id: 'c1' },
+  });
+  const commands = fakeCommands({ claude: () => claudeResult() });
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  assert.equal(run.code, 0, run.stderr);
+  assert.ok(taskwire.calls.some((call) => call.args.join(' ') === 'task update f1 --status in progress'));
+  assert.ok(!taskwire.calls.some((call) => call.args.includes('b1')));
+  const prompt = claudeCalls(commands.calls)[0].args[claudeCalls(commands.calls)[0].args.indexOf('-p') + 1];
+  assert.match(prompt, /the `fe` area of the group "Shop"/);
+  assert.match(prompt, /only the `fe` part/);
+});

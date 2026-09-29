@@ -126,3 +126,45 @@ test('the config takes analysisHours and a closedStatus per project, and refuses
     assert.throws(() => loadConfig(home), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 3, JSON.stringify(broken));
   }
 });
+
+test('the config takes an area and a group per project', () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/p/a', area: 'FE', group: 'Shop' }] }));
+  assert.deepEqual(loadConfig(home).projects[0], { path: '/p/a', area: 'fe', group: 'Shop' });
+  for (const broken of [{ path: '/p/a', area: 'front end' }, { path: '/p/a', area: '' }, { path: '/p/a', group: 3 }]) {
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [broken] }));
+    assert.throws(() => loadConfig(home), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 3, JSON.stringify(broken));
+  }
+});
+
+test('the analysis of a project with an area keeps to its tasks and tags the others only when it is clear', () => {
+  const prompt = analysisPrompt({ path: '/p/web', area: 'fe', group: 'Shop' }, ['be', 'mobile']);
+  assert.match(prompt, /the `fe` area of the group "Shop"/);
+  assert.match(prompt, /`be`, `mobile`/);
+  assert.match(prompt, /another area tag: leave it alone/);
+  assert.match(prompt, /--add-tag/);
+  assert.match(prompt, /one subtask per area/);
+  // A person must never get dozens of questions from one analysis.
+  assert.match(prompt, /at most 10 tasks/);
+  // Without an area the prompt says nothing about areas.
+  assert.doesNotMatch(analysisPrompt({ path: '/p/web' }), /area tag/);
+});
+
+test('the summary of the analysis stays short, with counts instead of lists', () => {
+  assert.match(analysisPrompt({ path: '/p/web' }), /at most 3 short lines.*counts, not lists/s);
+});
+
+test('the analysis gets the areas of the other projects of its group', async () => {
+  const home = tempDir('home');
+  const web = projectDir('web');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [
+    { path: web, area: 'fe', group: 'Shop' },
+    { path: '/p/api', area: 'be', group: 'Shop' },
+    { path: '/p/app', area: 'mobile', group: 'Shop' },
+    { path: '/p/other', area: 'docs', group: 'Blog' },
+  ] }));
+  const commands = fakeCommands({ claude: () => claudeResult() });
+  await runAnalysis({ home, runTaskwire: fakeTaskwire({}).run, runCommand: commands.run, now: () => NOW }, loadConfig(home).projects[0]);
+  const agent = commands.calls.find((call) => call.command === 'claude');
+  assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: web, area: 'fe', group: 'Shop' }, ['be', 'mobile']));
+});

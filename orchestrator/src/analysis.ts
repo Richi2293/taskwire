@@ -4,6 +4,7 @@ import { runClaude } from './agent.ts';
 import type { AgentResult } from './agent.ts';
 import { agentEnv, logPath, writeLog } from './cycle.ts';
 import type { CycleDeps } from './cycle.ts';
+import { loadConfig } from './config.ts';
 import type { ProjectEntry } from './config.ts';
 import { analysisPrompt } from './prompts.ts';
 import { readClaims, writeClaims } from './state.ts';
@@ -69,7 +70,7 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
     await freshWorktree(deps, project.path, worktree);
     agent = await runClaude(
       deps.runCommand,
-      { prompt: analysisPrompt(project), cwd: worktree },
+      { prompt: analysisPrompt(project, groupAreas(deps.home, project)), cwd: worktree },
       { sandbox: project.sandbox ?? false, allowedDomains: project.allowedDomains ?? [], env: agentEnv(deps.home, deps.taskwireCommand) },
     );
     if (!agent.ok) failure = agent.summary;
@@ -95,6 +96,15 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
   mkdirSync(deps.home, { recursive: true });
   appendFileSync(join(deps.home, ANALYSES_FILE), `${JSON.stringify(record)}\n`);
   return record;
+}
+
+// The areas of the other projects of the group, so the agent knows which tags belong to them.
+function groupAreas(home: string, project: ProjectEntry): string[] {
+  if (project.group === undefined) return [];
+  const areas = loadConfig(home).projects
+    .filter((entry) => entry.path !== project.path && entry.group === project.group && entry.area !== undefined && entry.area !== project.area)
+    .map((entry) => entry.area ?? '');
+  return [...new Set(areas)];
 }
 
 // Every analysis starts from the latest code: the worktree of the previous one is removed first.

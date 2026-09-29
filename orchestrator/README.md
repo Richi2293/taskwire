@@ -29,7 +29,7 @@ Projects can also be added and removed from the dashboard (see below).
 Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, and every 3 seconds while the task system is being read:
 
 - **Control bar:** paused or working, with Start agents or Pause. Below it, when the data was read from the task system ("Updated 2 minutes ago", or "Updating from ClickUp" with a spinner while a read runs), and **Refresh now**. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
-- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work, how many tasks ended today and what the last analysis found, or why the project could not be read. The **Agents** switch turns agents on or off for the project: off, no agent takes a new task there, an agent at work finishes its task, and what waits for you still shows in the queue. The choice is saved in the config (`agents`), so it stays after a restart. **Remove project**, under More, stops following the project, like `remove`.
+- **Projects:** one row per project, the projects of a group together, with its area and group, what waits for you (to decide, to try, to review), the agent at work, how many tasks ended today and what the last analysis found, or why the project could not be read. The **Agents** switch turns agents on or off for the project: off, no agent takes a new task there, an agent at work finishes its task, and what waits for you still shows in the queue. The choice is saved in the config (`agents`), so it stays after a restart. **Remove project**, under More, stops following the project, like `remove`.
 - **Add project:** lists the taskwire projects (folders with a `.taskwire.json`) found in `projectRoots`, or, without it, in the folders that hold the projects already followed, up to three levels down. Hidden folders and `node_modules` are skipped, and the search never covers the whole home folder, since macOS would ask for access to Documents, Desktop and Downloads. **Add** follows a project with the same checks as `add`; a project that is not in the list can be added by pasting its path (`~/` works). The optional test command applies to the project you follow.
 - **Waiting for you:** a compact queue grouped by kind, with filters. The project buttons above it narrow the queue to one or more projects (All projects shows them all again); the choice is kept in the browser, so it stays after a reload. A waiting chip in a project row, such as "2 to decide", shows only those tasks of that project. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment.
 - **Done recently:** the runs of `runs.jsonl`, by day.
@@ -91,7 +91,7 @@ With `"sandbox": true` the agent runs in the Claude Code sandbox (`--permission-
 In `start`, while agents work, an agent analyses each project with agents on: the first time the project is seen, then at most every `analysisHours` (1 by default, low while the analysis is tried out). A due analysis comes before the next task of the project, in the same slot, so the task picked next reflects it. It runs in its own worktree (`worktrees/<project>/analysis`), made again from the latest default branch every time, and writes no code. The agent:
 
 1. reads the project (README, AGENTS.md, recent history, tests);
-2. reviews the tasks an agent could take next: one that is too vague, too big or already done gets `needs decision`, with its questions and proposal;
+2. reviews the tasks an agent could take next: one that is too vague, too big or already done gets `needs decision`, with its questions and proposal, for at most 10 tasks per analysis, the most important first;
 3. checks up to 5 tasks that wait for a test or a review, as a person would: when every criterion is verified and the work is where the project wants it (for example merged), it marks the task `needs review` with a `### Ready to close` section, and the dashboard offers **Close the task**; it never closes a task itself;
 4. proposes at most 5 new tasks, only when they are clearly worth it and few tasks are ready: each gets the block tag, `needs decision` and a `### Proposed task` section, so no agent takes it until you accept it, and the tag `agent-proposed`, which stays after you accept or reject it, so the proposals can be found in the task system;
 5. ends with a short summary for you, shown in the project row.
@@ -99,6 +99,17 @@ In `start`, while agents work, an agent analyses each project with agents on: th
 Every comment of the analysis has a "Source" line in its details (automatic analysis by the orchestrator, with the date), in the project language.
 
 Each analysis is appended to `analyses.jsonl` (times, outcome, summary, cost, log), and a failed one is tried again only after `analysisHours`. `run-once` makes no analysis.
+
+## Projects that share a task list
+
+Several projects (for example the backend, the frontend and the app of one product) may share one task list. Each of them then gets an **area**, the tag of its tasks (`fe`, `be`, `mobile`), and a **group**, the product they belong to. Both are set in the config or with **Set area and group**, under More in the project row.
+
+- An agent of a project with an area takes only the tasks with that tag. A task with no area tag is taken by no agent of the group, so no work lands in the wrong repository.
+- A task that touches several areas becomes a container with one subtask per area, each with its tag. A dependency (`blocked by`) sets their order: a task that waits for an open task is not taken.
+- The analysis leaves alone the tasks of the other areas. It adds the area tag to a task whose area is clear, asks when it is not, and proposes the subtasks of a task that touches several areas; once the person accepts, the next analysis creates them. Two projects of a group are never analysed at once.
+- The agent working on a task does only the part of its area, and says in its comment what the other areas must do.
+
+A project without an area takes every task, as before.
 
 ## Which task comes next
 
@@ -108,7 +119,9 @@ A task is picked when:
 - its status is one of the start statuses of the project (`backlog` and `to do` by default);
 - it does not wait for a person (no `needs` mark, see `taskwire task update --needs`);
 - it does not have the block tag (`no-agent` by default), which keeps agents away from a task;
-- it has no open subtasks, since the work is in the subtasks.
+- it has no open subtasks, since the work is in the subtasks;
+- it does not wait for an open task (`blocked by`);
+- when the project has an area, it has the area tag.
 
 Among those, the highest priority comes first, then the oldest task.
 
@@ -143,6 +156,8 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].closedStatus` | status Close the task and Reject move a task to (default: the last status of the task's list) |
 | `projects[].sandbox` | `true` to run agents in the Claude Code sandbox |
 | `projects[].allowedDomains` | extra domains a sandboxed agent may reach |
+| `projects[].area` | tag of the tasks of the project, when it shares its task list with other projects (for example `fe`) |
+| `projects[].group` | the product the project belongs to, with the other projects of its task list |
 | `projects[].agents` | `false` keeps agents away from the project while it stays followed (default `true`) |
 
 ## Development

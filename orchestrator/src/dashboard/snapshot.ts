@@ -75,6 +75,9 @@ export interface ProjectSummary {
   analysis: { at: string; ok: boolean; summary: string } | null;
   // True when an analysis runs before the next task of the project, once agents work.
   analysisDue: boolean;
+  // The tag of the project's tasks and its group, when it shares its task list; null otherwise.
+  area: string | null;
+  group: string | null;
 }
 
 export interface ControlInfo {
@@ -254,6 +257,8 @@ export function createStore(deps: StoreDeps): Store {
         reading: reading.has(project.path),
         agents: agentsOn(project),
         analysis: null,
+        area: project.area ?? null,
+        group: project.group ?? null,
         analysisDue: agentsOn(project) && analysisDue(deps.home, project.path, deps.now(), config.analysisHours ?? DEFAULT_ANALYSIS_HOURS),
       };
       const analysis = lastAnalysis(deps.home, project.path);
@@ -265,11 +270,19 @@ export function createStore(deps: StoreDeps): Store {
         waiting.push(waitingItem(task, known.details[task.id], project.path, projectName));
       }
       if (firstTask === null && busy === null && summary.agents) {
-        const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG });
+        const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG, area: project.area });
         if (next !== null) firstTask = { project: project.path, projectName, id: next.id, name: next.name, status: next.status };
       }
     }
     waiting.sort((a, b) => NEEDS_ORDER[a.needs] - NEEDS_ORDER[b.needs]);
+    // The projects of a group come together, where the first of them is in the config.
+    const firstOfGroup = new Map<string, number>();
+    projects.forEach((p, index) => {
+      if (p.group !== null && !firstOfGroup.has(p.group)) firstOfGroup.set(p.group, index);
+    });
+    const position = (p: ProjectSummary, index: number) => (p.group === null ? index : firstOfGroup.get(p.group) ?? index);
+    const ordered = projects.map((p, index) => ({ p, index })).sort((a, b) => position(a.p, a.index) - position(b.p, b.index) || a.index - b.index);
+    projects.splice(0, projects.length, ...ordered.map(({ p }) => p));
 
     const reads = projects.map((p) => p.readAt);
     const mode = deps.working?.() ? 'working' : 'paused';

@@ -1,5 +1,5 @@
 import { usageError } from '../errors.ts';
-import { followProject, setProjectAgents, unfollowProject } from '../projects.ts';
+import { followProject, setProjectAgents, setProjectPlace, unfollowProject } from '../projects.ts';
 import type { RunTaskwire } from '../taskwire.ts';
 
 export interface ProjectActionDeps {
@@ -15,7 +15,7 @@ const MAX_TEST_COMMAND = 1000;
 export function createProjectActions(deps: ProjectActionDeps): (body: unknown) => Promise<void> {
   return async (body) => {
     if (typeof body !== 'object' || body === null) throw usageError('The request must be a JSON object');
-    const { action, project, testCommand } = body as Record<string, unknown>;
+    const { action, project, testCommand, area, group } = body as Record<string, unknown>;
     if (typeof project !== 'string' || project.trim() === '') throw usageError('The request needs the "project" folder');
     if (action === 'follow') {
       if (testCommand !== undefined && (typeof testCommand !== 'string' || testCommand.length > MAX_TEST_COMMAND)) {
@@ -31,8 +31,13 @@ export function createProjectActions(deps: ProjectActionDeps): (body: unknown) =
     } else if (action === 'agents-on' || action === 'agents-off') {
       // The state reads the config at every look, so the switch shows at once.
       setProjectAgents(deps.home, project, action === 'agents-on');
+    } else if (action === 'place') {
+      if ((area !== undefined && typeof area !== 'string') || (group !== undefined && typeof group !== 'string')) {
+        throw usageError('"area" and "group" must be strings');
+      }
+      setProjectPlace(deps.home, project, { area, group });
     } else {
-      throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow, agents-on, agents-off');
+      throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow, agents-on, agents-off, place');
     }
   };
 }

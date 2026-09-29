@@ -11,6 +11,8 @@ export interface TaskSummary {
   needs: 'decision' | 'test' | 'review' | null;
   parent: string | null;
   url: string;
+  // The tasks this one waits for; missing in taskwire 0.1.6 and older.
+  blockedBy?: string[];
   // The list the task belongs to; its statuses tell which one closes the task.
   list?: { id: string; name: string };
   // When the task last changed, comments included; missing in older taskwire versions.

@@ -173,6 +173,7 @@ async function nextTasks(deps: CliDeps): Promise<{ project: string; agents: bool
     const task = pickTask(tasks, {
       statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
       blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
+      area: project.area,
     });
     rows.push({ project: project.path, agents: true, task });
   }
