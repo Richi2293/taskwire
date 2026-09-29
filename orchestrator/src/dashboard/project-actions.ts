@@ -1,5 +1,5 @@
 import { usageError } from '../errors.ts';
-import { followProject, unfollowProject } from '../projects.ts';
+import { followProject, setProjectAgents, unfollowProject } from '../projects.ts';
 import type { RunTaskwire } from '../taskwire.ts';
 
 export interface ProjectActionDeps {
@@ -11,7 +11,7 @@ export interface ProjectActionDeps {
 
 const MAX_TEST_COMMAND = 1000;
 
-// Following and unfollowing projects from the dashboard, with the same checks as "add" and "remove".
+// Following and unfollowing projects from the dashboard, with the same checks as "add" and "remove", and switching their agents.
 export function createProjectActions(deps: ProjectActionDeps): (body: unknown) => Promise<void> {
   return async (body) => {
     if (typeof body !== 'object' || body === null) throw usageError('The request must be a JSON object');
@@ -28,8 +28,11 @@ export function createProjectActions(deps: ProjectActionDeps): (body: unknown) =
     } else if (action === 'unfollow') {
       // The state lists only the projects in the config, so there is nothing to read again.
       unfollowProject(deps.home, project);
+    } else if (action === 'agents-on' || action === 'agents-off') {
+      // The state reads the config at every look, so the switch shows at once.
+      setProjectAgents(deps.home, project, action === 'agents-on');
     } else {
-      throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow');
+      throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow, agents-on, agents-off');
     }
   };
 }

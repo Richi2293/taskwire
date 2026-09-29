@@ -20,8 +20,8 @@ orchestrator/bin/taskwire-orchestrator start
 - `list` shows the projects it follows.
 
 Projects can also be added and removed from the dashboard (see below).
-- `next` shows, for each project, the task an agent would work on next. It changes nothing.
-- `run-once` makes one pass: for each project, an agent works on the next task (see below).
+- `next` shows, for each project, the task an agent would work on next. It changes nothing. A project with agents off shows `"agents": false` and no task, without reading its tasks.
+- `run-once` makes one pass: for each project with agents on, an agent works on the next task (see below).
 - `start` opens the dashboard and runs until you press Ctrl+C. It starts **paused**: no agent takes a task until you press **Start working** on the dashboard, and **Pause** stops new work while agents already at work finish their task. Every start begins paused. While working, every `intervalMinutes` (5 by default) it starts a pass on each project that is free, with at most `maxAgents` agents at once (2 by default) and never two on the same project; pressing Start working starts the first pass at once. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`dashboard`, `start`, `interrupted`, `play`, `pause`, `run`, `action`, `error`, `stop`); an error in a project is logged and the others go on. An `action` event tells which action the dashboard sent on which task and whether it was done, refused or failed, with the reason; it never contains the text you wrote, which is in the task comment. After Ctrl+C it starts nothing new and waits for the running passes.
 
 ## Dashboard
@@ -29,7 +29,7 @@ Projects can also be added and removed from the dashboard (see below).
 Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, and every 3 seconds while the task system is being read:
 
 - **Control bar:** paused or working, with Start agents or Pause. Below it, when the data was read from the task system ("Updated 2 minutes ago", or "Updating from ClickUp" with a spinner while a read runs), and **Refresh now**. "What happens when I start" (or "What is happening") opens the details: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
-- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read. **Remove project**, under More, stops following the project, like `remove`.
+- **Projects:** one row per project with what waits for you (to decide, to try, to review), the agent at work and how many tasks ended today, or why the project could not be read. The **Agents** switch turns agents on or off for the project: off, no agent takes a new task there, an agent at work finishes its task, and what waits for you still shows in the queue. The choice is saved in the config (`agents`), so it stays after a restart. **Remove project**, under More, stops following the project, like `remove`.
 - **Add project:** lists the taskwire projects (folders with a `.taskwire.json`) found in `projectRoots`, or, without it, in the folders that hold the projects already followed, up to three levels down. Hidden folders and `node_modules` are skipped, and the search never covers the whole home folder, since macOS would ask for access to Documents, Desktop and Downloads. **Add** follows a project with the same checks as `add`; a project that is not in the list can be added by pasting its path (`~/` works). The optional test command applies to the project you follow.
 - **Waiting for you:** a compact queue grouped by kind, with filters. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment.
 - **Done recently:** the runs of `runs.jsonl`, by day.
@@ -88,6 +88,7 @@ With `"sandbox": true` the agent runs in the Claude Code sandbox (`--permission-
 
 A task is picked when:
 
+- its project has agents on (the default, see the Agents switch on the dashboard);
 - its status is one of the start statuses of the project (`backlog` and `to do` by default);
 - it does not wait for a person (no `needs` mark, see `taskwire task update --needs`);
 - it does not have the block tag (`no-agent` by default), which keeps agents away from a task;
@@ -124,6 +125,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].workStatus` | status a task moves to when an agent takes it (default `in progress`) |
 | `projects[].sandbox` | `true` to run agents in the Claude Code sandbox |
 | `projects[].allowedDomains` | extra domains a sandboxed agent may reach |
+| `projects[].agents` | `false` keeps agents away from the project while it stays followed (default `true`) |
 
 ## Development
 

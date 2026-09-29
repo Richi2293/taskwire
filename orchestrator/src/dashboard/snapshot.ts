@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, loadConfig } from '../config.ts';
+import { DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, agentsOn, loadConfig } from '../config.ts';
 import { pickTask } from '../picker.ts';
 import { readClaims, readRuns } from '../state.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
@@ -64,6 +64,8 @@ export interface ProjectSummary {
   readAt: string | null;
   // True while the project is being read again.
   reading: boolean;
+  // False when agents are off for the project: it stays followed, and what waits for the person still shows.
+  agents: boolean;
 }
 
 export interface ControlInfo {
@@ -240,6 +242,7 @@ export function createStore(deps: StoreDeps): Store {
         error: known.error,
         readAt: known.readAt,
         reading: reading.has(project.path),
+        agents: agentsOn(project),
       };
       projects.push(summary);
       for (const task of known.tasks) {
@@ -247,7 +250,7 @@ export function createStore(deps: StoreDeps): Store {
         summary.waiting[task.needs] += 1;
         waiting.push(waitingItem(task, known.details[task.id], project.path, projectName));
       }
-      if (firstTask === null && busy === null) {
+      if (firstTask === null && busy === null && summary.agents) {
         const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG });
         if (next !== null) firstTask = { project: project.path, projectName, id: next.id, name: next.name, status: next.status };
       }

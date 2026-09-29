@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { discoverProjects, followProject, projectSearchRoots, unfollowProject } from '../src/projects.ts';
+import { discoverProjects, followProject, projectSearchRoots, setProjectAgents, unfollowProject } from '../src/projects.ts';
 import { loadConfig } from '../src/config.ts';
 import { writeClaims } from '../src/state.ts';
 import { OrchestratorError } from '../src/errors.ts';
@@ -148,4 +148,25 @@ test('projectRoots in the config must be absolute paths', () => {
   assert.deepEqual(loadConfig(home).projectRoots, ['/code', join(homedir(), 'work')]);
   writeFileSync(join(home, 'config.json'), JSON.stringify({ projectRoots: ['code'], projects: [] }));
   assert.throws(() => loadConfig(home), /projectRoots/);
+});
+
+test('agents can be turned off and on for a project, keeping the rest of its entry', () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website, testCommand: 'npm test' }, { path: shop }] }));
+  setProjectAgents(home, website, false);
+  assert.deepEqual(saved(home).projects, [{ path: website, testCommand: 'npm test', agents: false }, { path: shop }]);
+  // On is the default, so the field goes away.
+  setProjectAgents(home, website, true);
+  assert.deepEqual(saved(home).projects, [{ path: website, testCommand: 'npm test' }, { path: shop }]);
+  assert.throws(() => setProjectAgents(home, '/code/other', false), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 2);
+});
+
+test('agents in the config must be true or false', () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/code/shop', agents: false }] }));
+  assert.equal(loadConfig(home).projects[0].agents, false);
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/code/shop', agents: 'no' }] }));
+  assert.throws(() => loadConfig(home), /"agents" of \/code\/shop must be true or false/);
 });

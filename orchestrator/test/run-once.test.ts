@@ -46,6 +46,17 @@ test('run-once with no task to pick changes nothing', async () => {
   assert.deepEqual((run.json() as { task: unknown }[]).map((row) => row.task), [null]);
 });
 
+test('run-once skips a project with agents off', async () => {
+  const { home } = setup({ agents: false });
+  const taskwire = taskwireFor();
+  const commands = fakeCommands();
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), []);
+  assert.deepEqual(taskwire.calls.filter((call) => call.args[0] === 'tasks' && !call.args.includes('--needs')), []);
+  assert.deepEqual(claudeCalls(commands.calls), []);
+});
+
 test('run-once claims the task, runs the agent in a new worktree and records the run', async () => {
   const { home, project } = setup();
   const taskwire = taskwireFor();

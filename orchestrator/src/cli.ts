@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
-import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, expandHome, loadConfig } from './config.ts';
+import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, agentsOn, expandHome, loadConfig } from './config.ts';
 import { createRunControl } from './control.ts';
 import type { RunControl } from './control.ts';
 import { createActions } from './dashboard/actions.ts';
@@ -141,7 +141,7 @@ async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
   const cycleDeps = { ...deps, taskwireCommand };
   await closeInterruptedClaims(cycleDeps);
   const results: CycleResult[] = [];
-  for (const project of projects) results.push(await runCycle(cycleDeps, project));
+  for (const project of projects.filter(agentsOn)) results.push(await runCycle(cycleDeps, project));
   return results;
 }
 
@@ -161,15 +161,20 @@ function projectFolder(deps: CliDeps, input: Input): string {
   return resolve(deps.cwd, expandHome(input.positionals[0]));
 }
 
-async function nextTasks(deps: CliDeps): Promise<{ project: string; task: TaskSummary | null }[]> {
-  const rows: { project: string; task: TaskSummary | null }[] = [];
+async function nextTasks(deps: CliDeps): Promise<{ project: string; agents: boolean; task: TaskSummary | null }[]> {
+  const rows: { project: string; agents: boolean; task: TaskSummary | null }[] = [];
   for (const project of loadConfig(deps.home).projects) {
+    // No agent takes a task of a project with agents off, so its tasks are not read.
+    if (!agentsOn(project)) {
+      rows.push({ project: project.path, agents: false, task: null });
+      continue;
+    }
     const tasks = (await deps.runTaskwire(['tasks'], project.path)) as TaskSummary[];
     const task = pickTask(tasks, {
       statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
       blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
     });
-    rows.push({ project: project.path, task });
+    rows.push({ project: project.path, agents: true, task });
   }
   return rows;
 }

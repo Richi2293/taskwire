@@ -165,7 +165,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .found .row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .found .row small { display: block; font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .path-row { display: flex; gap: 10px; }
-.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto auto auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .projects .row:last-child { border-bottom: 0; }
 .projects .name { font-weight: 600; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -177,6 +177,15 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .at-work { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
 .at-work.error { color: var(--problem); }
 .done { font-size: 13px; color: var(--muted); text-align: right; }
+.projects .row.off .name, .projects .row.off .at-work, .projects .row.off .done { opacity: 0.55; }
+.switch { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.switch[aria-checked="true"] { color: var(--ink); }
+.switch .track { position: relative; width: 30px; height: 18px; border-radius: 999px; background: var(--line-strong); flex: none; transition: background 0.15s; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform 0.15s; }
+.switch[aria-checked="true"] .track { background: var(--alive); }
+.switch[aria-checked="true"] .track::after { transform: translateX(12px); }
+.switch:disabled { opacity: 0.55; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .switch .track, .switch .track::after { transition: none; } }
 
 .work { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .filters { display: inline-flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 12px; flex-wrap: wrap; }
@@ -378,7 +387,7 @@ function renderControl(state) {
   let cols;
   if (working) {
     const first = state.working[0];
-    const free = state.projects.filter((p) => !p.working).map((p) => p.projectName);
+    const free = state.projects.filter((p) => !p.working && p.agents).map((p) => p.projectName);
     const room = c.maxAgents - c.agentsAtWork;
     cols = [
       col('Now', first
@@ -391,9 +400,12 @@ function renderControl(state) {
         (room > 0 ? plural(room, 'more agent') + ' can start at the next check. ' : 'No room for another agent until one finishes. ') + 'Pause stops new work; an agent at work finishes its task first.'),
     ];
   } else {
+    const on = state.projects.filter((p) => p.agents);
     cols = [
       col('Right away', c.firstTask ? 'An agent takes "' + c.firstTask.name + '" in ' + c.firstTask.projectName + ', the next task with nothing waiting.' : 'No task is ready now: an agent starts as soon as one appears.'),
-      col('Then every ' + c.intervalMinutes + ' minutes', 'The orchestrator looks for new tasks in your ' + plural(state.projects.length, 'project') + ' and starts an agent where there is room.'),
+      col('Then every ' + c.intervalMinutes + ' minutes', on.length
+        ? 'The orchestrator looks for new tasks in your ' + plural(on.length, 'project') + ' with agents on and starts an agent where there is room.'
+        : 'Agents are off in every project: turn them on in a project row.'),
       col('At most ' + c.maxAgents + ' agents at once', 'One agent per project. Pause stops new work; an agent at work finishes its task first.'),
     ];
   }
@@ -428,18 +440,24 @@ function renderProjects(state) {
   const label = { decision: 'to decide', test: 'to try', review: 'to review' };
   const rows = state.projects.map((p) => {
     const chips = ORDER.filter((k) => p.waiting[k]).map((k) => el('span', { className: 'chip ' + k }, el('b', { text: String(p.waiting[k]) }), label[k]));
+    let doing = p.agents ? 'No agent at work' : 'Agents off: no new task starts here';
+    if (p.working) doing = 'Agent at work: ' + p.working.name + ', for ' + duration(now - new Date(p.working.startedAt)) + (p.agents ? '' : '. No new task after it');
     // A failed read keeps the last data: the row says why it is not up to date.
     const work = p.error
       ? el('div', { className: 'at-work error', text: 'Could not update: ' + p.error.replace(/\\.?$/, '.') + (p.readAt ? ' Data from ' + ago(p.readAt, now) + '.' : '') })
-      : el('div', { className: 'at-work' }, el('span', { className: p.working ? 'dot alive' : 'dot' }),
-        p.working ? 'Agent at work: ' + p.working.name + ', for ' + duration(now - new Date(p.working.startedAt)) : 'No agent at work');
+      : el('div', { className: 'at-work' }, el('span', { className: p.working ? 'dot alive' : 'dot' }), doing);
+    // Off keeps the project followed: what waits for the person still shows, only new work stops.
+    const agents = el('button', { type: 'button', className: 'switch', role: 'switch', 'aria-checked': String(p.agents), title: p.agents ? 'Agents may take tasks of this project' : 'Agents take no new task of this project' },
+      el('span', { className: 'track' }), p.agents ? 'Agents on' : 'Agents off');
+    agents.onclick = () => switchAgents(p, agents);
     let empty = 'Nothing waits for you';
     if (!p.readAt) empty = p.reading ? 'Reading from ClickUp' : 'Not read yet';
-    return el('div', { className: 'row' },
+    return el('div', { className: p.agents ? 'row' : 'row off' },
       el('span', { className: 'name' }, p.projectName, p.reading ? el('span', { className: 'spinner', title: 'Updating from ClickUp', 'aria-label': 'Updating from ClickUp' }) : null),
       el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: empty })),
       work,
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
+      agents,
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
         el('div', {}, el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))));
   });
@@ -462,6 +480,20 @@ async function unfollow(project) {
     result.className = 'result failed';
     result.textContent = error.message;
   }
+}
+
+// The project stays followed either way; the loop reads the config at every check.
+async function switchAgents(project, button) {
+  const result = document.getElementById('projects-result');
+  const on = !project.agents;
+  button.disabled = true;
+  try {
+    await post('/api/projects', { action: on ? 'agents-on' : 'agents-off', project: project.project });
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+  }
+  refresh(true);
 }
 
 function openAdd(open) {

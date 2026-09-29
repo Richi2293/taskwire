@@ -49,6 +49,18 @@ export function unfollowProject(home: string, folder: string): void {
   saveConfig(home, config);
 }
 
+// Turns the agents of a followed project on or off. Off keeps the project followed: its waiting tasks still show on the dashboard.
+// An agent already at work finishes its task. On is the default, so it removes the field.
+export function setProjectAgents(home: string, folder: string, on: boolean): void {
+  const path = resolve(expandHome(folder));
+  const config = loadConfig(home);
+  const project = config.projects.find((entry) => entry.path === path);
+  if (project === undefined) throw usageError(`${path} is not followed`);
+  if (on) delete project.agents;
+  else project.agents = false;
+  saveConfig(home, config);
+}
+
 export interface DiscoverOptions {
   roots: string[];
   // Paths already followed, left out of the result.

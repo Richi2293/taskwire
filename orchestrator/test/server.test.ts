@@ -59,6 +59,14 @@ test('a More menu closes like a menu, and a refresh never closes it under the po
   assert.match(response.body, /document\.querySelector\('details\.menu\[open\]'\)/);
 });
 
+test('each project row has a switch for its agents', async () => {
+  const response = await get('/');
+  assert.match(response.body, /role: 'switch'/);
+  assert.match(response.body, /'agents-on' : 'agents-off'/);
+  assert.match(response.body, /Agents off/);
+  assert.match(response.body, /\.projects \.row\.off/);
+});
+
 test('task text from the task system is never turned into HTML', async () => {
   const response = await get('/');
   assert.ok(!response.body.includes('<img src=x'), 'the embedded state escapes "<"');

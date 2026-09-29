@@ -106,6 +106,14 @@ test('the config is read again at each tick, so a new project joins without a re
   assert.ok(h.started.includes('/p/new'));
 });
 
+test('a project with agents off gets no new work, and one without the field works as before', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [{ path: '/p/off', agents: false }, { path: '/p/on' }] });
+  const h = harness(home, 2, (_tick, harnessRef) => harnessRef.finish('/p/on'));
+  await runLoop(h.deps);
+  assert.deepEqual(h.started, ['/p/on', '/p/on']);
+});
+
 test('start hands the tasks of an interrupted pass to a person before the first tick', async () => {
   const home = tempDir('home');
   writeConfig(home, { projects: [] });
