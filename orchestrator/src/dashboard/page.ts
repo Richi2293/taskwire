@@ -694,10 +694,34 @@ async function switchMode(action, button) {
   refresh(true);
 }
 
-// Someone is typing or waiting for an answer: a refresh would throw that away.
+// Someone is typing, waiting for an answer or choosing in a menu: a refresh would throw that away.
 function busy() {
-  return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '') || Boolean(document.querySelector('#detail button:disabled'));
+  return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '')
+    || Boolean(document.querySelector('#detail button:disabled'))
+    || Boolean(document.querySelector('details.menu[open]'));
 }
+
+// A More menu closes like a menu: a click outside it, choosing an item, Escape or opening another menu.
+function closeMenus(except) {
+  for (const menu of document.querySelectorAll('details.menu[open]')) if (menu !== except) menu.open = false;
+}
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('details.menu') || event.target.closest('details.menu div button')) closeMenus();
+});
+
+document.addEventListener('keydown', (event) => {
+  const menu = document.querySelector('details.menu[open]');
+  if (event.key === 'Escape' && menu) {
+    menu.open = false;
+    menu.querySelector('summary').focus();
+  }
+});
+
+// The toggle event does not bubble, so it is caught on the way down.
+document.addEventListener('toggle', (event) => {
+  if (event.target.matches('details.menu') && event.target.open) closeMenus(event.target);
+}, true);
 
 let timer = null;
 
