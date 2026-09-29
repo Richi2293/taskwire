@@ -70,11 +70,21 @@ For each project, `run-once`:
    - starts a separate verifier agent that checks each acceptance criterion as a person would, keeps checked only what it verified, and marks the task `needs-review` (all verified) or `needs-test` (with steps for the criteria only a person can check);
    - if the verifier finds a problem, sends it to the author once, then runs the tests and the verifier again;
 6. marks the task `needs-review` itself, with a comment, when something could not end well: no mark from the agent, a failed run, tests that still fail, a verifier with no verdict or still finding problems;
-7. appends the run to `runs.jsonl` (task, times, cost of every agent session, tests, verdict, outcome, worktree, log) and keeps the output in `logs/`.
+7. appends the run to `runs.jsonl` (task, times, every agent session with its cost, tests, verdict, outcome, worktree, log) and keeps the whole output in `logs/` (see Diary and logs).
 
 Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
 
 The orchestrator needs a taskwire with `needs` (newer than 0.1.6): set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
+
+## Diary and logs
+
+Everything the orchestrator does is kept in its folder, so a run can be understood afterwards, also by an agent:
+
+- `events.jsonl`: the diary, one JSON event per line, written by `start` (the same events it prints) and by `run-once`. Besides the events of `start`, a run adds `claim` (a task taken), `agent` (an agent session ended: `role` author, nudge, fix-tests, fix-findings, verifier or analysis, `agent`, `sessionId`, `ok`, `costUsd`, `durationMs`), `tests` (command, result, exit code) and `marked` (the orchestrator marked the task for a person, with the reason);
+- `runs.jsonl` and `analyses.jsonl`: one line per run or analysis, with its `sessions` and the path of its `log`;
+- `logs/`: the whole output of every agent session of a run, each under a heading with its role, agent and session. With Claude Code it is the `stream-json` output, which holds every step of the session.
+
+The fields of the diary and of the records do not depend on the agent CLI; only the content of `logs/` does. Logs and events older than 30 days are removed at every start.
 
 ## Permissions and sandbox
 

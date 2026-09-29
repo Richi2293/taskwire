@@ -17,6 +17,7 @@ import { discoverProjects, followProject, projectSearchRoots, unfollowProject } 
 import type { RunCommand } from './commands.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
+import { appendEvent, pruneOld } from './journal.ts';
 import { MAX_TASKWIRE_CALLS, limitCalls } from './limit.ts';
 import { pickTask } from './picker.ts';
 import { runLoop } from './scheduler.ts';
@@ -77,8 +78,12 @@ const COMMANDS: Record<string, CommandSpec> = {
   start: { options: {}, run: start },
 };
 
+// Events go to the terminal and to the diary, so they are kept whoever started the orchestrator.
 function logTo(deps: CliDeps): (event: Record<string, unknown>) => void {
-  return (event) => deps.stdout.write(`${JSON.stringify(event)}\n`);
+  return (event) => {
+    deps.stdout.write(`${JSON.stringify(event)}\n`);
+    appendEvent(deps.home, event);
+  };
 }
 
 // Starts paused: agents take tasks only after play on the dashboard.
@@ -138,7 +143,9 @@ async function openDashboard(
 
 async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
   const { projects, taskwireCommand } = loadConfig(deps.home);
-  const cycleDeps = { ...deps, taskwireCommand };
+  pruneOld(deps.home, deps.now());
+  // stdout holds the result of run-once, so its events go only to the diary.
+  const cycleDeps = { ...deps, taskwireCommand, log: (event: Record<string, unknown>) => appendEvent(deps.home, event) };
   await closeInterruptedClaims(cycleDeps);
   const results: CycleResult[] = [];
   for (const project of projects.filter(agentsOn)) results.push(await runCycle(cycleDeps, project));

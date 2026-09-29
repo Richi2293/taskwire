@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProjectEntry } from '../src/config.ts';
 import type { CycleResult } from '../src/cycle.ts';
@@ -166,6 +166,9 @@ test('the start command prints one JSON event per line and stops when asked', as
   assert.equal(run.code, 0, run.stderr);
   const events = run.stdout.trim().split('\n').map((line) => (JSON.parse(line) as { event: string }).event);
   assert.deepEqual(events, ['dashboard', 'start', 'stop']);
+  // The same events go to the diary, whoever started the orchestrator.
+  const diary = readFileSync(join(home, 'events.jsonl'), 'utf8').trim().split('\n').map((line) => (JSON.parse(line) as { event: string }).event);
+  assert.deepEqual(diary, ['dashboard', 'start', 'stop']);
 });
 
 test('with a run control, no agent starts until play, and pause stops new work', async () => {
