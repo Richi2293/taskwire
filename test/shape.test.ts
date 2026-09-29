@@ -12,6 +12,10 @@ test('toTask keeps only the useful fields, with the due date in the system time 
     assignees: [{ id: 7, username: 'jane', email: 'x@y.z' }],
     due_date: '1767225600000',
     parent: 'p1',
+    dependencies: [
+      { task_id: 't1', depends_on: 'b1' },
+      { task_id: 'x9', depends_on: 't1' },
+    ],
   }));
   assert.deepEqual(summary, {
     id: 't1',
@@ -24,6 +28,7 @@ test('toTask keeps only the useful fields, with the due date in the system time 
     due: '2026-01-01T01:00:00+01:00',
     list: { id: '800', name: 'Backlog' },
     parent: 'p1',
+    blockedBy: ['b1'],
     url: 'https://app.clickup.com/t/t1',
     updatedAt: '2026-01-01T00:00:00.000Z',
   });
