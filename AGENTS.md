@@ -25,6 +25,13 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 - `orchestrator/` holds an experimental, unpublished package (`taskwire-orchestrator`) that lets agents work on the tasks of several projects. It is not part of the taskwire npm package.
 - It talks to taskwire only through the CLI and its JSON output, never by importing `src/`, so every taskwire check applies to it. When it needs something taskwire lacks, add it to the CLI.
 - The tech constraints below apply to it too. Its tests live in `orchestrator/test/` and never run a real taskwire or a real agent.
+- `orchestrator/README.md` explains how it works: the pass on a task, the project analysis, areas and groups, the dashboard, the config and the files it keeps. Read it before changing the orchestrator.
+- To understand what happened in a real run (when the user tested something, or an agent did something unexpected), read the files in its folder, `~/.config/taskwire-orchestrator` (or `TASKWIRE_ORCHESTRATOR_HOME`), before asking the user. They are local to the user's Mac, never in the repo:
+  1. `events.jsonl`, the diary: what the orchestrator did and when, one event per line. Filter it by `task` or `project`;
+  2. `runs.jsonl` and `analyses.jsonl`: one line per run or analysis, with its sessions, outcome and the path of its `log`;
+  3. that log in `logs/`: the whole output of every agent session of the run, under a heading with its role;
+  4. `config.json` for the projects followed, and `claims.json` for the work in progress right now.
+- These files hold real project data: quote from them only what is needed, and never copy them into the repo, a task or a pull request.
 
 ## Tech constraints
 
