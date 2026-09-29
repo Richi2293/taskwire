@@ -66,6 +66,15 @@ test('each project says what waits for the person, which agent works and how man
   ]);
 });
 
+test('a project with agents off still shows what waits for the person, but its tasks do not start first', async () => {
+  const { snapshot, home, shop, website } = setup();
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: shop, agents: false }, { path: website }] }));
+  const state = await snapshot();
+  assert.deepEqual(state.projects.map((p) => [p.projectName, p.agents]), [['shop', false], ['website', true]]);
+  assert.deepEqual(state.waiting.map((item) => item.id), ['d1', 'r1']);
+  assert.equal(state.control.firstTask, null);
+});
+
 test('a waiting task carries its goal, how long it has waited and the sections of its last comment', async () => {
   const { snapshot } = setup();
   const { waiting } = await snapshot();

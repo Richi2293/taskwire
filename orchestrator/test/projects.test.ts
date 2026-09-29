@@ -92,6 +92,17 @@ test('next shows the task each project would work on, without writing anything',
   assert.deepEqual(rows.map((row) => [row.project, row.task?.id ?? null]), [[website, 'b'], [shop, 'a']]);
 });
 
+test('next leaves out the task of a project with agents off, without reading it', async () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website }, { path: shop, agents: false }] }));
+  const taskwire = fakeTaskwire({ tasks: [task({ id: 'a' })] });
+  const run = await runOrchestrator(['next'], { home, taskwire: taskwire.run });
+  assert.deepEqual(taskwire.calls, [{ args: ['tasks'], cwd: website }]);
+  assert.deepEqual(run.json(), [{ project: website, agents: true, task: task({ id: 'a' }) }, { project: shop, agents: false, task: null }]);
+});
+
 test('an unknown command exits 2', async () => {
   const run = await runOrchestrator(['fly']);
   assert.equal(run.code, 2);

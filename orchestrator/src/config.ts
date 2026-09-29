@@ -18,6 +18,8 @@ export interface ProjectEntry {
   sandbox?: boolean;
   // Extra domains the sandboxed agent may reach, besides the task system API.
   allowedDomains?: string[];
+  // False keeps agents away from the project while it stays followed; defaults to true.
+  agents?: boolean;
 }
 
 export interface OrchestratorConfig {
@@ -88,6 +90,11 @@ function parseConfig(data: unknown, path: string): OrchestratorConfig {
   return config;
 }
 
+// Whether agents may take tasks of the project: a followed project has them on unless its entry says otherwise.
+export function agentsOn(project: ProjectEntry): boolean {
+  return project.agents !== false;
+}
+
 function positive(value: unknown, what: string, invalid: (reason: string) => Error, whole: boolean): number {
   if (typeof value !== 'number' || value <= 0 || (whole && !Number.isInteger(value))) {
     throw invalid(`${what} must be a ${whole ? 'whole ' : ''}number greater than 0`);
@@ -97,7 +104,7 @@ function positive(value: unknown, what: string, invalid: (reason: string) => Err
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag, workStatus, sandbox, allowedDomains } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, sandbox, allowedDomains, agents } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
@@ -106,6 +113,10 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
   if (sandbox !== undefined) {
     if (typeof sandbox !== 'boolean') throw invalid(`"sandbox" of ${path} must be true or false`);
     project.sandbox = sandbox;
+  }
+  if (agents !== undefined) {
+    if (typeof agents !== 'boolean') throw invalid(`"agents" of ${path} must be true or false`);
+    project.agents = agents;
   }
   if (allowedDomains !== undefined) {
     if (!Array.isArray(allowedDomains)) throw invalid(`"allowedDomains" of ${path} must be an array`);

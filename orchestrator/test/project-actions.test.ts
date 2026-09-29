@@ -31,6 +31,16 @@ test('follow adds the project with its test command, and unfollow removes it', a
   assert.deepEqual(changed, [shop]);
 });
 
+test('agents-off and agents-on switch the agents of a followed project', async () => {
+  const { act, projects } = setup();
+  const shop = projectDir('shop');
+  await act({ action: 'follow', project: shop });
+  await act({ action: 'agents-off', project: shop });
+  assert.deepEqual(projects(), [{ path: shop, agents: false }]);
+  await act({ action: 'agents-on', project: shop });
+  assert.deepEqual(projects(), [{ path: shop }]);
+});
+
 test('an empty test command from the page means no test command', async () => {
   const { act, projects } = setup();
   const shop = projectDir('shop');

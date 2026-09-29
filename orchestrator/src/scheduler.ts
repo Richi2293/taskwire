@@ -1,4 +1,4 @@
-import { DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, loadConfig } from './config.ts';
+import { DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, agentsOn, loadConfig } from './config.ts';
 import type { OrchestratorConfig, ProjectEntry } from './config.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleDeps, CycleResult } from './cycle.ts';
@@ -42,9 +42,9 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     const intervalMs = (config.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES) * 60_000;
     const maxAgents = config.maxAgents ?? DEFAULT_MAX_AGENTS;
     const cycleDeps: CycleDeps = { ...deps, taskwireCommand: config.taskwireCommand };
-    // While paused nothing new starts; agents already at work finish their task.
+    // While paused, or on a project with agents off, nothing new starts; agents already at work finish their task.
     const working = deps.control === undefined || deps.control.working();
-    const projects = working ? config.projects : [];
+    const projects = working ? config.projects.filter(agentsOn) : [];
     const first = turn;
     for (let offset = 0; offset < projects.length && running.size < maxAgents; offset++) {
       const index = (first + offset) % projects.length;
