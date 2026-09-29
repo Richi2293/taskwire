@@ -95,3 +95,43 @@ test('a project that cannot be read shows its error in its own row', async () =>
   assert.equal(state.projects[0].error, 'No ClickUp token found');
   assert.equal(state.control.firstTask, null);
 });
+
+test('each project tells its last analysis, and whether one is due before its next task', async () => {
+  const { snapshot, home, shop, website } = setup();
+  const analysis = { project: website, startedAt: new Date(NOW - 20 * 60_000).toISOString(), finishedAt: new Date(NOW - 15 * 60_000).toISOString(), ok: true, summary: 'Due task vaghi segnati.', costUsd: 0.5, durationMs: 1, log: '/l' };
+  writeFileSync(join(home, 'analyses.jsonl'), `${JSON.stringify(analysis)}\n`);
+  const { projects } = await snapshot();
+  assert.deepEqual(projects.map((p) => [p.projectName, p.analysis, p.analysisDue]), [
+    ['shop', null, true],
+    ['website', { at: analysis.finishedAt, ok: true, summary: 'Due task vaghi segnati.' }, false],
+  ]);
+  assert.ok(shop);
+});
+
+test('an analysis at work shows as the agent at work on its project', async () => {
+  const { snapshot, home, shop } = setup();
+  writeFileSync(join(home, 'claims.json'), JSON.stringify({ [`analysis:${shop}`]: { project: shop, name: 'Project analysis', worktree: '/wt', startedAt: new Date(NOW - 60_000).toISOString(), kind: 'analysis' } }));
+  const { projects, control } = await snapshot();
+  assert.equal(projects[0].working?.name, 'Project analysis');
+  assert.equal(projects[0].working?.kind, 'analysis');
+  assert.equal(control.agentsAtWork, 1);
+});
+
+test('a waiting task carries why the analysis proposed it and why it is ready to close', async () => {
+  const home = tempDir('home');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: shop }] }));
+  const comments: Record<string, string> = {
+    p1: '> **Stato:** proposto.\n\n---\n\n### Proposed task\n\nMancano i test dei pagamenti.',
+    c1: '> **Fatto:** verificato.\n\n---\n\n### Ready to close\n\nPR #12 mergiata.',
+  };
+  const runTaskwire = async (args: string[]) => {
+    if (args[0] === 'tasks') return [task({ id: 'p1', needs: 'decision', tags: ['no-agent'] }), task({ id: 'c1', needs: 'review', status: 'qa' })];
+    return { ...task(), description: '', comments: [{ id: 'x', author: 'jane', date: null, text: comments[args[2]] }] };
+  };
+  const { waiting } = await reader({ home, runTaskwire, now: () => NOW })();
+  assert.deepEqual(waiting.map((item) => [item.id, item.proposedTask, item.readyToClose]), [
+    ['p1', 'Mancano i test dei pagamenti.', null],
+    ['c1', null, 'PR #12 mergiata.'],
+  ]);
+});

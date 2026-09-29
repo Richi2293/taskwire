@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, agentsOn, loadConfig } from '../config.ts';
+import { analysisDue, lastAnalysis } from '../analysis.ts';
+import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, agentsOn, loadConfig } from '../config.ts';
 import { pickTask } from '../picker.ts';
 import { readClaims, readRuns } from '../state.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
@@ -27,6 +28,8 @@ export interface WaitingItem {
   proposal: string | null;
   checked: string[];
   byHand: string[];
+  proposedTask: string | null;
+  readyToClose: string | null;
 }
 
 export interface WorkingItem {
@@ -35,6 +38,8 @@ export interface WorkingItem {
   task: string;
   name: string;
   startedAt: string;
+  // Set when the agent analyses the project instead of working on a task.
+  kind?: 'analysis';
 }
 
 export interface HistoryItem {
@@ -66,6 +71,10 @@ export interface ProjectSummary {
   reading: boolean;
   // False when agents are off for the project: it stays followed, and what waits for the person still shows.
   agents: boolean;
+  // The last analysis of the project, when it ended and what the agent said; null before the first one.
+  analysis: { at: string; ok: boolean; summary: string } | null;
+  // True when an analysis runs before the next task of the project, once agents work.
+  analysisDue: boolean;
 }
 
 export interface ControlInfo {
@@ -209,6 +218,7 @@ export function createStore(deps: StoreDeps): Store {
       task,
       name: claim.name,
       startedAt: claim.startedAt,
+      ...(claim.kind === undefined ? {} : { kind: claim.kind }),
     }));
     const history = readRuns(deps.home, HISTORY_LIMIT).map((run) => ({
       project: run.project,
@@ -243,7 +253,11 @@ export function createStore(deps: StoreDeps): Store {
         readAt: known.readAt,
         reading: reading.has(project.path),
         agents: agentsOn(project),
+        analysis: null,
+        analysisDue: agentsOn(project) && analysisDue(deps.home, project.path, deps.now(), config.analysisHours ?? DEFAULT_ANALYSIS_HOURS),
       };
+      const analysis = lastAnalysis(deps.home, project.path);
+      if (analysis !== null) summary.analysis = { at: analysis.finishedAt, ok: analysis.ok, summary: analysis.summary };
       projects.push(summary);
       for (const task of known.tasks) {
         if (task.needs === null) continue;

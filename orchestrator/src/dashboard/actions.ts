@@ -1,8 +1,9 @@
 import { DEFAULT_BLOCK_TAG, loadConfig } from '../config.ts';
+import type { ProjectEntry } from '../config.ts';
 import { usageError } from '../errors.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 
-export const ACTIONS = ['answer', 'accept-proposal', 'approve', 'send-back', 'block'] as const;
+export const ACTIONS = ['answer', 'accept-proposal', 'approve', 'send-back', 'block', 'accept-task', 'reject-task', 'close'] as const;
 export type ActionName = (typeof ACTIONS)[number];
 
 export interface ActionRequest {
@@ -26,6 +27,10 @@ const FITS: Record<ActionName, readonly string[]> = {
   approve: ['test', 'review'],
   'send-back': ['test', 'review'],
   block: ['decision', 'test', 'review'],
+  // A task the project analysis proposed waits for a decision; one it found ready to close waits for a review.
+  'accept-task': ['decision'],
+  'reject-task': ['decision'],
+  close: ['review'],
 };
 
 const MAX_TEXT = 10_000;
@@ -65,12 +70,31 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
     } else if (request.action === 'send-back') {
       await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\n${text}`]);
       await run(['task', 'update', task.id, '--needs', 'none', '--status', project.startStatuses?.[0] ?? SEND_BACK_STATUS]);
+    } else if (request.action === 'accept-task') {
+      await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\nAccepted: agents may work on this task.`]);
+      await run(['task', 'update', task.id, '--needs', 'none', '--remove-tag', project.blockTag ?? DEFAULT_BLOCK_TAG]);
+    } else if (request.action === 'reject-task' || request.action === 'close') {
+      const status = await closedStatus(project, task, run);
+      const why = request.action === 'close' ? 'Closed: the work is done.' : 'Rejected: this task is not needed.';
+      await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\n${why}`]);
+      await run(['task', 'update', task.id, '--needs', 'none', '--status', status]);
     } else {
       await run(['task', 'update', task.id, '--add-tag', project.blockTag ?? DEFAULT_BLOCK_TAG]);
     }
     // Every action but block clears the mark: the task no longer waits for the person.
     deps.onChange(project.path, request.action === 'block' ? undefined : task.id);
   };
+}
+
+// The project may name it; otherwise it is the last status of the task's list, where ClickUp keeps the closed one.
+async function closedStatus(project: ProjectEntry, task: TaskSummary, run: (args: string[]) => Promise<unknown>): Promise<string> {
+  if (project.closedStatus !== undefined) return project.closedStatus;
+  const lists = (await run(['lists'])) as { id: string; statuses?: string[] }[];
+  const status = lists.find((list) => list.id === task.list?.id)?.statuses?.at(-1);
+  if (status === undefined) {
+    throw usageError(`The closed status of task ${task.id} is unknown`, `Set "closedStatus" for ${project.path} in the orchestrator config`);
+  }
+  return status;
 }
 
 function parseRequest(body: unknown): ActionRequest {

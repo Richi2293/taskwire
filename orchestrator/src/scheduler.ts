@@ -1,4 +1,6 @@
-import { DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, agentsOn, loadConfig } from './config.ts';
+import { analysisDue, runAnalysis } from './analysis.ts';
+import type { AnalysisRecord } from './analysis.ts';
+import { DEFAULT_ANALYSIS_HOURS, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, agentsOn, loadConfig } from './config.ts';
 import type { OrchestratorConfig, ProjectEntry } from './config.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleDeps, CycleResult } from './cycle.ts';
@@ -12,6 +14,8 @@ export interface LoopDeps extends CycleDeps {
   stopped: () => boolean;
   // The work on one project; replaced in tests.
   cycle?: (deps: CycleDeps, project: ProjectEntry) => Promise<CycleResult>;
+  // The analysis of one project; replaced in tests.
+  analyze?: (deps: CycleDeps, project: ProjectEntry) => Promise<AnalysisRecord>;
   // Play and pause from the dashboard; without it the loop always works.
   control?: RunControl;
   // Told before each wait: when the loop looks for new tasks next, or null while paused.
@@ -21,6 +25,7 @@ export interface LoopDeps extends CycleDeps {
 // Runs cycles until stopped: at most maxAgents at once, one per project, taking projects in turn.
 export async function runLoop(deps: LoopDeps): Promise<void> {
   const cycle = deps.cycle ?? runCycle;
+  const analyze = deps.analyze ?? runAnalysis;
   const at = () => new Date(deps.now()).toISOString();
   deps.log({ event: 'start', at: at() });
   for (const taskId of await closeInterruptedClaims(deps)) deps.log({ event: 'interrupted', at: at(), task: taskId });
@@ -41,6 +46,7 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     }
     const intervalMs = (config.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES) * 60_000;
     const maxAgents = config.maxAgents ?? DEFAULT_MAX_AGENTS;
+    const analysisHours = config.analysisHours ?? DEFAULT_ANALYSIS_HOURS;
     const cycleDeps: CycleDeps = { ...deps, taskwireCommand: config.taskwireCommand };
     // While paused, or on a project with agents off, nothing new starts; agents already at work finish their task.
     const working = deps.control === undefined || deps.control.working();
@@ -51,13 +57,23 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
       const project = projects[index];
       if (running.has(project.path)) continue;
       turn = index + 1;
-      const work = cycle(cycleDeps, project)
+      const logError = (error: unknown) => {
+        deps.log({ event: 'error', at: at(), project: project.path, error: error instanceof Error ? error.message : String(error) });
+      };
+      // A due analysis comes first, in the same slot, so the task picked next reflects it. A failed analysis does not stop the task.
+      const analysis = analysisDue(deps.home, project.path, deps.now(), analysisHours)
+        ? analyze(cycleDeps, project)
+          .then((record) => {
+            deps.log({ event: 'analysis', at: at(), project: project.path, ok: record.ok, summary: record.summary, costUsd: record.costUsd });
+          })
+          .catch(logError)
+        : Promise.resolve();
+      const work = analysis
+        .then(() => cycle(cycleDeps, project))
         .then((result) => {
           if (result.task !== null) deps.log({ event: 'run', at: at(), project: project.path, ...result.task });
         })
-        .catch((error: unknown) => {
-          deps.log({ event: 'error', at: at(), project: project.path, error: error instanceof Error ? error.message : String(error) });
-        })
+        .catch(logError)
         .finally(() => running.delete(project.path));
       running.set(project.path, work);
     }

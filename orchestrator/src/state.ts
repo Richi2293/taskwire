@@ -8,6 +8,8 @@ export interface Claim {
   name: string;
   worktree: string;
   startedAt: string;
+  // An analysis of the project, not a task: keyed "analysis:<project>" and never marked for a person.
+  kind?: 'analysis';
 }
 
 // One agent run, appended to runs.jsonl: the history the dashboard shows.

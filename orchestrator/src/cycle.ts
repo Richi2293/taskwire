@@ -123,6 +123,12 @@ export async function closeInterruptedClaims(deps: CycleDeps): Promise<string[]>
   const claims = readClaims(deps.home);
   const closed: string[] = [];
   for (const [taskId, claim] of Object.entries(claims)) {
+    // An analysis cut short changed no task of its own: it runs again at the next start.
+    if (claim.kind === 'analysis') {
+      delete claims[taskId];
+      writeClaims(deps.home, claims);
+      continue;
+    }
     await markForReview(deps, claim.project, taskId, `the orchestrator was interrupted while an agent worked on it (started ${claim.startedAt}).`, claim.worktree);
     delete claims[taskId];
     writeClaims(deps.home, claims);
@@ -145,7 +151,7 @@ async function readTask(deps: CycleDeps, project: string, taskId: string): Promi
 }
 
 // The agent runs "taskwire" from its PATH: a link in the orchestrator's bin folder makes it the configured one.
-function agentEnv(home: string, taskwireCommand: string | undefined): Record<string, string> {
+export function agentEnv(home: string, taskwireCommand: string | undefined): Record<string, string> {
   if (taskwireCommand === undefined) return {};
   const bin = join(home, 'bin');
   const link = join(bin, 'taskwire');
@@ -156,11 +162,11 @@ function agentEnv(home: string, taskwireCommand: string | undefined): Record<str
   return { PATH: `${bin}:${process.env.PATH ?? ''}` };
 }
 
-function logPath(home: string, taskId: string, startedAt: string): string {
+export function logPath(home: string, taskId: string, startedAt: string): string {
   return join(home, 'logs', `${taskId}-${startedAt.replace(/[:.]/g, '-')}.log`);
 }
 
-function writeLog(path: string, outputs: string[], failure: string | null): void {
+export function writeLog(path: string, outputs: string[], failure: string | null): void {
   mkdirSync(join(path, '..'), { recursive: true });
   writeFileSync(path, `${outputs.join('\n\n')}${failure === null ? '' : `\n\n[failure]\n${failure}`}\n`);
 }
