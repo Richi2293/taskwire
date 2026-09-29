@@ -613,7 +613,8 @@ function renderProjectFilters(state) {
   const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review;
   const shown = state.projects.filter((p) => count(p) > 0 || ui.projects.has(p.project));
   const box = document.getElementById('project-filters');
-  box.hidden = shown.length < 2 && ui.projects.size === 0;
+  // With a single project followed there is nothing to choose.
+  box.hidden = state.projects.length < 2;
   box.replaceChildren(
     el('button', { type: 'button', 'aria-pressed': String(ui.projects.size === 0), onclick: () => toggleProject(null) }, 'All projects'),
     ...shown.map((p) => el('button', { type: 'button', 'aria-pressed': String(ui.projects.has(p.project)), onclick: () => toggleProject(p.project) },
