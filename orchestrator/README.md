@@ -43,7 +43,7 @@ Each task waiting for you has its actions, all done through taskwire:
 
 Following and removing a project also need the token of the page, and so does the search, since it lists folders of the Mac. Each one is logged as an `action` event (`follow` or `unfollow`), without the test command. When agents are working, a project added from the dashboard or with `add` joins at the next check.
 
-Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type.
+Your comments start with "Answer from the person, via the dashboard:", since they come from the same account as the agents. Before any action the dashboard reads the task again and refuses the action if the task no longer waits for that. The page does not refresh while you type or a More menu is open. A More menu closes with a click outside it, with Escape or when another one opens.
 
 The page never waits for the task system: it always shows the last data read, and reads again in the background. To stay well under the rate limit of the free ClickUp plan (100 requests a minute):
 

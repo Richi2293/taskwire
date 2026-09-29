@@ -48,6 +48,17 @@ test('an element with the hidden attribute stays hidden, even when its class set
   assert.match(response.body, /\[hidden\] \{ display: none !important; \}/);
 });
 
+test('a More menu closes like a menu, and a refresh never closes it under the pointer', async () => {
+  const response = await get('/');
+  // A click outside, Escape or opening another menu closes it; choosing an item closes it too.
+  assert.match(response.body, /function closeMenus\(/);
+  assert.match(response.body, /document\.addEventListener\('click'/);
+  assert.match(response.body, /event\.key === 'Escape'/);
+  assert.match(response.body, /addEventListener\('toggle'/);
+  // The page does not refresh while a menu is open.
+  assert.match(response.body, /document\.querySelector\('details\.menu\[open\]'\)/);
+});
+
 test('task text from the task system is never turned into HTML', async () => {
   const response = await get('/');
   assert.ok(!response.body.includes('<img src=x'), 'the embedded state escapes "<"');
