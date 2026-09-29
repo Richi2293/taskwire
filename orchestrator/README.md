@@ -40,7 +40,7 @@ Each task waiting for you has its actions, all done through taskwire:
 - **It works** (a test by hand) or **Approve** (a review): clears the mark; merging and closing the task stay with you;
 - **Something is wrong** or **Request changes**: adds what the agent should fix as a comment, clears the mark and moves the task back to a start status; the agent continues in the same worktree and branch;
 - **Keep agents away from this task**, under More: adds the block tag (`no-agent`);
-- **Accept the task** (a task proposed by the analysis): clears the mark and removes the block tag, so an agent may take it; **Reject** closes it;
+- **Accept the task** (a task proposed by the analysis): clears the mark and removes the block tag, so an agent may take it; **Reject** closes it; both keep the tag `agent-proposed`;
 - **Close the task** (a task the analysis found ready to close): moves it to the closed status of its list (`closedStatus` to choose another).
 
 Following and removing a project also need the token of the page, and so does the search, since it lists folders of the Mac. Each one is logged as an `action` event (`follow` or `unfollow`), without the test command. When agents are working, a project added from the dashboard or with `add` joins at the next check.
@@ -93,8 +93,10 @@ In `start`, while agents work, an agent analyses each project with agents on: th
 1. reads the project (README, AGENTS.md, recent history, tests);
 2. reviews the tasks an agent could take next: one that is too vague, too big or already done gets `needs decision`, with its questions and proposal;
 3. checks up to 5 tasks that wait for a test or a review, as a person would: when every criterion is verified and the work is where the project wants it (for example merged), it marks the task `needs review` with a `### Ready to close` section, and the dashboard offers **Close the task**; it never closes a task itself;
-4. proposes at most 5 new tasks, only when they are clearly worth it and few tasks are ready: each gets the block tag, `needs decision` and a `### Proposed task` section, so no agent takes it until you accept it;
+4. proposes at most 5 new tasks, only when they are clearly worth it and few tasks are ready: each gets the block tag, `needs decision` and a `### Proposed task` section, so no agent takes it until you accept it, and the tag `agent-proposed`, which stays after you accept or reject it, so the proposals can be found in the task system;
 5. ends with a short summary for you, shown in the project row.
+
+Every comment of the analysis has a "Source" line in its details (automatic analysis by the orchestrator, with the date), in the project language.
 
 Each analysis is appended to `analyses.jsonl` (times, outcome, summary, cost, log), and a failed one is tried again only after `analysisHours`. `run-once` makes no analysis.
 

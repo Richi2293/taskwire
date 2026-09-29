@@ -104,6 +104,10 @@ test('the analysis prompt names the block tag, the statuses and the limits', () 
   assert.match(prompt, /doing/);
   assert.match(prompt, /at most 5 new tasks/);
   assert.match(prompt, /### Proposed task/);
+  // The proposed tasks and the comments of the analysis can be told apart in the task system.
+  assert.match(prompt, /--tag manual --tag agent-proposed --needs decision/);
+  assert.match(prompt, /never remove the tag `agent-proposed`/i);
+  assert.match(prompt, /\*\*Source:\*\* automatic analysis by the orchestrator, <today's date>/);
   assert.match(prompt, /### Ready to close/);
   assert.match(prompt, /Never write code.*move a task to a closed status/);
   const defaults = analysisPrompt({ path: '/p/shop' });
