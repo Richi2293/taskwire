@@ -15,6 +15,8 @@ export interface TaskSummary {
   due: string | null;
   list: { id: string; name: string };
   parent: string | null;
+  // The tasks this one waits for (ClickUp dependencies), open or closed.
+  blockedBy: string[];
   url: string;
   updatedAt: string | null;
 }
@@ -59,6 +61,7 @@ export function toTask(raw: RawTask, needsTags: NeedsTags = DEFAULT_NEEDS_TAGS):
     due: msToLocalIso(raw.due_date),
     list: { id: raw.list.id, name: raw.list.name },
     parent: raw.parent,
+    blockedBy: (raw.dependencies ?? []).filter((d) => d.task_id === raw.id).map((d) => d.depends_on),
     url: raw.url,
     updatedAt: msToIso(raw.date_updated),
   };
