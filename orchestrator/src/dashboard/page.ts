@@ -69,6 +69,7 @@ export function renderPage(state: DashboardState, token: string): string {
         <h2 id="queue-title">Waiting for you</h2>
         <span id="queue-count" class="count"></span>
       </div>
+      <div id="project-filters" class="filters projects-filter" role="group" aria-label="Projects" hidden></div>
       <div id="filters" class="filters" role="group" aria-label="Show"></div>
       <div id="queue" class="panel queue-list"></div>
     </section>
@@ -192,6 +193,9 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .filters button { border: 1px solid transparent; background: none; border-radius: 6px; padding: 5px 12px; font-size: 13px; color: var(--muted); }
 .filters button[aria-pressed="true"] { background: var(--raised); border-color: var(--line-strong); color: var(--ink); font-weight: 600; }
 .filters small { font-family: var(--mono); margin-left: 6px; color: var(--muted); }
+.projects-filter { display: flex; width: fit-content; max-width: 100%; margin-bottom: 8px; }
+button.chip { border: 0; cursor: pointer; }
+button.chip:hover { text-decoration: underline; text-underline-offset: 3px; }
 .queue-list { overflow: hidden; padding-bottom: 6px; }
 .group { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; font-size: 12px; font-weight: 600; }
 .group i { width: 8px; height: 8px; border-radius: 2px; }
@@ -297,7 +301,27 @@ const DONE = {
   block: 'Agents will keep away from this task.',
 };
 
-const ui = { state: null, selected: null, filter: 'all', open: new Set(), details: false };
+// The projects the queue is narrowed to, kept in this browser only: an empty set shows every project.
+const PROJECTS_KEY = 'taskwire-orchestrator.queue-projects';
+
+function savedProjects() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]');
+    return new Set(Array.isArray(saved) ? saved.filter((path) => typeof path === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveProjects() {
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify([...ui.projects]));
+  } catch {
+    // Storage may be blocked: the choice then lasts until the page is reloaded.
+  }
+}
+
+const ui = { state: null, selected: null, filter: 'all', projects: savedProjects(), open: new Set(), details: false };
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -439,7 +463,9 @@ function renderProjects(state) {
   document.getElementById('projects-count').textContent = plural(state.projects.length, 'project') + ' followed';
   const label = { decision: 'to decide', test: 'to try', review: 'to review' };
   const rows = state.projects.map((p) => {
-    const chips = ORDER.filter((k) => p.waiting[k]).map((k) => el('span', { className: 'chip ' + k }, el('b', { text: String(p.waiting[k]) }), label[k]));
+    const chips = ORDER.filter((k) => p.waiting[k]).map((k) => el('button', {
+      type: 'button', className: 'chip ' + k, title: 'Show only these tasks of ' + p.projectName, onclick: () => focusQueue(p.project, k),
+    }, el('b', { text: String(p.waiting[k]) }), label[k]));
     let doing = p.agents ? 'No agent at work' : 'Agents off: no new task starts here';
     if (p.working) doing = 'Agent at work: ' + p.working.name + ', for ' + duration(now - new Date(p.working.startedAt)) + (p.agents ? '' : '. No new task after it');
     // A failed read keeps the last data: the row says why it is not up to date.
@@ -560,17 +586,54 @@ document.getElementById('add-path').onkeydown = (event) => {
   if (event.key === 'Enter') document.getElementById('add-path-follow').click();
 };
 
+// A waiting chip of a project row: the queue shows only that project and that kind.
+function focusQueue(project, kind) {
+  ui.projects = new Set([project]);
+  ui.filter = kind;
+  saveProjects();
+  renderQueue(ui.state);
+  renderDetail(ui.state);
+  document.getElementById('queue-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleProject(project) {
+  if (project === null) ui.projects.clear();
+  else if (ui.projects.has(project)) ui.projects.delete(project);
+  else ui.projects.add(project);
+  saveProjects();
+  renderQueue(ui.state);
+  renderDetail(ui.state);
+}
+
+// One button per project with something waiting, and per project chosen even with nothing left, so a choice never hides.
+function renderProjectFilters(state) {
+  const followed = new Set(state.projects.map((p) => p.project));
+  // A project no longer followed leaves the choice.
+  for (const path of [...ui.projects]) if (!followed.has(path)) ui.projects.delete(path);
+  const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review;
+  const shown = state.projects.filter((p) => count(p) > 0 || ui.projects.has(p.project));
+  const box = document.getElementById('project-filters');
+  box.hidden = shown.length < 2 && ui.projects.size === 0;
+  box.replaceChildren(
+    el('button', { type: 'button', 'aria-pressed': String(ui.projects.size === 0), onclick: () => toggleProject(null) }, 'All projects'),
+    ...shown.map((p) => el('button', { type: 'button', 'aria-pressed': String(ui.projects.has(p.project)), onclick: () => toggleProject(p.project) },
+      p.projectName, el('small', { text: String(count(p)) }))));
+}
+
 function renderQueue(state) {
   const now = new Date(state.generatedAt);
-  const items = state.waiting;
+  renderProjectFilters(state);
+  const items = ui.projects.size ? state.waiting.filter((i) => ui.projects.has(i.project)) : state.waiting;
   document.getElementById('queue-count').textContent = String(items.length);
   const counts = { all: items.length };
   for (const k of ORDER) counts[k] = items.filter((i) => i.needs === k).length;
   document.getElementById('filters').replaceChildren(...['all', ...ORDER].map((f) =>
-    el('button', { type: 'button', 'aria-pressed': String(ui.filter === f), onclick: () => { ui.filter = f; renderQueue(ui.state); } },
+    el('button', { type: 'button', 'aria-pressed': String(ui.filter === f), onclick: () => { ui.filter = f; renderQueue(ui.state); renderDetail(ui.state); } },
       f === 'all' ? 'All' : KIND[f].filter, el('small', { text: String(counts[f]) }))));
 
-  if (!items.find((i) => keyOf(i) === ui.selected)) ui.selected = items.length ? keyOf(items[0]) : null;
+  // The detail always shows a task the queue shows: the first one when the filters hide the task selected.
+  const visible = ui.filter === 'all' ? items : items.filter((i) => i.needs === ui.filter);
+  if (!visible.find((i) => keyOf(i) === ui.selected)) ui.selected = visible.length ? keyOf(visible[0]) : null;
   const kinds = ui.filter === 'all' ? ORDER : [ui.filter];
   const blocks = [];
   for (const kind of kinds) {
@@ -598,12 +661,18 @@ function renderQueue(state) {
   }
   const list = document.getElementById('queue');
   list.replaceChildren(...blocks);
-  if (!blocks.length) list.replaceChildren(el('p', { className: 'empty', text: items.length ? 'Nothing of this kind waits for you.' : 'Nothing waits for you.' }));
+  let empty = ui.projects.size ? 'Nothing waits for you in the selected projects.' : 'Nothing waits for you.';
+  if (items.length) empty = 'Nothing of this kind waits for you' + (ui.projects.size ? ' in the selected projects.' : '.');
+  if (!blocks.length) list.replaceChildren(el('p', { className: 'empty', text: empty }));
 }
 
 function renderDetail(state) {
   const box = document.getElementById('detail');
   const item = state.waiting.find((i) => keyOf(i) === ui.selected);
+  if (!item && state.waiting.length) {
+    box.replaceChildren(el('p', { className: 'muted', text: 'No task matches the filters. Press All' + (ui.projects.size ? ' projects' : '') + ' to see the others.' }));
+    return;
+  }
   if (!item) {
     box.replaceChildren(el('p', { className: 'muted', text: state.control.mode === 'working'
       ? 'Nothing waits for you. Agents keep working, and new questions or checks show up here.'
