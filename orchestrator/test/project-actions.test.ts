@@ -56,3 +56,15 @@ test('a request with an unknown action, no project or a test command that is not
   await assert.rejects(act({ action: 'follow', project: projectDir(), testCommand: 42 }), refusedWith(/testCommand/));
   await assert.rejects(act('follow'), refusedWith(/JSON object/));
 });
+
+test('place sets the area and the group of a followed project, and empty values remove them', async () => {
+  const { act, projects } = setup();
+  const shop = projectDir('shop');
+  await act({ action: 'follow', project: shop });
+  await act({ action: 'place', project: shop, area: ' FE ', group: 'Shop' });
+  assert.deepEqual(projects(), [{ path: shop, area: 'fe', group: 'Shop' }]);
+  await act({ action: 'place', project: shop, area: '', group: '' });
+  assert.deepEqual(projects(), [{ path: shop }]);
+  await assert.rejects(act({ action: 'place', project: shop, area: 'front end' }), refusedWith(/area/));
+  await assert.rejects(act({ action: 'place', project: shop, group: 'x'.repeat(101) }), refusedWith(/group/));
+});

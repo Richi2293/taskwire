@@ -36,6 +36,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   const task = pickTask(tasks, {
     statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
     blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
+    area: project.area,
   });
   if (task === null) return { project: project.path, task: null };
 
@@ -55,7 +56,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   let failure: string | null = null;
   try {
     await createWorktree(deps.runCommand, project.path, worktree);
-    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task), cwd: worktree }, agentOptions);
+    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task, project), cwd: worktree }, agentOptions);
     outputs.push(agent.output);
     if (!agent.ok) failure = agent.summary;
   } catch (error) {

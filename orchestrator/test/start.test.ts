@@ -257,3 +257,17 @@ test('an analysis cut short is dropped at start, without touching any task', asy
   assert.deepEqual(readClaims(home), {});
   assert.ok(!h.logs.some((log) => log.event === 'interrupted'));
 });
+
+test('two projects of the same group are never analysed at once, so they do not act on the same shared tasks', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { maxAgents: 3, projects: [{ path: '/p/api', group: 'Shop' }, { path: '/p/web', group: 'Shop' }, { path: '/p/blog' }] });
+  const analysedAtTick: string[][] = [];
+  const h = harness(home, 2, (_tick, harnessRef) => {
+    analysedAtTick.push([...harnessRef.analysed]);
+    for (const p of ['/p/api', '/p/web', '/p/blog']) harnessRef.finish(p);
+  });
+  await runLoop(h.deps);
+  // web waits for the analysis of api; blog is in no group and goes on.
+  assert.deepEqual(analysedAtTick[0], ['/p/api', '/p/blog']);
+  assert.deepEqual(h.analysed, ['/p/api', '/p/blog', '/p/web']);
+});

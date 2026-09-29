@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { expandHome, loadConfig, saveConfig } from './config.ts';
+import { expandHome, loadConfig, normalizeArea, saveConfig } from './config.ts';
 import type { OrchestratorConfig, ProjectEntry } from './config.ts';
 import { configError, usageError } from './errors.ts';
 import { readClaims } from './state.ts';
@@ -60,6 +60,32 @@ export function setProjectAgents(home: string, folder: string, on: boolean): voi
   else project.agents = false;
   saveConfig(home, config);
 }
+
+// Sets where a followed project stands among the projects that share its task list: its area tag and its group.
+// An empty value removes the field, so the project takes every task again.
+export function setProjectPlace(home: string, folder: string, place: { area?: string; group?: string }): void {
+  const path = resolve(expandHome(folder));
+  const config = loadConfig(home);
+  const project = config.projects.find((entry) => entry.path === path);
+  if (project === undefined) throw usageError(`${path} is not followed`);
+  if (place.area !== undefined) {
+    if (place.area.trim() === '') delete project.area;
+    else {
+      const area = normalizeArea(place.area);
+      if (area === null) throw usageError('The area must be one word, a tag such as "fe"');
+      project.area = area;
+    }
+  }
+  if (place.group !== undefined) {
+    const group = place.group.trim();
+    if (group.length > MAX_GROUP) throw usageError(`The group must be at most ${MAX_GROUP} characters`);
+    if (group === '') delete project.group;
+    else project.group = group;
+  }
+  saveConfig(home, config);
+}
+
+const MAX_GROUP = 100;
 
 export interface DiscoverOptions {
   roots: string[];

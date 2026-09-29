@@ -135,3 +135,16 @@ test('a waiting task carries why the analysis proposed it and why it is ready to
     ['c1', null, 'PR #12 mergiata.'],
   ]);
 });
+
+test('each project shows its area and group, and projects of a group come together', async () => {
+  const { home, shop, website } = setup();
+  const blog = projectDir('blog');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [
+    { path: website, area: 'fe', group: 'Shop' },
+    { path: blog },
+    { path: shop, area: 'be', group: 'Shop' },
+  ] }));
+  const runTaskwire = async () => [];
+  const { projects } = await reader({ home, runTaskwire, now: () => NOW })();
+  assert.deepEqual(projects.map((p) => [p.projectName, p.area, p.group]), [['website', 'fe', 'Shop'], ['shop', 'be', 'Shop'], ['blog', null, null]]);
+});

@@ -179,6 +179,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .at-work.error { color: var(--problem); }
 .done { font-size: 13px; color: var(--muted); text-align: right; }
 .projects .row.off .name, .projects .row.off .at-work, .projects .row.off .done { opacity: 0.55; }
+.projects .name small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.projects .place-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 260px) auto; gap: 12px; align-items: end; }
+.projects .place-form .main { display: flex; align-items: center; gap: 12px; }
+.projects .place-form .hint { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); }
 .projects .row .analysis { grid-column: 1 / -1; margin: -12px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .projects .row .analysis.error { color: var(--problem); }
 .switch { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
@@ -326,7 +330,7 @@ function saveProjects() {
   }
 }
 
-const ui = { state: null, selected: null, filter: 'all', projects: savedProjects(), open: new Set(), details: false };
+const ui = { state: null, selected: null, filter: 'all', projects: savedProjects(), open: new Set(), details: false, placing: null };
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -491,18 +495,58 @@ function renderProjects(state) {
     let empty = 'Nothing waits for you';
     if (!p.readAt) empty = p.reading ? 'Reading from ClickUp' : 'Not read yet';
     return el('div', { className: p.agents ? 'row' : 'row off' },
-      el('span', { className: 'name' }, p.projectName, p.reading ? el('span', { className: 'spinner', title: 'Updating from ClickUp', 'aria-label': 'Updating from ClickUp' }) : null),
+      el('span', { className: 'name' }, el('span', {}, p.projectName, placeText(p) ? el('small', { text: placeText(p) }) : null), p.reading ? el('span', { className: 'spinner', title: 'Updating from ClickUp', 'aria-label': 'Updating from ClickUp' }) : null),
       el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: empty })),
       work,
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
       agents,
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
-        el('div', {}, el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))),
+        el('div', {},
+          el('button', { type: 'button', text: 'Set area and group', onclick: () => { ui.placing = p.project; renderProjects(ui.state); } }),
+          el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))),
+      ui.placing === p.project ? placeForm(p) : null,
       analysisLine(p, now));
   });
   const box = document.getElementById('projects');
   box.replaceChildren(...rows);
   if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Press Add project to add one.' }));
+}
+
+// The area and the group of a project that shares its task list, for its row.
+function placeText(p) {
+  if (!p.area && !p.group) return '';
+  return (p.area ? 'Area ' + p.area : 'No area') + (p.group ? ', ' + p.group : '');
+}
+
+// Sets the area tag and the group of a project; empty fields remove them.
+function placeForm(p) {
+  const area = el('input', { type: 'text', value: p.area || '', placeholder: 'fe', 'aria-label': 'Area tag', autocomplete: 'off', spellcheck: false });
+  const group = el('input', { type: 'text', value: p.group || '', placeholder: 'Shop', 'aria-label': 'Group', autocomplete: 'off', spellcheck: false });
+  const form = el('div', { className: 'place-form' },
+    el('label', { className: 'field' }, el('span', { className: 'section-label', text: 'Area tag' }), area),
+    el('label', { className: 'field' }, el('span', { className: 'section-label', text: 'Group' }), group),
+    el('div', { className: 'main' },
+      el('button', { type: 'button', className: 'btn primary', text: 'Save', onclick: () => savePlace(p, area.value, group.value, form) }),
+      el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { ui.placing = null; renderProjects(ui.state); } })),
+    el('p', { className: 'hint', text: 'Area: the tag of the tasks of this project, when it shares its task list with other projects, for example fe, be or mobile. Agents here take only tasks with this tag. Group: the product the projects of that list belong to. Leave both empty to take every task.' }));
+  return form;
+}
+
+async function savePlace(p, area, group, form) {
+  const result = document.getElementById('projects-result');
+  for (const control of form.querySelectorAll('button, input')) control.disabled = true;
+  try {
+    await post('/api/projects', { action: 'place', project: p.project, area, group });
+    ui.placing = null;
+    result.className = 'result';
+    result.textContent = '';
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+    for (const control of form.querySelectorAll('button, input')) control.disabled = false;
+    return;
+  }
+  refresh(true);
 }
 
 // What the last analysis of the project found, in the words of its agent.
@@ -844,7 +888,8 @@ async function switchMode(action, button) {
 function busy() {
   return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '')
     || Boolean(document.querySelector('#detail button:disabled'))
-    || Boolean(document.querySelector('details.menu[open]'));
+    || Boolean(document.querySelector('details.menu[open]'))
+    || Boolean(document.querySelector('.place-form'));
 }
 
 // A More menu closes like a menu: a click outside it, choosing an item, Escape or opening another menu.

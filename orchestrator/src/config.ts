@@ -22,6 +22,10 @@ export interface ProjectEntry {
   allowedDomains?: string[];
   // False keeps agents away from the project while it stays followed; defaults to true.
   agents?: boolean;
+  // The tag of the tasks that belong to this project, when it shares its task list with others (for example "fe"). Without it, every task is the project's.
+  area?: string;
+  // The product the project is part of, with the other projects that share its task list (for example the backend and the app).
+  group?: string;
 }
 
 export interface OrchestratorConfig {
@@ -111,13 +115,19 @@ function positive(value: unknown, what: string, invalid: (reason: string) => Err
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents, area, group } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
   if (blockTag !== undefined) project.blockTag = text(blockTag, `"blockTag" of ${path}`, invalid).toLowerCase();
   if (workStatus !== undefined) project.workStatus = text(workStatus, `"workStatus" of ${path}`, invalid);
   if (closedStatus !== undefined) project.closedStatus = text(closedStatus, `"closedStatus" of ${path}`, invalid);
+  if (area !== undefined) {
+    const tag = typeof area === 'string' ? normalizeArea(area) : null;
+    if (tag === null) throw invalid(`"area" of ${path} must be one word, a tag such as "fe"`);
+    project.area = tag;
+  }
+  if (group !== undefined) project.group = text(group, `"group" of ${path}`, invalid);
   if (sandbox !== undefined) {
     if (typeof sandbox !== 'boolean') throw invalid(`"sandbox" of ${path} must be true or false`);
     project.sandbox = sandbox;
@@ -135,6 +145,12 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
     project.startStatuses = startStatuses.map((status: unknown) => text(status, `"startStatuses" of ${path}`, invalid));
   }
   return project;
+}
+
+// An area is a task tag: one word, compared in lower case like every tag. Null when the value cannot be one.
+export function normalizeArea(value: string): string | null {
+  const tag = value.trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9_-]{0,29}$/.test(tag) ? tag : null;
 }
 
 function text(value: unknown, what: string, invalid: (reason: string) => Error): string {
