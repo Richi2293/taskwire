@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configError } from './errors.ts';
+import type { SessionRecord } from './journal.ts';
 
 // A task the orchestrator is working on. Kept on disk, so a run cut short is found at the next start.
 export interface Claim {
@@ -29,6 +30,8 @@ export interface RunRecord {
   tests: 'pass' | 'fail' | null;
   // What the verifier agent concluded, null when it did not run or gave no verdict.
   verdict: 'pass' | 'manual' | 'fail' | null;
+  // Every agent session of the run, in order; missing in runs recorded before the diary.
+  sessions?: SessionRecord[];
   worktree: string;
   log: string;
 }

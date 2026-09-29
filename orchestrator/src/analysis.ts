@@ -6,6 +6,8 @@ import { agentEnv, logPath, writeLog } from './cycle.ts';
 import type { CycleDeps } from './cycle.ts';
 import { loadConfig } from './config.ts';
 import type { ProjectEntry } from './config.ts';
+import { logSection, sessionRecord } from './journal.ts';
+import type { SessionRecord } from './journal.ts';
 import { analysisPrompt } from './prompts.ts';
 import { readClaims, writeClaims } from './state.ts';
 import { createWorktree, worktreePath } from './worktree.ts';
@@ -20,6 +22,8 @@ export interface AnalysisRecord {
   summary: string;
   costUsd: number | null;
   durationMs: number | null;
+  // The agent session, in neutral fields; missing in analyses recorded before the diary.
+  sessions?: SessionRecord[];
   log: string;
 }
 
@@ -66,6 +70,7 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
   const log = logPath(deps.home, `analysis-${basename(project.path)}`, startedAt);
   let agent: AgentResult | null = null;
   let failure: string | null = null;
+  const sessions: SessionRecord[] = [];
   try {
     await freshWorktree(deps, project.path, worktree);
     agent = await runClaude(
@@ -74,6 +79,9 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
       { sandbox: project.sandbox ?? false, allowedDomains: project.allowedDomains ?? [], env: agentEnv(deps.home, deps.taskwireCommand) },
     );
     if (!agent.ok) failure = agent.summary;
+    const session = sessionRecord('analysis', agent);
+    sessions.push(session);
+    deps.log?.({ event: 'agent', at: new Date(deps.now()).toISOString(), project: project.path, ...session });
   } catch (error) {
     failure = error instanceof Error ? error.message : String(error);
   } finally {
@@ -81,7 +89,7 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
     delete claims[key];
     writeClaims(deps.home, claims);
   }
-  writeLog(log, agent === null ? [] : [agent.output], failure);
+  writeLog(log, agent === null ? [] : [logSection(sessions[0] ?? sessionRecord('analysis', agent), agent.output)], failure);
 
   const record: AnalysisRecord = {
     project: project.path,
@@ -91,6 +99,7 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
     summary: failure ?? agent?.summary ?? '',
     costUsd: agent?.costUsd ?? null,
     durationMs: agent?.durationMs ?? null,
+    sessions,
     log,
   };
   mkdirSync(deps.home, { recursive: true });

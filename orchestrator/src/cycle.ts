@@ -6,6 +6,8 @@ import type { RunCommand } from './commands.ts';
 import { DEFAULT_BLOCK_TAG, DEFAULT_START_STATUSES, DEFAULT_WORK_STATUS } from './config.ts';
 import type { ProjectEntry } from './config.ts';
 import { configError } from './errors.ts';
+import { logSection, sessionRecord } from './journal.ts';
+import type { Event, Log, Role, SessionRecord } from './journal.ts';
 import { pickTask } from './picker.ts';
 import { markPrompt, workPrompt } from './prompts.ts';
 import { appendRun, readClaims, writeClaims } from './state.ts';
@@ -22,6 +24,8 @@ export interface CycleDeps {
   now: () => number;
   // The taskwire the orchestrator uses, when it is not the one on the PATH; the agent must use it too.
   taskwireCommand?: string;
+  // The diary of what the orchestrator does; without it nothing is recorded.
+  log?: Log;
 }
 
 export interface CycleResult {
@@ -44,6 +48,16 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   const worktree = worktreePath(deps.home, project.path, task.id);
   await deps.runTaskwire(['task', 'update', task.id, '--status', project.workStatus ?? DEFAULT_WORK_STATUS], project.path);
   writeClaims(deps.home, { ...readClaims(deps.home), [task.id]: { project: project.path, name: task.name, worktree, startedAt } });
+  const note = (event: Event): void => deps.log?.({ ...event, at: new Date(deps.now()).toISOString(), project: project.path, task: task.id });
+  note({ event: 'claim', name: task.name });
+  const sessions: SessionRecord[] = [];
+  const outputs: string[] = [];
+  const track = (role: Role, result: AgentResult): void => {
+    const session = sessionRecord(role, result);
+    sessions.push(session);
+    outputs.push(logSection(session, result.output));
+    note({ event: 'agent', ...session });
+  };
 
   const agentOptions: AgentOptions = {
     sandbox: project.sandbox ?? false,
@@ -51,13 +65,12 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     env: agentEnv(deps.home, deps.taskwireCommand),
   };
   const log = logPath(deps.home, task.id, startedAt);
-  const outputs: string[] = [];
   let agent: AgentResult | null = null;
   let failure: string | null = null;
   try {
     await createWorktree(deps.runCommand, project.path, worktree);
     agent = await runClaude(deps.runCommand, { prompt: workPrompt(task, project), cwd: worktree }, agentOptions);
-    outputs.push(agent.output);
+    track('author', agent);
     if (!agent.ok) failure = agent.summary;
   } catch (error) {
     failure = error instanceof Error ? error.message : String(error);
@@ -67,7 +80,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   let after = await readTask(deps, project.path, task.id);
   if (after.needs === null && failure === null && agent?.sessionId) {
     const nudge = await runClaude(deps.runCommand, { prompt: markPrompt(task), cwd: worktree, resume: agent.sessionId }, agentOptions);
-    outputs.push(nudge.output);
+    track('nudge', nudge);
     costUsd = addCost(costUsd, nudge.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
@@ -80,8 +93,10 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
       testCommand: project.testCommand,
       authorSession: agent?.sessionId ?? null,
       agentOptions,
+      report: note,
     });
     outputs.push(...verification.outputs);
+    sessions.push(...verification.sessions);
     costUsd = addCost(costUsd, verification.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
@@ -109,6 +124,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     summary: problem ?? agent?.summary ?? '',
     tests: verification?.tests ?? null,
     verdict: verification?.verdict ?? null,
+    sessions,
     worktree,
     log,
   };
@@ -141,6 +157,7 @@ export async function closeInterruptedClaims(deps: CycleDeps): Promise<string[]>
 // The orchestrator's own comments are in English: the agent writes in the project language.
 async function markForReview(deps: CycleDeps, project: string, taskId: string, reason: string, worktree: string, log?: string): Promise<void> {
   await deps.runTaskwire(['task', 'update', taskId, '--needs', 'review'], project);
+  deps.log?.({ event: 'marked', at: new Date(deps.now()).toISOString(), project, task: taskId, needs: 'review', reason });
   const logLine = log === undefined ? '' : ` The agent log is \`${log}\`.`;
   const text = `> **Status:** waiting for a person: ${reason}\n> **Next:** check the work in \`${worktree}\`, then clear \`needs\` or move the task.${logLine}`;
   await deps.runTaskwire(['comment', 'add', taskId, '--text', text], project);

@@ -168,3 +168,14 @@ test('the analysis gets the areas of the other projects of its group', async () 
   const agent = commands.calls.find((call) => call.command === 'claude');
   assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: web, area: 'fe', group: 'Shop' }, ['be', 'mobile']));
 });
+
+test('the analysis tells the diary about its agent session, and records it', async () => {
+  const home = tempDir('home');
+  const project = projectDir('shop');
+  const events: Record<string, unknown>[] = [];
+  const commands = fakeCommands({ claude: () => claudeResult({ session_id: 'session-7' }) });
+  const record = await runAnalysis({ home, runTaskwire: fakeTaskwire({}).run, runCommand: commands.run, now: () => NOW, log: (event) => { events.push(event); } }, { path: project });
+  assert.deepEqual(events, [{ event: 'agent', at: new Date(NOW).toISOString(), project, role: 'analysis', agent: 'claude', sessionId: 'session-7', ok: true, costUsd: 0.42, durationMs: 90_000 }]);
+  assert.deepEqual(record.sessions, [{ role: 'analysis', agent: 'claude', sessionId: 'session-7', ok: true, costUsd: 0.42, durationMs: 90_000 }]);
+  assert.match(readFileSync(record.log, 'utf8'), /^=== analysis: claude, session session-7 ===/);
+});

@@ -5,6 +5,7 @@ import type { OrchestratorConfig, ProjectEntry } from './config.ts';
 import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleDeps, CycleResult } from './cycle.ts';
 import type { RunControl } from './control.ts';
+import { pruneOld } from './journal.ts';
 
 export interface LoopDeps extends CycleDeps {
   // One event per line: what the loop did, for the terminal and later the dashboard.
@@ -27,6 +28,7 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
   const cycle = deps.cycle ?? runCycle;
   const analyze = deps.analyze ?? runAnalysis;
   const at = () => new Date(deps.now()).toISOString();
+  pruneOld(deps.home, deps.now());
   deps.log({ event: 'start', at: at() });
   for (const taskId of await closeInterruptedClaims(deps)) deps.log({ event: 'interrupted', at: at(), task: taskId });
 

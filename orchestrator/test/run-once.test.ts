@@ -80,7 +80,8 @@ test('run-once claims the task, runs the agent in a new worktree and records the
   assert.equal(agent.cwd, worktree);
   assert.equal(agent.args[0], '-p');
   assert.match(agent.args[1], /task t1 \(https:\/\/app\.clickup\.com\/t\/t1\)/);
-  assert.deepEqual(agent.args.slice(2), ['--output-format', 'json', '--dangerously-skip-permissions']);
+  // stream-json keeps every step of the agent in the log, not only its final answer.
+  assert.deepEqual(agent.args.slice(2), ['--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']);
 
   const [record] = readFileSync(join(home, 'runs.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
   assert.deepEqual(
@@ -203,4 +204,66 @@ test('run-once on a project with an area works only on a task of that area, and 
   const prompt = claudeCalls(commands.calls)[0].args[claudeCalls(commands.calls)[0].args.indexOf('-p') + 1];
   assert.match(prompt, /the `fe` area of the group "Shop"/);
   assert.match(prompt, /only the `fe` part/);
+});
+
+function events(home: string): Record<string, unknown>[] {
+  return readFileSync(join(home, 'events.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+test('a run writes its steps to the event diary, with neutral fields for each agent session', async () => {
+  const { home, project } = setup({ testCommand: 'npm test' });
+  const taskwire = taskwireFor();
+  let sessions = 0;
+  const commands = fakeCommands({ claude: () => claudeResult({ session_id: `session-${++sessions}` }) });
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  assert.equal(run.code, 0, run.stderr);
+
+  const diary = events(home).map(({ at, ...rest }) => {
+    assert.equal(at, '2026-09-27T10:00:00.000Z');
+    return rest;
+  });
+  assert.deepEqual(diary, [
+    { event: 'claim', project, task: 't1', name: 'Add a discount' },
+    { event: 'agent', project, task: 't1', role: 'author', agent: 'claude', sessionId: 'session-1', ok: true, costUsd: 0.42, durationMs: 90_000 },
+    { event: 'tests', project, task: 't1', command: 'npm test', result: 'pass', exitCode: 0 },
+    { event: 'agent', project, task: 't1', role: 'verifier', agent: 'claude', sessionId: 'session-2', ok: true, costUsd: 0.42, durationMs: 90_000 },
+  ]);
+
+  const [record] = readFileSync(join(home, 'runs.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { sessions: unknown[]; log: string });
+  assert.deepEqual(record.sessions, [
+    { role: 'author', agent: 'claude', sessionId: 'session-1', ok: true, costUsd: 0.42, durationMs: 90_000 },
+    { role: 'verifier', agent: 'claude', sessionId: 'session-2', ok: true, costUsd: 0.42, durationMs: 90_000 },
+  ]);
+  // The log keeps the whole output of each session, under a heading with its role.
+  const log = readFileSync(record.log, 'utf8');
+  assert.match(log, /=== author: claude, session session-1 ===\n\{"type":"result"/);
+  assert.match(log, /=== verifier: claude, session session-2 ===/);
+});
+
+test('when the orchestrator marks a task for review itself, the diary says why', async () => {
+  const { home } = setup();
+  const taskwire = taskwireFor({ ...task({ status: 'in progress' }), needs: null });
+  const commands = fakeCommands({ claude: () => claudeResult() });
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  const marked = events(home).filter((event) => event.event === 'marked');
+  assert.deepEqual(marked.map((event) => [event.task, event.needs, event.reason]), [['t1', 'review', 'the agent stopped without marking the task.']]);
+  assert.deepEqual(events(home).filter((event) => event.event === 'agent').map((event) => event.role), ['author', 'nudge']);
+});
+
+test('the result of the agent is read from the last line of its stream', async () => {
+  const { home } = setup();
+  const taskwire = taskwireFor();
+  const stream = [
+    JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session-9' }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Working.' }] }, session_id: 'session-9' }),
+    'not json at all',
+    JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Done.\nVERDICT: pass', session_id: 'session-9', total_cost_usd: 1.5, duration_ms: 1000 }),
+  ].join('\n');
+  const commands = fakeCommands({ claude: () => ({ stdout: `${stream}\n` }) });
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  assert.equal(run.code, 0, run.stderr);
+  const [record] = readFileSync(join(home, 'runs.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { summary: string; costUsd: number; verdict: string });
+  assert.equal(record.costUsd, 3);
+  assert.equal(record.verdict, 'pass');
+  assert.match(record.summary, /^Done\./);
 });
