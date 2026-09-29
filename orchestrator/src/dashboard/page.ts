@@ -19,10 +19,11 @@ export function renderPage(state: DashboardState, token: string): string {
   <header class="panel control" aria-label="Agents">
     <div class="control-row">
       <div class="control-state">
-        <p class="brand"><strong>taskwire</strong> <span>orchestrator</span></p>
-        <p class="state-line"><span id="state-dot" class="dot"></span><span id="state" class="state"></span><span id="state-hint" class="state-hint"></span></p>
-        <p class="sync" role="status"><span id="sync-spinner" class="spinner" hidden></span><span id="sync-text"></span><button id="refresh" class="link" type="button">Refresh now</button></p>
-        <button id="details-toggle" class="link" type="button" aria-expanded="false" aria-controls="details"></button>
+        <p class="state-line"><span class="brand"><strong>taskwire</strong> <span>orchestrator</span></span><span id="state-dot" class="dot"></span><span id="state" class="state"></span><span id="state-hint" class="state-hint"></span></p>
+        <div class="sub-line">
+          <p class="sync" role="status"><span id="sync-spinner" class="spinner" hidden></span><span id="sync-text"></span><button id="refresh" class="link" type="button">Refresh now</button></p>
+          <button id="details-toggle" class="link" type="button" aria-expanded="false" aria-controls="details"></button>
+        </div>
       </div>
       <button id="switch" type="button"></button>
     </div>
@@ -130,12 +131,13 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 .link:disabled { color: var(--muted); cursor: default; }
 .quiet { background: none; border: 0; padding: 0; color: var(--muted); font-size: 13px; }
 
-.control-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 24px; flex-wrap: wrap; }
-.control-state { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.brand { font-size: 15px; }
+.control-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 12px 20px; flex-wrap: wrap; }
+.control-state { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.brand { font-size: 15px; padding-right: 12px; margin-right: 2px; border-right: 1px solid var(--line-strong); }
 .brand span { color: var(--muted); margin-left: 4px; }
 .state-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.state { font-size: 22px; font-weight: 600; }
+.state { font-size: 17px; font-weight: 600; }
+.sub-line { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
 .state.alive { color: var(--alive); }
 .state-hint { color: var(--muted); }
 .sync { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
@@ -143,7 +145,7 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-color: var(--test); } }
 .projects .name { display: inline-flex; align-items: center; gap: 8px; }
-#switch { padding: 12px 20px; font-size: 15px; }
+#switch { padding: 8px 18px; font-size: 15px; }
 .details { border-top: 1px solid var(--line); padding: 16px 24px 20px; }
 .details-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .details-cols div { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
