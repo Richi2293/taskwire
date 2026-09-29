@@ -14,6 +14,8 @@ export interface ProjectEntry {
   blockTag?: string;
   // Status a task moves to when an agent takes it; defaults to DEFAULT_WORK_STATUS.
   workStatus?: string;
+  // Status the dashboard moves a task to when the person closes it; defaults to the last status of the task's list.
+  closedStatus?: string;
   // Runs agents in the Claude Code sandbox. Safer, but the agent cannot reach the git remote over SSH or use gh.
   sandbox?: boolean;
   // Extra domains the sandboxed agent may reach, besides the task system API.
@@ -29,6 +31,8 @@ export interface OrchestratorConfig {
   maxAgents?: number;
   // Minutes between two looks at the projects in "start"; defaults to DEFAULT_INTERVAL_MINUTES.
   intervalMinutes?: number;
+  // Hours between two analyses of the same project in "start"; defaults to DEFAULT_ANALYSIS_HOURS.
+  analysisHours?: number;
   // Port of the dashboard on 127.0.0.1; defaults to DEFAULT_DASHBOARD_PORT.
   dashboardPort?: number;
   // Folders where the dashboard looks for taskwire projects to add; defaults to the folders of the projects followed.
@@ -41,6 +45,8 @@ export const DEFAULT_BLOCK_TAG = 'no-agent';
 export const DEFAULT_WORK_STATUS = 'in progress';
 export const DEFAULT_MAX_AGENTS = 2;
 export const DEFAULT_INTERVAL_MINUTES = 5;
+// Low on purpose while the analysis is being tried out.
+export const DEFAULT_ANALYSIS_HOURS = 1;
 export const DEFAULT_DASHBOARD_PORT = 4777;
 
 const CONFIG_FILE = 'config.json';
@@ -65,7 +71,7 @@ export function saveConfig(home: string, config: OrchestratorConfig): void {
 function parseConfig(data: unknown, path: string): OrchestratorConfig {
   const invalid = (reason: string) => configError(`${path}: ${reason}`, 'Fix the file, or remove it and add the projects again');
   if (typeof data !== 'object' || data === null || Array.isArray(data)) throw invalid('must contain a JSON object');
-  const { taskwireCommand, maxAgents, intervalMinutes, dashboardPort, projectRoots, projects } = data as Record<string, unknown>;
+  const { taskwireCommand, maxAgents, intervalMinutes, analysisHours, dashboardPort, projectRoots, projects } = data as Record<string, unknown>;
   if (!Array.isArray(projects)) throw invalid('"projects" must be an array');
   const config: OrchestratorConfig = { projects: projects.map((entry: unknown) => parseProject(entry, invalid)) };
   if (taskwireCommand !== undefined) {
@@ -74,6 +80,7 @@ function parseConfig(data: unknown, path: string): OrchestratorConfig {
   }
   if (maxAgents !== undefined) config.maxAgents = positive(maxAgents, '"maxAgents"', invalid, true);
   if (intervalMinutes !== undefined) config.intervalMinutes = positive(intervalMinutes, '"intervalMinutes"', invalid, false);
+  if (analysisHours !== undefined) config.analysisHours = positive(analysisHours, '"analysisHours"', invalid, false);
   if (dashboardPort !== undefined) {
     const port = positive(dashboardPort, '"dashboardPort"', invalid, true);
     if (port > 65535) throw invalid('"dashboardPort" must be a port number, up to 65535');
@@ -104,12 +111,13 @@ function positive(value: unknown, what: string, invalid: (reason: string) => Err
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag, workStatus, sandbox, allowedDomains, agents } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
   if (blockTag !== undefined) project.blockTag = text(blockTag, `"blockTag" of ${path}`, invalid).toLowerCase();
   if (workStatus !== undefined) project.workStatus = text(workStatus, `"workStatus" of ${path}`, invalid);
+  if (closedStatus !== undefined) project.closedStatus = text(closedStatus, `"closedStatus" of ${path}`, invalid);
   if (sandbox !== undefined) {
     if (typeof sandbox !== 'boolean') throw invalid(`"sandbox" of ${path} must be true or false`);
     project.sandbox = sandbox;

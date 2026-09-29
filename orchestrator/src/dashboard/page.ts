@@ -179,6 +179,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .at-work.error { color: var(--problem); }
 .done { font-size: 13px; color: var(--muted); text-align: right; }
 .projects .row.off .name, .projects .row.off .at-work, .projects .row.off .done { opacity: 0.55; }
+.projects .row .analysis { grid-column: 1 / -1; margin: -12px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.projects .row .analysis.error { color: var(--problem); }
 .switch { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .switch[aria-checked="true"] { color: var(--ink); }
 .switch .track { position: relative; width: 30px; height: 18px; border-radius: 999px; background: var(--line-strong); flex: none; transition: background 0.15s; }
@@ -299,6 +301,9 @@ const DONE = {
   approve: 'Done. The task left your queue.',
   'send-back': 'Sent back. An agent takes the task up again at the next check.',
   block: 'Agents will keep away from this task.',
+  'accept-task': 'Task accepted. An agent may take it at the next check.',
+  'reject-task': 'Task rejected and closed.',
+  close: 'Task closed.',
 };
 
 // The projects the queue is narrowed to, kept in this browser only: an empty set shows every project.
@@ -415,7 +420,10 @@ function renderControl(state) {
     const room = c.maxAgents - c.agentsAtWork;
     cols = [
       col('Now', first
-        ? 'An agent works on "' + first.name + '" in ' + first.projectName + ', for ' + duration(now - new Date(first.startedAt)) + '. When it is done, the project tests and an independent check run.' + (state.working.length > 1 ? ' ' + plural(state.working.length - 1, 'more agent') + ' at work.' : '')
+        ? (first.kind === 'analysis'
+          ? 'An agent analyses ' + first.projectName + ', for ' + duration(now - new Date(first.startedAt)) + ': it reviews the tasks, checks the work waiting for you and may propose new tasks.'
+          : 'An agent works on "' + first.name + '" in ' + first.projectName + ', for ' + duration(now - new Date(first.startedAt)) + '. When it is done, the project tests and an independent check run.')
+          + (state.working.length > 1 ? ' ' + plural(state.working.length - 1, 'more agent') + ' at work.' : '')
         : 'No agent is working right now.'),
       col(c.nextCheckAt ? 'Next check at ' + clock(c.nextCheckAt) : 'Checking now',
         (c.nextCheckAt ? 'In ' + duration(new Date(c.nextCheckAt) - now) + ' the' : 'The') + ' orchestrator looks for new tasks' + (free.length ? ' in ' + free.join(', ') : '') + '.'
@@ -425,8 +433,12 @@ function renderControl(state) {
     ];
   } else {
     const on = state.projects.filter((p) => p.agents);
+    const due = on.filter((p) => p.analysisDue).map((p) => p.projectName);
+    const task = c.firstTask ? 'An agent takes "' + c.firstTask.name + '" in ' + c.firstTask.projectName + ', the next task with nothing waiting.' : 'No task is ready now: an agent starts as soon as one appears.';
     cols = [
-      col('Right away', c.firstTask ? 'An agent takes "' + c.firstTask.name + '" in ' + c.firstTask.projectName + ', the next task with nothing waiting.' : 'No task is ready now: an agent starts as soon as one appears.'),
+      col('Right away', due.length
+        ? 'An agent first analyses ' + due.join(', ') + ': it reviews the tasks, checks the work waiting for you and may propose new tasks. Then the tasks start.'
+        : task),
       col('Then every ' + c.intervalMinutes + ' minutes', on.length
         ? 'The orchestrator looks for new tasks in your ' + plural(on.length, 'project') + ' with agents on and starts an agent where there is room.'
         : 'Agents are off in every project: turn them on in a project row.'),
@@ -485,11 +497,21 @@ function renderProjects(state) {
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
       agents,
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
-        el('div', {}, el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))));
+        el('div', {}, el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))),
+      analysisLine(p, now));
   });
   const box = document.getElementById('projects');
   box.replaceChildren(...rows);
   if (!rows.length) box.replaceChildren(el('p', { className: 'empty', text: 'No project yet. Press Add project to add one.' }));
+}
+
+// What the last analysis of the project found, in the words of its agent.
+function analysisLine(p, now) {
+  if (p.analysis) {
+    const when = 'Last analysis ' + ago(p.analysis.at, now);
+    return el('p', { className: p.analysis.ok ? 'analysis' : 'analysis error', text: (p.analysis.ok ? when + ': ' : when + ' failed: ') + p.analysis.summary });
+  }
+  return p.agents && p.analysisDue && p.working?.kind !== 'analysis' ? el('p', { className: 'analysis', text: 'Not analysed yet: an agent analyses the project before its next task.' }) : null;
 }
 
 // The folder and its tasks stay as they are: only the orchestrator stops looking at them.
@@ -683,7 +705,7 @@ function renderDetail(state) {
   const now = new Date(state.generatedAt);
   const result = el('p', { className: 'result', role: 'status' });
   const parts = [
-    el('div', { className: 'meta' }, el('span', { className: 'pill ' + item.needs, text: KIND[item.needs].pill }), item.projectName + (item.since ? ', waiting for ' + duration(now - new Date(item.since)) : '')),
+    el('div', { className: 'meta' }, el('span', { className: 'pill ' + item.needs, text: item.proposedTask ? 'New task proposed' : item.readyToClose ? 'Ready to close' : KIND[item.needs].pill }), item.projectName + (item.since ? ', waiting for ' + duration(now - new Date(item.since)) : '')),
     el('div', {}, el('h3', {}, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })), item.goal && !sameText(item.goal, item.name) ? el('p', { className: 'goal' }, ...inline(item.goal)) : null),
   ];
   const note = item.note.length ? el('div', {}, el('p', { className: 'section-label', text: 'The agent says' }), el('ul', { className: 'note' }, item.note.map((line) => el('li', {}, ...inline(line))))) : null;
@@ -693,7 +715,29 @@ function renderDetail(state) {
     el('details', { className: 'menu' }, el('summary', { text: 'More' }),
       el('div', {}, el('button', { type: 'button', text: 'Keep agents away from this task', onclick: () => send(item, 'block', undefined, box, result) }))));
 
-  if (item.needs === 'decision') {
+  if (item.needs === 'decision' && item.proposedTask) {
+    parts.push(el('div', { className: 'proposal' }, el('p', { className: 'section-label', text: 'Why the analysis proposes it' }), el('p', {}, ...inline(item.proposedTask))));
+    parts.push(el('div', { className: 'actions' },
+      el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: 'Accept the task', onclick: () => send(item, 'accept-task', undefined, box, result) }),
+        el('button', { type: 'button', className: 'btn', text: 'Reject', onclick: () => send(item, 'reject-task', undefined, box, result) })),
+      side));
+    parts.push(el('p', { className: 'after', text: 'Accept the task lets agents take it at the next check. Reject closes it. Open it in ClickUp first to read or change its description.' }));
+  } else if (item.needs === 'review' && item.readyToClose) {
+    parts.push(el('div', { className: 'proposal' }, el('p', { className: 'section-label', text: 'Ready to close' }), el('p', {}, ...inline(item.readyToClose))));
+    const text = field('What should change', 'What should the agent fix? It reads this and continues on the same branch.');
+    const feedback = el('div', { hidden: true }, el('p', { className: 'section-label', text: 'What should change' }), text,
+      el('div', { className: 'actions' }, el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: 'Send to the agent', onclick: () => (text.value.trim() ? send(item, 'send-back', text.value, box, result) : text.focus()) }),
+        el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { feedback.hidden = true; } }))));
+    parts.push(el('div', { className: 'actions' },
+      el('div', { className: 'main' },
+        el('button', { type: 'button', className: 'btn primary', text: 'Close the task', onclick: () => send(item, 'close', undefined, box, result) }),
+        el('button', { type: 'button', className: 'btn', text: 'Request changes', onclick: () => { feedback.hidden = false; text.focus(); } })),
+      side));
+    parts.push(feedback);
+    parts.push(el('p', { className: 'after', text: 'The analysis verified every criterion. Close the task moves it to the closed status of its list. Request changes sends your note back to the agent.' }));
+  } else if (item.needs === 'decision') {
     if (item.questions.length) parts.push(el('div', {}, el('p', { className: 'section-label', text: 'The agent asks' }), el('ol', { className: 'numbered decision' }, item.questions.map((q) => el('li', {}, el('span', {}, ...inline(q)))))));
     else if (note) parts.push(note);
     if (item.proposal) parts.push(el('div', { className: 'proposal' }, el('p', { className: 'section-label', text: 'The agent proposes' }), el('p', {}, ...inline(item.proposal))));

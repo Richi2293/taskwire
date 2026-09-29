@@ -11,7 +11,13 @@ function setup(projectOptions: Record<string, unknown> = {}) {
   const project = projectDir('shop');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: project, ...projectOptions }] }));
   const taskwire = fakeTaskwire({
-    'tasks --needs any': [task({ id: 'd1', needs: 'decision' }), task({ id: 't1', needs: 'test', status: 'qa' }), task({ id: 'r1', needs: 'review', status: 'qa' })],
+    'tasks --needs any': [
+      task({ id: 'd1', needs: 'decision' }),
+      task({ id: 't1', needs: 'test', status: 'qa' }),
+      task({ id: 'r1', needs: 'review', status: 'qa', list: { id: 'l1', name: 'Backlog' } }),
+      task({ id: 'p1', needs: 'decision', tags: ['no-agent'], list: { id: 'l1', name: 'Backlog' } }),
+    ],
+    lists: [{ id: 'l0', name: 'Other', statuses: ['open', 'closed'] }, { id: 'l1', name: 'Backlog', statuses: ['backlog', 'in progress', 'qa', 'complete'] }],
     'task update': {},
     'comment add': { id: 'c1' },
   });
@@ -94,4 +100,54 @@ test('after an action only its project is read again, and a task whose mark was 
   await act({ project, task: 'd1', action: 'block' });
   // A blocked task still waits for the person: it stays in the queue until the next read.
   assert.deepEqual(changed, [[project, 'r1'], [project, undefined]]);
+});
+
+test('accept task lets agents take a task the analysis proposed: it clears the mark and removes the block tag', async () => {
+  const { project, taskwire, act, changed } = setup({ blockTag: 'manual' });
+  await act({ project, task: 'p1', action: 'accept-task' });
+  assert.deepEqual(writes(taskwire.calls), [
+    ['comment', 'add', 'p1', '--text', 'Answer from the person, via the dashboard:\n\nAccepted: agents may work on this task.'],
+    ['task', 'update', 'p1', '--needs', 'none', '--remove-tag', 'manual'],
+  ]);
+  assert.deepEqual(changed, [[project, 'p1']]);
+});
+
+test('reject task closes a task the analysis proposed, in the closed status of its list', async () => {
+  const { project, taskwire, act } = setup();
+  await act({ project, task: 'p1', action: 'reject-task' });
+  assert.deepEqual(writes(taskwire.calls), [
+    ['lists'],
+    ['comment', 'add', 'p1', '--text', 'Answer from the person, via the dashboard:\n\nRejected: this task is not needed.'],
+    ['task', 'update', 'p1', '--needs', 'none', '--status', 'complete'],
+  ]);
+});
+
+test('close moves a task ready to close to the closed status, or to the one the project sets', async () => {
+  const first = setup();
+  await first.act({ project: first.project, task: 'r1', action: 'close' });
+  assert.deepEqual(writes(first.taskwire.calls), [
+    ['lists'],
+    ['comment', 'add', 'r1', '--text', 'Answer from the person, via the dashboard:\n\nClosed: the work is done.'],
+    ['task', 'update', 'r1', '--needs', 'none', '--status', 'complete'],
+  ]);
+  const second = setup({ closedStatus: 'done' });
+  await second.act({ project: second.project, task: 'r1', action: 'close' });
+  assert.deepEqual(writes(second.taskwire.calls).at(-1), ['task', 'update', 'r1', '--needs', 'none', '--status', 'done']);
+  assert.ok(!second.taskwire.calls.some((call) => call.args[0] === 'lists'));
+});
+
+test('close fits only a review, accept and reject only a decision, and nothing closes without a known closed status', async () => {
+  const { project, taskwire, act } = setup();
+  const refused = [
+    { project, task: 't1', action: 'close' },
+    { project, task: 'd1', action: 'close' },
+    { project, task: 'r1', action: 'accept-task' },
+    { project, task: 'r1', action: 'reject-task' },
+    // d1 has no list in its summary, so its closed status is unknown.
+    { project, task: 'd1', action: 'reject-task' },
+  ];
+  for (const request of refused) {
+    await assert.rejects(act(request), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 2, JSON.stringify(request));
+  }
+  assert.deepEqual(writes(taskwire.calls).filter((args) => args[0] !== 'lists'), []);
 });

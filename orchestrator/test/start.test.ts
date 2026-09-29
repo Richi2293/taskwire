@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProjectEntry } from '../src/config.ts';
 import type { CycleResult } from '../src/cycle.ts';
 import { createRunControl } from '../src/control.ts';
 import { runLoop } from '../src/scheduler.ts';
+import { readClaims } from '../src/state.ts';
 import type { LoopDeps } from '../src/scheduler.ts';
 import { fakeCommands, fakeTaskwire, runOrchestrator, tempDir } from './helpers.ts';
 
@@ -21,6 +22,8 @@ interface Harness {
   started: string[];
   finish: (project: string) => void;
   maxRunning: () => number;
+  // Projects analysed, in order.
+  analysed: string[];
 }
 
 // A loop with fake cycles that last until the test finishes them, and a sleep that stops after the given ticks.
@@ -39,6 +42,8 @@ function harness(home: string, ticks: number, onTick: (tick: number, h: Harness)
       now: () => Date.UTC(2026, 8, 27, 10, 0, 0),
       log: (event) => logs.push(event),
       sleep: async () => {
+        // Let the cycles just started get past a due analysis first.
+        await new Promise((resolve) => setImmediate(resolve));
         tick += 1;
         onTick(tick, h);
         // Let finished cycles settle before the next tick.
@@ -51,6 +56,15 @@ function harness(home: string, ticks: number, onTick: (tick: number, h: Harness)
     started,
     finish: (project) => waiting.get(project)?.(),
     maxRunning: () => peak,
+    analysed: [],
+  };
+  // A fake analysis that ends at once and is recorded like a real one, so it is not due again right away.
+  h.deps.analyze = async (deps, project) => {
+    h.analysed.push(project.path);
+    const at = new Date(deps.now()).toISOString();
+    const record = { project: project.path, startedAt: at, finishedAt: at, ok: true, summary: 'Nothing to change.', costUsd: 0.1, durationMs: 1, log: '/l' };
+    appendFileSync(join(home, 'analyses.jsonl'), `${JSON.stringify(record)}\n`);
+    return record;
   };
   h.deps.cycle = (_deps, project: ProjectEntry) => {
     running.add(project.path);
@@ -185,4 +199,61 @@ test('the loop tells when it looks for new tasks next, and nothing while paused'
   h.deps.onWait = (until) => waits.push(until);
   await runLoop(h.deps);
   assert.deepEqual(waits, [null, Date.UTC(2026, 8, 27, 10, 5, 0)]);
+});
+
+test('a project is analysed before its first task, then again only once analysisHours have passed', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { analysisHours: 1, projects: [{ path: '/p/a' }] });
+  let now = Date.UTC(2026, 8, 27, 10, 0, 0);
+  const h = harness(home, 3, (tick, harnessRef) => {
+    harnessRef.finish('/p/a');
+    if (tick === 2) now += 3600_000;
+  });
+  h.deps.now = () => now;
+  await runLoop(h.deps);
+  assert.deepEqual(h.analysed, ['/p/a', '/p/a']);
+  assert.deepEqual(h.started, ['/p/a', '/p/a', '/p/a']);
+  const analyses = h.logs.filter((log) => log.event === 'analysis');
+  assert.deepEqual(analyses.map((log) => [log.project, log.ok, log.summary]), [['/p/a', true, 'Nothing to change.'], ['/p/a', true, 'Nothing to change.']]);
+});
+
+test('an analysis that fails is logged, and the task of the project still runs', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [{ path: '/p/a' }] });
+  const h = harness(home, 1, (_tick, harnessRef) => harnessRef.finish('/p/a'));
+  h.deps.analyze = async () => {
+    throw new Error('git worktree add failed');
+  };
+  await runLoop(h.deps);
+  assert.ok(h.logs.some((log) => log.event === 'error' && log.project === '/p/a' && String(log.error).includes('git worktree')));
+  assert.deepEqual(h.started, ['/p/a']);
+});
+
+test('no analysis runs while paused or on a project with agents off', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [{ path: '/p/a' }, { path: '/p/off', agents: false }] });
+  const control = createRunControl();
+  const h = harness(home, 2, (tick, harnessRef) => {
+    if (tick === 1) {
+      assert.deepEqual(harnessRef.analysed, []);
+      control.play();
+    }
+    if (tick === 2) harnessRef.finish('/p/a');
+  });
+  h.deps.control = control;
+  await runLoop(h.deps);
+  assert.deepEqual(h.analysed, ['/p/a']);
+});
+
+test('an analysis cut short is dropped at start, without touching any task', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [] });
+  writeFileSync(join(home, 'claims.json'), JSON.stringify({ 'analysis:/p/a': { project: '/p/a', name: 'Project analysis', worktree: '/wt', startedAt: '2026-09-27T08:00:00.000Z', kind: 'analysis' } }));
+  const taskwire = fakeTaskwire({});
+  const h = harness(home, 1);
+  h.deps.runTaskwire = taskwire.run;
+  await runLoop(h.deps);
+  assert.deepEqual(taskwire.calls, []);
+  assert.deepEqual(readClaims(home), {});
+  assert.ok(!h.logs.some((log) => log.event === 'interrupted'));
 });
