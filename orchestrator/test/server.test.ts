@@ -67,6 +67,16 @@ test('each project row has a switch for its agents', async () => {
   assert.match(response.body, /\.projects \.row\.off/);
 });
 
+test('the queue can be narrowed to some projects, and the choice is kept in the browser', async () => {
+  const response = await get('/');
+  assert.match(response.body, /id="project-filters"/);
+  assert.match(response.body, /All projects/);
+  assert.match(response.body, /Nothing waits for you in the selected projects/);
+  assert.match(response.body, /localStorage\.setItem\(PROJECTS_KEY/);
+  // The waiting chips of a project row narrow the queue to that project and kind.
+  assert.match(response.body, /function focusQueue\(/);
+});
+
 test('task text from the task system is never turned into HTML', async () => {
   const response = await get('/');
   assert.ok(!response.body.includes('<img src=x'), 'the embedded state escapes "<"');
