@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checksState, currentBranch, defaultBranch, findPullRequest, mergePullRequest } from '../src/github.ts';
+import { aheadBy, checksState, currentBranch, defaultBranch, fetchRemote, findPullRequest, findReleasePullRequest, isInBranch, mergePullRequest, openReleasePullRequest, remoteCommit } from '../src/github.ts';
 import { fakeCommands } from './helpers.ts';
 
 const prJson = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -71,4 +71,43 @@ test('the default branch of the remote, or null when git cannot tell', async () 
   assert.deepEqual(known.calls[0].args, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
   const unknown = fakeCommands({ git: () => ({ code: 128, stderr: 'not a symbolic ref' }) });
   assert.equal(await defaultBranch(unknown.run, '/p/shop'), null);
+});
+
+test('the git calls of a release: fetch, remote commit, how far ahead, whether a commit is in a branch', async () => {
+  const git = fakeCommands({
+    'git fetch': () => ({ code: 0 }),
+    'git rev-parse': () => ({ stdout: 'dev777\n' }),
+    'git rev-list': () => ({ stdout: '3\n' }),
+    'git merge-base': (call) => ({ code: call.args[2] === 'in1' ? 0 : 1 }),
+  });
+  assert.equal(await fetchRemote(git.run, '/p/shop'), true);
+  assert.equal(await remoteCommit(git.run, '/p/shop', 'dev'), 'dev777');
+  assert.equal(await aheadBy(git.run, '/p/shop', 'main', 'dev'), 3);
+  assert.equal(await isInBranch(git.run, '/p/shop', 'in1', 'main'), true);
+  assert.equal(await isInBranch(git.run, '/p/shop', 'out1', 'main'), false);
+  assert.deepEqual(git.calls.map((call) => call.args), [
+    ['fetch', '--quiet'],
+    ['rev-parse', '--verify', '--quiet', 'origin/dev'],
+    ['rev-list', '--count', 'origin/main..origin/dev'],
+    ['merge-base', '--is-ancestor', 'in1', 'origin/main'],
+    ['merge-base', '--is-ancestor', 'out1', 'origin/main'],
+  ]);
+  const offline = fakeCommands({ git: () => ({ code: 128, stderr: 'Could not resolve host' }) });
+  assert.equal(await fetchRemote(offline.run, '/p/shop'), false);
+  assert.equal(await remoteCommit(offline.run, '/p/shop', 'dev'), null);
+  assert.equal(await aheadBy(offline.run, '/p/shop', 'main', 'dev'), 0);
+});
+
+test('the release pull request: found among the open ones, opened when missing, merged with a merge commit', async () => {
+  const found = fakeCommands({ 'gh pr': () => ({ stdout: `[${prJson({ baseRefName: 'main', headRefName: 'dev' })}]` }) });
+  assert.equal((await findReleasePullRequest(found.run, '/p/shop', 'main', 'dev'))?.headRefName, 'dev');
+  assert.deepEqual(found.calls[0].args.slice(0, 8), ['pr', 'list', '--base', 'main', '--head', 'dev', '--state', 'open']);
+  const none = fakeCommands({ 'gh pr': () => ({ stdout: '[]' }) });
+  assert.equal(await findReleasePullRequest(none.run, '/p/shop', 'main', 'dev'), null);
+  const open = fakeCommands();
+  await openReleasePullRequest(open.run, '/p/shop', 'main', 'dev');
+  assert.deepEqual(open.calls[0].args, ['pr', 'create', '--base', 'main', '--head', 'dev', '--title', 'release: dev to main', '--body', 'Release of dev to main by the taskwire orchestrator.']);
+  const merge = fakeCommands();
+  await mergePullRequest(merge.run, '/p/shop', 30, 'dev777', 'merge');
+  assert.deepEqual(merge.calls[0].args, ['pr', 'merge', '30', '--merge', '--match-head-commit', 'dev777']);
 });

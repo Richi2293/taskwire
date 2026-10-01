@@ -52,12 +52,57 @@ export async function findPullRequest(run: RunCommand, cwd: string, branch: stri
     if (/no pull requests? found/i.test(result.stderr)) return null;
     throw new OrchestratorError(`gh pr view failed: ${result.stderr.trim() || `exit ${result.code}`}`, EXIT.external);
   }
-  let data: Record<string, unknown>;
+  return toPullRequest(parseJson(result.stdout, 'gh pr view'));
+}
+
+// The open pull request from head to base, such as the release from dev to main; null when there is none.
+export async function findReleasePullRequest(run: RunCommand, cwd: string, base: string, head: string): Promise<PullRequest | null> {
+  const result = await run('gh', ['pr', 'list', '--base', base, '--head', head, '--state', 'open', '--json', PR_FIELDS, '--limit', '1'], { cwd });
+  if (result.code !== 0) throw new OrchestratorError(`gh pr list failed: ${result.stderr.trim() || `exit ${result.code}`}`, EXIT.external);
+  const list = parseJson(result.stdout, 'gh pr list');
+  return Array.isArray(list) && list.length > 0 ? toPullRequest(list[0]) : null;
+}
+
+export async function openReleasePullRequest(run: RunCommand, cwd: string, base: string, head: string): Promise<void> {
+  const body = `Release of ${head} to ${base} by the taskwire orchestrator.`;
+  const result = await run('gh', ['pr', 'create', '--base', base, '--head', head, '--title', `release: ${head} to ${base}`, '--body', body], { cwd });
+  if (result.code !== 0) throw new OrchestratorError(`gh pr create failed: ${result.stderr.trim() || `exit ${result.code}`}`, EXIT.external);
+}
+
+// Brings the remote branches up to date; false when the remote cannot be reached.
+export async function fetchRemote(run: RunCommand, cwd: string): Promise<boolean> {
+  return (await run('git', ['fetch', '--quiet'], { cwd })).code === 0;
+}
+
+// The commit a remote branch is at, as of the last fetch; null when the branch is unknown.
+export async function remoteCommit(run: RunCommand, cwd: string, branch: string): Promise<string | null> {
+  const result = await run('git', ['rev-parse', '--verify', '--quiet', `origin/${branch}`], { cwd });
+  const sha = result.code === 0 ? result.stdout.trim() : '';
+  return sha === '' ? null : sha;
+}
+
+// How many commits head has that base has not, between remote branches; 0 when git cannot tell.
+export async function aheadBy(run: RunCommand, cwd: string, base: string, head: string): Promise<number> {
+  const result = await run('git', ['rev-list', '--count', `origin/${base}..origin/${head}`], { cwd });
+  const count = Number(result.stdout.trim());
+  return result.code === 0 && Number.isInteger(count) ? count : 0;
+}
+
+// Whether a commit is in a remote branch, as of the last fetch.
+export async function isInBranch(run: RunCommand, cwd: string, sha: string, branch: string): Promise<boolean> {
+  return (await run('git', ['merge-base', '--is-ancestor', sha, `origin/${branch}`], { cwd })).code === 0;
+}
+
+function parseJson(stdout: string, what: string): unknown {
   try {
-    data = JSON.parse(result.stdout) as Record<string, unknown>;
+    return JSON.parse(stdout);
   } catch {
-    throw new OrchestratorError('gh pr view did not print JSON', EXIT.external);
+    throw new OrchestratorError(`${what} did not print JSON`, EXIT.external);
   }
+}
+
+function toPullRequest(value: unknown): PullRequest {
+  const data = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   return {
     number: Number(data.number),
     url: String(data.url ?? ''),
@@ -99,9 +144,9 @@ export function checksState(rollup: unknown): ChecksState {
   return pending ? 'pending' : 'pass';
 }
 
-// The only merge the orchestrator makes into staging: a squash, like the project workflow.
-// GitHub refuses it if the pull request moved on from the verified commit in the meantime.
-export async function mergePullRequest(run: RunCommand, cwd: string, pr: number, sha: string): Promise<void> {
-  const result = await run('gh', ['pr', 'merge', String(pr), '--squash', '--match-head-commit', sha], { cwd });
+// The only merges the orchestrator makes: a squash of a task into staging, a merge commit for a release, like the project workflow.
+// GitHub refuses it if the pull request moved on from the checked commit in the meantime.
+export async function mergePullRequest(run: RunCommand, cwd: string, pr: number, sha: string, method: 'squash' | 'merge' = 'squash'): Promise<void> {
+  const result = await run('gh', ['pr', 'merge', String(pr), `--${method}`, '--match-head-commit', sha], { cwd });
   if (result.code !== 0) throw new OrchestratorError(`gh pr merge failed: ${result.stderr.trim() || `exit ${result.code}`}`, EXIT.external);
 }
