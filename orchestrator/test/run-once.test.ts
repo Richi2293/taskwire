@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from
 import { basename, join } from 'node:path';
 import { claudeResult, fakeCommands, fakeTaskwire, projectDir, runOrchestrator, task, tempDir } from './helpers.ts';
 import type { CommandCall, FakeReply } from './helpers.ts';
+import { loadConfig } from '../src/config.ts';
+import { readMerges } from '../src/merges.ts';
 
 interface Setup {
   home: string;
@@ -71,8 +73,10 @@ test('run-once claims the task, runs the agent in a new worktree and records the
     ['fetch', '--quiet'],
     ['rev-parse', '--verify', '--quiet', 'origin/HEAD'],
     ['worktree', 'add', '--detach', worktree, 'origin/HEAD'],
+    // After the agent: the branch it left the worktree on, to find its pull request.
+    ['branch', '--show-current'],
   ]);
-  assert.ok(git.every((call) => call.cwd === project));
+  assert.deepEqual(git.map((call) => call.cwd), [project, project, project, worktree]);
   // .taskwire.json is often kept out of git, so the worktree gets a copy.
   assert.ok(existsSync(join(worktree, '.taskwire.json')));
 
@@ -266,4 +270,82 @@ test('the result of the agent is read from the last line of its stream', async (
   assert.equal(record.costUsd, 3);
   assert.equal(record.verdict, 'pass');
   assert.match(record.summary, /^Done\./);
+});
+
+// The commands of a run where the agent leaves the worktree on a branch with a pull request.
+function withPullRequest(pr: Record<string, unknown>) {
+  return fakeCommands({
+    claude: () => claudeResult(),
+    'git branch': () => ({ stdout: 'feat/discount\n' }),
+    'gh pr': () => ({ stdout: JSON.stringify({ number: 12, url: 'https://github.com/acme/shop/pull/12', state: 'OPEN', baseRefName: 'dev', headRefName: 'feat/discount', mergeable: 'MERGEABLE', statusCheckRollup: [], ...pr }) }),
+  });
+}
+
+test('with a merge level, a verified task is queued for the orchestrator to merge', async () => {
+  const { home, project } = setup({ merge: 'dev' });
+  const commands = withPullRequest({});
+  const run = await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: commands.run });
+  assert.equal(run.code, 0);
+  assert.deepEqual(readMerges(home).map((entry) => [entry.project, entry.task, entry.pr, entry.branch]), [[project, 't1', 12, 'feat/discount']]);
+  const events = readFileSync(join(home, 'events.jsonl'), 'utf8');
+  assert.match(events, /"event":"merge-queued"/);
+});
+
+test('without a merge level nothing is queued, and the run records the branch and its pull request', async () => {
+  const { home } = setup();
+  const commands = withPullRequest({});
+  await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: commands.run });
+  assert.deepEqual(readMerges(home), []);
+  const record = JSON.parse(readFileSync(join(home, 'runs.jsonl'), 'utf8').trim()) as { branch: string; pr: number };
+  assert.equal(record.branch, 'feat/discount');
+  assert.equal(record.pr, 12);
+});
+
+test('a task the verifier left for a test by hand is not queued', async () => {
+  const { home } = setup({ merge: 'dev' });
+  const commands = fakeCommands({
+    claude: () => claudeResult({ result: 'Checked what I could.\nVERDICT: manual' }),
+    'git branch': () => ({ stdout: 'feat/discount\n' }),
+    'gh pr': () => ({ stdout: JSON.stringify({ number: 12, url: 'u', state: 'OPEN', baseRefName: 'dev', headRefName: 'feat/discount', mergeable: 'MERGEABLE', statusCheckRollup: [] }) }),
+  });
+  await runOrchestrator(['run-once'], { home, taskwire: taskwireFor({ ...task({ status: 'qa' }), needs: 'test' }).run, commands: commands.run });
+  assert.deepEqual(readMerges(home), []);
+});
+
+test('a pull request to the wrong branch goes to the person with the reason', async () => {
+  const { home } = setup({ merge: 'dev' });
+  const taskwire = taskwireFor();
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest({ baseRefName: 'main' }).run });
+  assert.deepEqual(readMerges(home), []);
+  assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('targets main, not dev')));
+});
+
+test('an agent that merged its own pull request turns the agents of the project off', async () => {
+  const { home, project } = setup();
+  const taskwire = taskwireFor();
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest({ state: 'MERGED' }).run });
+  assert.equal(loadConfig(home).projects.find((entry) => entry.path === project)?.agents, false);
+  assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('agents are now off')));
+  assert.match(readFileSync(join(home, 'events.jsonl'), 'utf8'), /"event":"agent-merged"/);
+});
+
+test('a detached worktree or a gh that fails never breaks the pass', async () => {
+  const { home } = setup({ merge: 'dev' });
+  const detached = fakeCommands({ claude: () => claudeResult() });
+  const first = await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: detached.run });
+  assert.equal(first.code, 0);
+  assert.deepEqual(detached.calls.filter((call) => call.command === 'gh'), []);
+  const noGh = fakeCommands({ claude: () => claudeResult(), 'git branch': () => ({ stdout: 'feat/discount\n' }), gh: () => ({ code: 127, stderr: 'spawn gh ENOENT' }) });
+  const second = await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: noGh.run });
+  assert.equal(second.code, 0);
+  assert.deepEqual(readMerges(home), []);
+});
+
+test('with a merge level the agent is told to open a pull request to the staging branch', async () => {
+  const { home } = setup({ merge: 'dev', stagingBranch: 'develop' });
+  const commands = fakeCommands({ claude: () => claudeResult() });
+  await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: commands.run });
+  const prompt = claudeCalls(commands.calls)[0].args.join(' ');
+  assert.match(prompt, /open a pull request to `develop`/);
+  assert.match(prompt, /the orchestrator merges it/);
 });

@@ -1,4 +1,4 @@
-import { DEFAULT_BLOCK_TAG, DEFAULT_START_STATUSES, DEFAULT_WORK_STATUS } from './config.ts';
+import { DEFAULT_BLOCK_TAG, DEFAULT_STAGING_BRANCH, DEFAULT_START_STATUSES, DEFAULT_WORK_STATUS, mergeLevel } from './config.ts';
 import type { ProjectEntry } from './config.ts';
 import type { TaskSummary } from './taskwire.ts';
 
@@ -74,13 +74,16 @@ export function workPrompt(task: TaskSummary, project: ProjectEntry): string {
   const area = project.area === undefined
     ? ''
     : `\n${areaIntro(project)} Do only the \`${project.area}\` part of this task. If it also needs changes in another area, do not make them here: say in your comment what the other areas must do.\n`;
+  const merge = mergeLevel(project) === 'none'
+    ? 'open a pull request if the project rules ask for one'
+    : `open a pull request to \`${project.stagingBranch ?? DEFAULT_STAGING_BRANCH}\`: the orchestrator merges it once its checks pass`;
   return `You are working unattended: nobody will answer questions during this session.
 ${area}
 Work only on task ${task.id} (${task.url}), "${task.name}". This folder is a git worktree created for this task, on a detached HEAD.
 
 1. Run \`taskwire rules\` and \`taskwire task get ${task.id}\`, and follow them together with the project's AGENTS.md.
 2. If the task needs a choice that is not yours to make, or you cannot do it, do not guess: mark it with \`taskwire task update ${task.id} --needs decision\`, ask your questions in a comment (under \`### Questions\`, with your \`### Proposal\`, as the rules say), and stop.
-3. Otherwise create a branch as the project rules say, do the work, commit it, and open a pull request if the project rules ask for one.
+3. Otherwise create a branch as the project rules say, do the work, commit it, push it, and ${merge}.
 4. Verify your work: run the tests and check each acceptance criterion you can check yourself.
 5. At the end mark the task and move it to the status the project uses for work to check:
    - \`--needs review\` when everything is verified and only a review or a merge is missing;
