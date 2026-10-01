@@ -160,3 +160,22 @@ test('a live task has Close the task in its queue row', () => {
   const row = nodes(get('queue'), (node) => node.className.startsWith('item live'))[0];
   assert.ok(nodes(row, (node) => node.tag === 'button' && /Close the task/.test(text(node))).length === 1);
 });
+
+test('the items of a More menu stack one under the other', () => {
+  const css = renderPage(state({}), 'token');
+  assert.match(css, /details\.menu div \{[^}]*display: flex; flex-direction: column;/);
+});
+
+test('Remove project looks dangerous and asks in the confirm modal, not the browser', () => {
+  const get = renderScript(state());
+  const remove = nodes(get('projects'), (node) => node.tag === 'button' && text(node).trim() === 'Remove project')[0];
+  assert.equal(remove.className, 'danger');
+  remove.click();
+  const dialog = get('confirm-dialog');
+  assert.equal(dialog.open, true);
+  assert.match(text(dialog), /Remove shop from the orchestrator\?/);
+  const confirm = nodes(dialog, (node) => node.tag === 'button' && text(node).trim() === 'Remove project')[0];
+  assert.equal(confirm.className, 'btn danger');
+  nodes(dialog, (node) => node.tag === 'button' && text(node).trim() === 'Cancel')[0].click();
+  assert.equal(dialog.open, false);
+});
