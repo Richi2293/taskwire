@@ -422,7 +422,11 @@ function renderControl(state) {
   let cols;
   if (working) {
     const first = state.working[0];
-    const free = state.projects.filter((p) => !p.working && p.agents).map((p) => p.projectName);
+    // A project whose group has an agent at work waits for it: one agent at a time works in a group.
+    const busyGroups = state.projects.filter((p) => p.working && p.group).map((p) => p.group);
+    const idle = state.projects.filter((p) => !p.working && p.agents);
+    const free = idle.filter((p) => !busyGroups.includes(p.group)).map((p) => p.projectName);
+    const waitingGroup = idle.filter((p) => busyGroups.includes(p.group)).map((p) => p.projectName);
     const room = c.maxAgents - c.agentsAtWork;
     cols = [
       col('Now', first
@@ -433,7 +437,8 @@ function renderControl(state) {
         : 'No agent is working right now.'),
       col(c.nextCheckAt ? 'Next check at ' + clock(c.nextCheckAt) : 'Checking now',
         (c.nextCheckAt ? 'In ' + duration(new Date(c.nextCheckAt) - now) + ' the' : 'The') + ' orchestrator looks for new tasks' + (free.length ? ' in ' + free.join(', ') : '') + '.'
-        + (c.busyProjects.length ? ' ' + c.busyProjects.join(', ') + (c.busyProjects.length === 1 ? ' is' : ' are') + ' busy until its agent finishes.' : '')),
+        + (c.busyProjects.length ? ' ' + c.busyProjects.join(', ') + (c.busyProjects.length === 1 ? ' is' : ' are') + ' busy until its agent finishes.' : '')
+        + (waitingGroup.length ? ' ' + waitingGroup.join(', ') + (waitingGroup.length === 1 ? ' waits' : ' wait') + ' for the agent of its group.' : '')),
       col(c.agentsAtWork + ' of ' + c.maxAgents + ' agents in use',
         (room > 0 ? plural(room, 'more agent') + ' can start at the next check. ' : 'No room for another agent until one finishes. ') + 'Pause stops new work; an agent at work finishes its task first.'),
     ];
@@ -448,7 +453,7 @@ function renderControl(state) {
       col('Then every ' + c.intervalMinutes + ' minutes', on.length
         ? 'The orchestrator looks for new tasks in your ' + plural(on.length, 'project') + ' with agents on and starts an agent where there is room.'
         : 'Agents are off in every project: turn them on in a project row.'),
-      col('At most ' + c.maxAgents + ' agents at once', 'One agent per project. Pause stops new work; an agent at work finishes its task first.'),
+      col('At most ' + c.maxAgents + ' agents at once', 'One agent per project, and one per group of projects that share a task list. Pause stops new work; an agent at work finishes its task first.'),
     ];
   }
   document.getElementById('details-cols').replaceChildren(...cols);
