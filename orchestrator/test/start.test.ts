@@ -300,24 +300,21 @@ test('projects of different groups work at the same time', async () => {
   assert.deepEqual(h.started, ['/p/api', '/p/crm']);
 });
 
-test('while working, the merge queue of each project with agents on is looked at every tick', async () => {
+test('every tick looks after each project: merges and releases only while working with agents on, live tasks always', async () => {
   const home = tempDir('home');
   writeConfig(home, { projects: [{ path: '/p/a' }, { path: '/p/broken' }, { path: '/p/off', agents: false }] });
   const control = createRunControl();
-  const merged: string[] = [];
+  const calls: string[] = [];
   const h = harness(home, 2, (tick, harnessRef) => {
-    if (tick === 1) {
-      assert.deepEqual(merged, []);
-      control.play();
-    }
+    if (tick === 1) control.play();
     if (tick === 2) for (const p of ['/p/a', '/p/broken']) harnessRef.finish(p);
   });
   h.deps.control = control;
-  h.deps.merge = async (_deps, project) => {
-    merged.push(project.path);
+  h.deps.upkeep = async (_deps, project, working) => {
+    calls.push(`${project.path} ${working}`);
     if (project.path === '/p/broken') throw new Error('gh is not logged in');
   };
   await runLoop(h.deps);
-  assert.deepEqual(merged, ['/p/a', '/p/broken']);
+  assert.deepEqual(calls, ['/p/a false', '/p/broken false', '/p/off false', '/p/a true', '/p/broken true', '/p/off false']);
   assert.ok(h.logs.some((log) => log.event === 'error' && log.project === '/p/broken' && String(log.error).includes('gh is not logged in')));
 });
