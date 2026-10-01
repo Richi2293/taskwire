@@ -37,6 +37,10 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /\/api\/discover/);
   assert.match(response.body, /\/api\/projects/);
   assert.match(response.body, /Remove project/);
+  // Who merges each project, and the live tasks to close.
+  assert.match(response.body, /'merge-level'/);
+  assert.match(response.body, /'close-live'/);
+  assert.match(response.body, /Live, close it/);
   assert.match(response.body, /'Added ' \+/);
   // A light control bar: the brand sits above it, and the state comes in a chip.
   assert.match(response.body, /<p class="brand">[\s\S]*<header class="control"/);
