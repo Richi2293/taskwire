@@ -215,3 +215,13 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 ## Development
 
 Same rules as taskwire (see [AGENTS.md](../AGENTS.md)): Node 24.7 or later, TypeScript run directly, no dependencies, `node --test` from the repository root runs these tests too.
+
+### Design first
+
+The dashboard is designed before it is coded. [`design/dashboard.pen`](design/dashboard.pen) holds its screens and states, one frame each (the whole dashboard, the control bar, the project rows and their More menu, the queue, the modals). It is a JSON file that opens in [Pencil](https://pen.dev), so its changes show in the diff of a pull request.
+
+1. A change to the UI starts in the design: change the frames it touches, or add one for a new state.
+2. Once the design is approved, it moves to the code in `src/dashboard/page.ts`, test first.
+3. A change made in the code alone, such as a small fix, is brought back into the design, so the two stay alike.
+
+The design follows the rules of the repository: neutral names (`website`, `shop`), texts in English, no em-dash or en-dash. On the page, a destructive action is red (the `danger` class), and every confirmation goes through the confirm modal (`askConfirm`), never the confirm of the browser.
