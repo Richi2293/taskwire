@@ -15,6 +15,7 @@ import { checkForUpdate } from './update-check.ts';
 import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
+import { projectInfo, setArea } from './commands/project.ts';
 import { formatSetup, setup } from './commands/setup-guide.ts';
 import type { SetupOut } from './commands/setup-guide.ts';
 import type { RulesOut } from './commands/rules.ts';
@@ -57,11 +58,15 @@ Setup:
   taskwire setup                  how an agent sets up taskwire in this project (guide and AGENTS.md block)
   taskwire whoami
   taskwire folders
-  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <l>] [--instructions <text>] [--force]
+  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <l>] [--instructions <text>]
+                [--area <tag>] [--force]
                   --scope-list limits the project to some lists of the folder, --list is the default list,
-                  --language and --instructions set the project conventions
+                  --language and --instructions set the project conventions,
+                  --area the tag of the project's tasks when several projects share the task list
   taskwire rules                  how agents must manage tasks in this project (rules and conventions)
   taskwire conventions            the project conventions only (language, instructions)
+  taskwire project                the project configuration (folder, lists, account, area)
+  taskwire area set <tag>|none    the area of the project in a task list shared by several projects
 
 Lists:
   taskwire lists [--folder <id>]      --folder shows the lists of any folder, also before init
@@ -130,6 +135,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'scope-list': { type: 'string', multiple: true },
       language: { type: 'string' },
       instructions: { type: 'string' },
+      area: { type: 'string' },
       force: { type: 'boolean' },
     },
     positionals: 0,
@@ -144,6 +150,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     formatPretty: (result) => formatRules(result as RulesOut),
   },
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
+  project: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => projectInfo(ctx) },
+  'area set': { options: {}, positionals: 1, needsConfig: true, run: async (ctx, input) => setArea(ctx, input) },
   lists: { options: { folder: { type: 'string' } }, positionals: 0, needsConfig: 'optional', run: (ctx, input) => listLists(ctx, input) },
   'list create': {
     options: { name: { type: 'string' } },

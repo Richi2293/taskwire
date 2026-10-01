@@ -213,6 +213,19 @@ export function readAccount(dir: string): string | undefined {
   }
 }
 
+// The area of the config file in dir, read leniently like readConventions, so that "init --force" keeps it.
+export function readArea(dir: string): string | undefined {
+  const path = join(dir, CONFIG_FILE);
+  if (!existsSync(path)) return undefined;
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (typeof data !== 'object' || data === null || !('area' in data)) return undefined;
+    return parseArea(data.area, path);
+  } catch {
+    return undefined;
+  }
+}
+
 // The listIds of the config file in dir when it is for the same folder, read leniently like readConventions.
 export function readListIds(dir: string, folderId: string): string[] | undefined {
   const path = join(dir, CONFIG_FILE);
