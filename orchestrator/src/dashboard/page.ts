@@ -85,7 +85,8 @@ export function renderPage(state: DashboardState, token: string): string {
     <div class="section-head"><h2 id="history-title">Done recently</h2></div>
     <div id="history"></div>
   </section>
-  <dialog id="merge-dialog" class="merge-dialog" aria-labelledby="merge-title"></dialog>
+  <dialog id="merge-dialog" class="modal merge-dialog" aria-labelledby="merge-title"></dialog>
+  <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title"></dialog>
 </main>
 <script id="initial-state" type="application/json">${initial}</script>
 <script>${SCRIPT}</script>
@@ -131,6 +132,7 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 
 .btn { border-radius: 8px; padding: 9px 18px; border: 1px solid var(--line-strong); background: transparent; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; }
 .btn.primary { background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); font-weight: 600; }
+.btn.danger { background: var(--problem); color: var(--panel); border-color: var(--problem); font-weight: 600; }
 .btn:disabled { opacity: 0.55; cursor: default; }
 .link { background: none; border: 0; padding: 0; color: var(--test); font-size: 13px; text-align: left; }
 .link:disabled { color: var(--muted); cursor: default; }
@@ -251,10 +253,12 @@ button.chip:hover { text-decoration: underline; text-underline-offset: 3px; }
 .merge-pill.main { border-color: var(--decision); color: var(--decision); background: var(--decision-soft); }
 .icon { display: inline-flex; flex: none; }
 .icon svg { display: block; }
-.merge-dialog { width: min(540px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--ink); }
-.merge-dialog::backdrop { background: rgba(7, 9, 13, 0.6); }
-.merge-dialog h2 { font-size: 16px; }
-.merge-dialog .sub { color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+.modal { width: min(540px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--ink); }
+.modal::backdrop { background: rgba(7, 9, 13, 0.6); }
+.modal h2 { font-size: 16px; }
+.modal .sub { color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+.modal footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+#confirm-dialog { width: min(440px, calc(100vw - 32px)); }
 .merge-options { display: flex; flex-direction: column; gap: 8px; }
 .merge-option { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .merge-option .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line-strong); flex: none; margin-top: 2px; }
@@ -270,7 +274,6 @@ button.chip:hover { text-decoration: underline; text-underline-offset: 3px; }
 .merge-confirm { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
 .merge-confirm input { font-family: var(--mono); }
 .merge-dialog .branches { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 14px; }
-.merge-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .item.live { cursor: pointer; }
 .item .status { font-size: 12px; color: var(--muted); }
 .group.live .icon { color: var(--ink); }
@@ -299,6 +302,7 @@ details.menu summary::-webkit-details-marker { display: none; }
 details.menu div { display: flex; flex-direction: column; gap: 2px; position: absolute; right: 0; top: 24px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; z-index: 2; white-space: nowrap; }
 details.menu div button { background: none; border: 0; padding: 6px 10px; border-radius: 6px; width: 100%; text-align: left; }
 details.menu div button:hover { background: var(--bg); }
+details.menu div button.danger { color: var(--problem); }
 .after { font-size: 13px; color: var(--muted); }
 .result { font-size: 14px; }
 .result:empty { display: none; }
@@ -592,7 +596,7 @@ function renderProjects(state) {
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
         el('div', {},
           el('button', { type: 'button', text: 'Set area and group', onclick: () => { ui.placing = p.project; renderProjects(ui.state); } }),
-          el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))),
+          el('button', { type: 'button', className: 'danger', text: 'Remove project', onclick: () => unfollow(p) }))),
       ui.placing === p.project ? placeForm(p) : null,
       releaseLine(p),
       analysisLine(p, now));
@@ -713,10 +717,33 @@ function analysisLine(p, now) {
   return p.agents && p.analysisDue && p.working?.kind !== 'analysis' ? el('p', { className: 'analysis', text: 'Not analysed yet: an agent analyses the project before its next task.' }) : null;
 }
 
+// Every confirmation of the page, in a modal instead of the browser confirm. Resolves true only on the action button;
+// Cancel and Escape resolve false. A danger action gets the red button.
+function askConfirm({ title, text, action, danger = false }) {
+  const dialog = document.getElementById('confirm-dialog');
+  return new Promise((resolve) => {
+    const answer = (yes) => { resolve(yes); dialog.close(); };
+    dialog.onclose = () => resolve(false);
+    dialog.replaceChildren(
+      el('h2', { id: 'confirm-title', text: title }),
+      el('p', { className: 'sub', text }),
+      el('footer', {},
+        el('button', { type: 'button', className: 'btn', text: 'Cancel', onclick: () => answer(false) }),
+        el('button', { type: 'button', className: danger ? 'btn danger' : 'btn primary', text: action, onclick: () => answer(true) })));
+    dialog.showModal();
+  });
+}
+
 // The folder and its tasks stay as they are: only the orchestrator stops looking at them.
 async function unfollow(project) {
   const result = document.getElementById('projects-result');
-  if (!confirm('Remove ' + project.projectName + ' from the orchestrator? Agents stop working on it; its folder and its tasks stay as they are.')) return;
+  const yes = await askConfirm({
+    title: 'Remove ' + project.projectName + ' from the orchestrator?',
+    text: 'Agents stop working on it. Its folder and its tasks stay as they are.',
+    action: 'Remove project',
+    danger: true,
+  });
+  if (!yes) return;
   result.className = 'result';
   result.textContent = 'Removing ' + project.projectName + '.';
   try {
