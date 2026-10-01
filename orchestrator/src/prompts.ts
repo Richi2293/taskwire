@@ -122,7 +122,7 @@ export function fixTestsPrompt(task: TaskSummary, testCommand: string, output: s
 ${output.trim()}
 \`\`\`
 
-Fix the cause, run the tests again, commit, and update the task mark and comment if needed.`;
+Fix the cause, run the tests again, commit, push the branch if it has a pull request, and update the task mark and comment if needed.`;
 }
 
 // Sent to the author's session when the verifier found a problem.
@@ -131,5 +131,5 @@ export function fixFindingsPrompt(task: TaskSummary, findings: string): string {
 
 ${findings.trim()}
 
-Fix it, run the tests, commit, and update the task mark and comment if needed.`;
+Fix it, run the tests, commit, push the branch if it has a pull request, and update the task mark and comment if needed.`;
 }

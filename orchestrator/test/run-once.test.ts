@@ -272,12 +272,20 @@ test('the result of the agent is read from the last line of its stream', async (
   assert.match(record.summary, /^Done\./);
 });
 
+// The git commands of an agent that left the worktree on a branch, at commit abc123, with nothing uncommitted.
+const onBranch = {
+  'git branch': () => ({ stdout: 'feat/discount\n' }),
+  'git rev-parse': (call: CommandCall) => (call.args[1] === 'HEAD' ? { stdout: 'abc123\n' } : {}),
+  'git status': () => ({ stdout: '' }),
+};
+
 // The commands of a run where the agent leaves the worktree on a branch with a pull request.
-function withPullRequest(pr: Record<string, unknown>) {
+function withPullRequest(pr: Record<string, unknown>, extra: Record<string, (call: CommandCall) => Partial<{ code: number; stdout: string; stderr: string }>> = {}) {
   return fakeCommands({
     claude: () => claudeResult(),
-    'git branch': () => ({ stdout: 'feat/discount\n' }),
-    'gh pr': () => ({ stdout: JSON.stringify({ number: 12, url: 'https://github.com/acme/shop/pull/12', state: 'OPEN', baseRefName: 'dev', headRefName: 'feat/discount', mergeable: 'MERGEABLE', statusCheckRollup: [], ...pr }) }),
+    ...onBranch,
+    'gh pr': () => ({ stdout: JSON.stringify({ number: 12, url: 'https://github.com/acme/shop/pull/12', state: 'OPEN', baseRefName: 'dev', headRefName: 'feat/discount', headRefOid: 'abc123', mergedAt: null, mergeable: 'MERGEABLE', statusCheckRollup: [], ...pr }) }),
+    ...extra,
   });
 }
 
@@ -286,7 +294,7 @@ test('with a merge level, a verified task is queued for the orchestrator to merg
   const commands = withPullRequest({});
   const run = await runOrchestrator(['run-once'], { home, taskwire: taskwireFor().run, commands: commands.run });
   assert.equal(run.code, 0);
-  assert.deepEqual(readMerges(home).map((entry) => [entry.project, entry.task, entry.pr, entry.branch]), [[project, 't1', 12, 'feat/discount']]);
+  assert.deepEqual(readMerges(home).map((entry) => [entry.project, entry.task, entry.pr, entry.branch, entry.sha]), [[project, 't1', 12, 'feat/discount', 'abc123']]);
   const events = readFileSync(join(home, 'events.jsonl'), 'utf8');
   assert.match(events, /"event":"merge-queued"/);
 });
@@ -320,10 +328,41 @@ test('a pull request to the wrong branch goes to the person with the reason', as
   assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('targets main, not dev')));
 });
 
+test('a pull request whose head is not the verified commit, or a worktree with uncommitted changes, goes to the person', async () => {
+  const cases: [Record<string, unknown>, Record<string, () => Partial<{ stdout: string }>>, string][] = [
+    [{ headRefOid: 'old999' }, {}, 'not the verified commit'],
+    [{}, { 'git status': () => ({ stdout: ' M src/cart.ts\n' }) }, 'uncommitted changes'],
+  ];
+  for (const [pr, extra, reason] of cases) {
+    const { home } = setup({ merge: 'dev' });
+    const taskwire = taskwireFor();
+    await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest(pr, extra).run });
+    assert.deepEqual(readMerges(home), [], reason);
+    assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes(reason)), reason);
+  }
+});
+
+test('a pull request merged before the run, by a person, is no alarm', async () => {
+  const { home, project } = setup();
+  const taskwire = taskwireFor();
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest({ state: 'MERGED', mergedAt: '2026-09-20T09:00:00Z' }).run });
+  assert.equal(loadConfig(home).projects.find((entry) => entry.path === project)?.agents, undefined);
+  assert.equal(writes(taskwire.calls).some((line) => line.includes('agents are now off')), false);
+});
+
+test('an agent that merged its own pull request and then failed still turns the agents off', async () => {
+  const { home, project } = setup();
+  const taskwire = taskwireFor({ ...task({ status: 'in progress' }), needs: null });
+  const commands = withPullRequest({ state: 'MERGED', mergedAt: '2026-09-27T10:00:30Z' }, { claude: () => ({ code: 1, stdout: '', stderr: 'Credit balance is too low' }) });
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
+  assert.equal(loadConfig(home).projects.find((entry) => entry.path === project)?.agents, false);
+  assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('agents are now off')));
+});
+
 test('an agent that merged its own pull request turns the agents of the project off', async () => {
   const { home, project } = setup();
   const taskwire = taskwireFor();
-  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest({ state: 'MERGED' }).run });
+  await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: withPullRequest({ state: 'MERGED', mergedAt: '2026-09-27T10:00:30Z' }).run });
   assert.equal(loadConfig(home).projects.find((entry) => entry.path === project)?.agents, false);
   assert.ok(writes(taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('agents are now off')));
   assert.match(readFileSync(join(home, 'events.jsonl'), 'utf8'), /"event":"agent-merged"/);

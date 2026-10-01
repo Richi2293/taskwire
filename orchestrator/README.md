@@ -89,11 +89,12 @@ The agent never merges: the orchestrator does, with `gh pr merge --squash`, and 
 - the verifier confirmed every acceptance criterion (a task left for a test by hand waits for the person);
 - the task still waits for a review, so the person did not act on it meanwhile;
 - the pull request is open, targets the staging branch and has no conflicts;
-- its CI is green. Right after the pull request is opened the orchestrator waits; without any check after 10 minutes, the task goes to the person.
+- its last commit is the one the tests and the verifier checked, with nothing left uncommitted in the worktree; the merge itself is pinned to that commit (`--match-head-commit`), so a push in the meantime stops it;
+- its CI is green. The orchestrator waits at least 2 minutes after the task is queued, so a slower CI can register; without any check after 10 minutes, the task goes to the person. Without required status checks on GitHub, green means green among the checks registered so far.
 
 Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
 
-After every pass the orchestrator also looks at the pull request: if it is already merged, the agent merged it on its own. The task goes to the person, and agents are turned off for the project (`"agents": false`).
+After every pass, failed ones too, the orchestrator also looks at the pull request: if it was merged during the run, the agent merged it on its own. The task goes to the person, and agents are turned off for the project (`"agents": false`).
 
 The orchestrator needs `gh`, logged in, on its PATH. It cannot stop an agent that has every permission from running `gh` itself: for a hard stop, protect the staging and production branches on GitHub (required reviews or required status checks).
 

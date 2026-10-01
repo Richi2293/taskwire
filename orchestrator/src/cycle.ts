@@ -102,7 +102,8 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     after = await readTask(deps, project.path, task.id);
   }
   const verified = verification !== null && verification.verdict === 'pass' && verification.problem === null && after.needs === 'review';
-  const pass = failure === null ? await afterPass(deps, project, { task, worktree, verified }) : { branch: null, pr: null, problem: null };
+  // Also after a failed run: an agent may merge on its own and then fail.
+  const pass = await afterPass(deps, project, { task, worktree, verified, startedAt });
   writeLog(log, outputs, failure);
   // The agent alarm comes first: its comment must say that agents are now off, even when the verification failed too.
   let problem = pass.problem ?? verification?.problem ?? null;

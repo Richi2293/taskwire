@@ -2,7 +2,7 @@ import { markForReview } from './cycle.ts';
 import type { CycleDeps } from './cycle.ts';
 import { DEFAULT_STAGING_BRANCH, mergeLevel } from './config.ts';
 import type { ProjectEntry } from './config.ts';
-import { currentBranch, findPullRequest, mergePullRequest } from './github.ts';
+import { currentBranch, findPullRequest, hasUncommittedChanges, headCommit, mergePullRequest } from './github.ts';
 import type { PullRequest } from './github.ts';
 import { readMerges, writeMerges } from './merges.ts';
 import type { PendingMerge } from './merges.ts';
@@ -18,10 +18,11 @@ export interface PassOutcome {
 }
 
 // After an agent worked on a task: an agent that merged on its own loses the project, and a verified task is queued for the merge.
+// startedAt is when the run began: a pull request merged before it was merged by someone else, not by this agent.
 export async function afterPass(
   deps: CycleDeps,
   project: ProjectEntry,
-  pass: { task: TaskSummary; worktree: string; verified: boolean },
+  pass: { task: TaskSummary; worktree: string; verified: boolean; startedAt: string },
 ): Promise<PassOutcome> {
   const note = (event: Record<string, unknown>): void => deps.log?.({ ...event, at: new Date(deps.now()).toISOString(), project: project.path, task: pass.task.id });
   const branch = await currentBranch(deps.runCommand, pass.worktree);
@@ -34,7 +35,7 @@ export async function afterPass(
     note({ event: 'error', error: error instanceof Error ? error.message : String(error) });
     return { branch, pr: null, problem: null };
   }
-  if (pr?.state === 'MERGED') {
+  if (pr?.state === 'MERGED' && pr.mergedAt !== null && Date.parse(pr.mergedAt) >= Date.parse(pass.startedAt)) {
     setProjectAgents(deps.home, project.path, false);
     note({ event: 'agent-merged', pr: pr.number });
     return { branch, pr: pr.number, problem: 'the pull request was merged during the agent run, not by the orchestrator: agents are now off for this project' };
@@ -42,13 +43,22 @@ export async function afterPass(
   const outcome = { branch, pr: pr?.number ?? null, problem: null };
   if (mergeLevel(project) === 'none' || !pass.verified) return outcome;
   const staging = project.stagingBranch ?? DEFAULT_STAGING_BRANCH;
-  if (pr === null) return { ...outcome, problem: `no pull request found for branch ${branch}, so the orchestrator cannot merge it` };
+  // A pull request merged before this run belongs to earlier work on the branch.
+  if (pr === null || pr.state === 'MERGED') return { ...outcome, problem: `no open pull request found for branch ${branch}, so the orchestrator cannot merge it` };
   if (pr.state === 'CLOSED') return { ...outcome, problem: 'the pull request was closed without merging' };
   if (pr.baseRefName !== staging) {
     return { ...outcome, problem: `the pull request targets ${pr.baseRefName}, not ${staging}: the orchestrator merges only into ${staging}` };
   }
+  // The tests and the verifier ran on the worktree: the pull request must hold exactly that commit.
+  if (await hasUncommittedChanges(deps.runCommand, pass.worktree)) {
+    return { ...outcome, problem: 'the worktree has uncommitted changes, so the pull request is not what was verified' };
+  }
+  const sha = await headCommit(deps.runCommand, pass.worktree);
+  if (sha === null || pr.headRefOid !== sha) {
+    return { ...outcome, problem: `the head of the pull request is not the verified commit ${sha ?? '(unknown)'}: push the branch, then merge it by hand` };
+  }
   const queue = readMerges(deps.home).filter((entry) => !(entry.project === project.path && entry.task === pass.task.id));
-  queue.push({ project: project.path, task: pass.task.id, name: pass.task.name, branch, pr: pr.number, url: pr.url, queuedAt: new Date(deps.now()).toISOString() });
+  queue.push({ project: project.path, task: pass.task.id, name: pass.task.name, branch, pr: pr.number, url: pr.url, sha, queuedAt: new Date(deps.now()).toISOString() });
   writeMerges(deps.home, queue);
   note({ event: 'merge-queued', pr: pr.number, branch });
   return outcome;
@@ -56,6 +66,8 @@ export async function afterPass(
 
 // How long a pull request may show no CI checks before the person is told: right after it is opened GitHub has not registered them yet.
 export const NO_CHECKS_GRACE_MS = 10 * 60_000;
+// How long a queued task waits before its first merge, even with green checks: a fast check may be green before a slower CI registers.
+export const SETTLE_MS = 2 * 60_000;
 
 type Decision = { kind: 'wait' } | { kind: 'skip'; reason: string } | { kind: 'hand-over'; reason: string } | { kind: 'merge'; pr: PullRequest };
 
@@ -66,32 +78,61 @@ export async function processMerges(deps: CycleDeps, project: ProjectEntry): Pro
   for (const entry of readMerges(deps.home).filter((item) => item.project === project.path)) {
     const note = (event: Record<string, unknown>): void => deps.log?.({ ...event, at: new Date(deps.now()).toISOString(), project: project.path, task: entry.task });
     const worktree = worktreePath(deps.home, project.path, entry.task);
-    const decision = await decide(deps, project, entry, staging);
-    if (decision.kind === 'wait') continue;
-    drop(deps.home, entry);
-    if (decision.kind === 'skip') {
-      note({ event: 'merge-skipped', pr: entry.pr, reason: decision.reason });
-    } else if (decision.kind === 'hand-over') {
-      await markForReview(deps, project.path, entry.task, `${decision.reason}.`, worktree);
-    } else {
-      try {
-        await mergePullRequest(deps.runCommand, project.path, decision.pr.number);
-      } catch (error) {
-        await markForReview(deps, project.path, entry.task, `the merge failed: ${error instanceof Error ? error.message : String(error)}.`, worktree);
-        continue;
+    try {
+      const decision = await decide(deps, project, entry, staging);
+      if (decision.kind === 'wait') continue;
+      drop(deps.home, entry);
+      if (decision.kind === 'skip') {
+        note({ event: 'merge-skipped', pr: entry.pr, reason: decision.reason });
+      } else if (decision.kind === 'hand-over') {
+        await markForReview(deps, project.path, entry.task, `${decision.reason}.`, worktree);
+      } else {
+        await merge(deps, project, entry, decision.pr, staging, note);
       }
-      await deps.runTaskwire(['task', 'update', entry.task, '--needs', 'none'], project.path);
-      const text = `> **Done:** merged into \`${staging}\` by the orchestrator, ${decision.pr.url}.\n> **Next:** release \`${staging}\` to production, then close the task.`;
-      await deps.runTaskwire(['comment', 'add', entry.task, '--text', text], project.path);
-      note({ event: 'merge', pr: decision.pr.number, branch: entry.branch, base: staging });
+    } catch (error) {
+      // One entry that cannot be handled (a task deleted, say) must not hold back the others: it goes to the person.
+      drop(deps.home, entry);
+      const message = error instanceof Error ? error.message : String(error);
+      note({ event: 'error', error: message });
+      await markForReview(deps, project.path, entry.task, `the orchestrator could not merge it: ${message}.`, worktree).catch(() => {});
     }
   }
 }
 
+async function merge(
+  deps: CycleDeps,
+  project: ProjectEntry,
+  entry: PendingMerge,
+  pr: PullRequest,
+  staging: string,
+  note: (event: Record<string, unknown>) => void,
+): Promise<void> {
+  // Read once more right before the merge: the person may have acted while the pull request was read.
+  if ((await readNeeds(deps, project, entry)) !== 'review') {
+    note({ event: 'merge-skipped', pr: entry.pr, reason: 'the task changed since it was verified' });
+    return;
+  }
+  try {
+    await mergePullRequest(deps.runCommand, project.path, pr.number, entry.sha);
+  } catch (error) {
+    await markForReview(deps, project.path, entry.task, `the merge failed: ${error instanceof Error ? error.message : String(error)}.`, worktreePath(deps.home, project.path, entry.task));
+    return;
+  }
+  await deps.runTaskwire(['task', 'update', entry.task, '--needs', 'none'], project.path);
+  const text = `> **Done:** merged into \`${staging}\` by the orchestrator, ${pr.url}.\n> **Next:** release \`${staging}\` to production, then close the task.`;
+  await deps.runTaskwire(['comment', 'add', entry.task, '--text', text], project.path);
+  note({ event: 'merge', pr: pr.number, branch: entry.branch, base: staging });
+}
+
+async function readNeeds(deps: CycleDeps, project: ProjectEntry, entry: PendingMerge): Promise<string | null> {
+  const task = (await deps.runTaskwire(['task', 'get', entry.task, '--comments', '0'], project.path)) as Partial<TaskSummary>;
+  return task.needs ?? null;
+}
+
 async function decide(deps: CycleDeps, project: ProjectEntry, entry: PendingMerge, staging: string): Promise<Decision> {
   if (mergeLevel(project) === 'none') return { kind: 'skip', reason: 'the merge level is PR only' };
-  const task = (await deps.runTaskwire(['task', 'get', entry.task, '--comments', '0'], project.path)) as Partial<TaskSummary>;
-  if (task.needs !== 'review') return { kind: 'skip', reason: 'the task changed since it was verified' };
+  if (deps.now() - Date.parse(entry.queuedAt) < SETTLE_MS) return { kind: 'wait' };
+  if ((await readNeeds(deps, project, entry)) !== 'review') return { kind: 'skip', reason: 'the task changed since it was verified' };
   let pr: PullRequest | null;
   try {
     pr = await findPullRequest(deps.runCommand, project.path, entry.branch);
@@ -102,6 +143,7 @@ async function decide(deps: CycleDeps, project: ProjectEntry, entry: PendingMerg
   if (pr.state === 'MERGED') return { kind: 'skip', reason: 'already merged by a person' };
   if (pr.state === 'CLOSED') return { kind: 'hand-over', reason: 'the pull request was closed without merging' };
   if (pr.baseRefName !== staging) return { kind: 'hand-over', reason: `the pull request targets ${pr.baseRefName}, not ${staging}` };
+  if (pr.headRefOid !== entry.sha) return { kind: 'hand-over', reason: 'the pull request has new commits since it was verified' };
   if (pr.mergeable === 'CONFLICTING') return { kind: 'hand-over', reason: `the pull request has conflicts with ${staging}` };
   if (pr.checks === 'fail') return { kind: 'hand-over', reason: 'the CI of the pull request failed' };
   if (pr.checks === 'none') {

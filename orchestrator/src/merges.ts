@@ -9,6 +9,8 @@ export interface PendingMerge {
   branch: string;
   pr: number;
   url: string;
+  // The commit the tests and the verifier checked: only this one may be merged.
+  sha: string;
   queuedAt: string;
 }
 
