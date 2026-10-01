@@ -13,7 +13,7 @@ const state: DashboardState = {
   working: [],
   waiting: [{
     project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog',
-    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null,
+    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null, autoMerge: false,
   }],
   history: [],
   live: [],

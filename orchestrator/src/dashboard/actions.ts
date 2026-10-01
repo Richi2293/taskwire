@@ -2,7 +2,7 @@ import { DEFAULT_BLOCK_TAG, loadConfig, mergeLevel } from '../config.ts';
 import type { ProjectEntry } from '../config.ts';
 import { usageError } from '../errors.ts';
 import { readLive, removeLive } from '../live.ts';
-import { readMerges, writeMerges } from '../merges.ts';
+import { approvalCanMerge, readMerges, writeMerges } from '../merges.ts';
 import { readRuns } from '../state.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 
@@ -122,9 +122,7 @@ async function closeLive(deps: ActionDeps, project: ProjectEntry, taskId: string
 function queueApproved(home: string, project: ProjectEntry, task: TaskSummary, now: () => string): void {
   if (mergeLevel(project) === 'none') return;
   const last = readRuns(home, RUNS_LOOKED_AT).find((run) => run.project === project.path && run.task === task.id);
-  if (last === undefined || !last.branch || !last.pr || !last.sha) return;
-  // Only work the verifier passed, in full or but for the checks by hand: a run that failed its checks is the person's to merge.
-  if (last.verdict !== 'pass' && last.verdict !== 'manual') return;
+  if (!approvalCanMerge(last)) return;
   const queue = readMerges(home).filter((entry) => !(entry.project === project.path && entry.task === task.id));
   queue.push({ project: project.path, task: task.id, name: task.name, branch: last.branch, pr: last.pr, url: '', sha: last.sha, approvedBy: 'person', queuedAt: now() });
   writeMerges(home, queue);

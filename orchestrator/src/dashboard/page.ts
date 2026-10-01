@@ -417,7 +417,8 @@ function sameText(a, b) {
 }
 
 function keyOf(item) {
-  return item.project + '#' + item.id;
+  // A task can be live and waiting again (sent back after its release): the two items need their own keys.
+  return (item.needs === 'live' ? 'live:' : '') + item.project + '#' + item.id;
 }
 
 function renderControl(state) {
@@ -619,6 +620,12 @@ function mergeForm(p) {
 
 async function saveMerge(p, level, confirmName, form) {
   const result = document.getElementById('projects-result');
+  // Nothing changed: close the form, without asking for the project name again.
+  if (level === p.merge) {
+    ui.merging = null;
+    renderProjects(ui.state);
+    return;
+  }
   for (const control of form.querySelectorAll('button, input')) control.disabled = true;
   try {
     await post('/api/projects', { action: 'merge-level', project: p.project, level, confirm: confirmName });
@@ -636,9 +643,10 @@ async function saveMerge(p, level, confirmName, form) {
 
 // Where the release of staging to production stands, while it waits or is blocked.
 function releaseLine(p) {
-  if (!p.release || p.release.state === 'released') return null;
+  if (p.merge !== 'main' || !p.release || p.release.state === 'released') return null;
   const target = 'Release to ' + (p.productionBranch || 'production');
-  const text = p.release.state === 'blocked' ? target + ' is blocked: ' + p.release.reason + '.' : target + ' waits: ' + p.release.reason + '.';
+  const reason = p.release.reason.replace(/\\.?$/, '.');
+  const text = p.release.state === 'blocked' ? target + ' is blocked: ' + reason : target + ' waits: ' + reason;
   return el('p', { className: p.release.state === 'blocked' ? 'analysis error' : 'analysis', text });
 }
 
@@ -769,7 +777,8 @@ function renderProjectFilters(state) {
   const followed = new Set(state.projects.map((p) => p.project));
   // A project no longer followed leaves the choice.
   for (const path of [...ui.projects]) if (!followed.has(path)) ui.projects.delete(path);
-  const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review;
+  const live = state.live || [];
+  const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review + live.filter((i) => i.project === p.project).length;
   const shown = state.projects.filter((p) => count(p) > 0 || ui.projects.has(p.project));
   const box = document.getElementById('project-filters');
   // With a single project followed there is nothing to choose.
@@ -855,13 +864,6 @@ function renderDetail(state) {
     el('div', { className: 'meta' }, el('span', { className: 'pill ' + item.needs, text: item.proposedTask ? 'New task proposed' : item.readyToClose ? 'Ready to close' : KIND[item.needs].pill }), item.projectName + (item.since ? ', waiting for ' + duration(now - new Date(item.since)) : '')),
     el('div', {}, el('h3', {}, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })), item.goal && !sameText(item.goal, item.name) ? el('p', { className: 'goal' }, ...inline(item.goal)) : null),
   ];
-  const note = item.note.length ? el('div', {}, el('p', { className: 'section-label', text: 'The agent says' }), el('ul', { className: 'note' }, item.note.map((line) => el('li', {}, ...inline(line))))) : null;
-  const field = (label, placeholder) => el('textarea', { 'aria-label': label, placeholder });
-  const side = el('div', { className: 'side' },
-    el('a', { href: item.url, target: '_blank', rel: 'noopener', text: 'Open in ClickUp' }),
-    el('details', { className: 'menu' }, el('summary', { text: 'More' }),
-      el('div', {}, el('button', { type: 'button', text: 'Keep agents away from this task', onclick: () => send(item, 'block', undefined, box, result) }))));
-
   if (item.needs === 'live') {
     parts.push(el('p', { text: 'Pull request #' + item.pr + ' is in production.' }));
     parts.push(el('div', { className: 'actions' },
@@ -872,6 +874,13 @@ function renderDetail(state) {
     box.replaceChildren(...parts);
     return;
   }
+  const note = item.note.length ? el('div', {}, el('p', { className: 'section-label', text: 'The agent says' }), el('ul', { className: 'note' }, item.note.map((line) => el('li', {}, ...inline(line))))) : null;
+  const field = (label, placeholder) => el('textarea', { 'aria-label': label, placeholder });
+  const side = el('div', { className: 'side' },
+    el('a', { href: item.url, target: '_blank', rel: 'noopener', text: 'Open in ClickUp' }),
+    el('details', { className: 'menu' }, el('summary', { text: 'More' }),
+      el('div', {}, el('button', { type: 'button', text: 'Keep agents away from this task', onclick: () => send(item, 'block', undefined, box, result) }))));
+
   if (item.needs === 'decision' && item.proposedTask) {
     parts.push(el('div', { className: 'proposal' }, el('p', { className: 'section-label', text: 'Why the analysis proposes it' }), el('p', {}, ...inline(item.proposedTask))));
     parts.push(el('div', { className: 'actions' },
@@ -923,8 +932,8 @@ function renderDetail(state) {
         el('button', { type: 'button', className: 'btn', text: wrong, onclick: () => { feedback.hidden = false; text.focus(); } })),
       side));
     parts.push(feedback);
-    const project = state.projects.find((p) => p.project === item.project);
-    const merges = project && project.merge !== 'none';
+    // Only when the orchestrator will merge it: a run that failed its checks stays the person's to merge.
+    const merges = item.autoMerge;
     let after = ok + ' takes the task out of your queue; ' + (item.needs === 'test' ? 'merging the branch stays with you. ' : 'merging and closing it stay with you. ');
     if (merges) after = ok + ' lets the orchestrator merge ' + (item.needs === 'test' ? 'the branch' : 'it') + ' once its checks pass; closing it stays with you. ';
     parts.push(el('p', { className: 'after', text: after + wrong + ' sends your note back to the agent.' }));

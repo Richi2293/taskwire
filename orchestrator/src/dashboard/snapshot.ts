@@ -4,6 +4,7 @@ import { analysisDue, lastAnalysis } from '../analysis.ts';
 import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_STAGING_BRANCH, DEFAULT_START_STATUSES, agentsOn, loadConfig, mergeLevel } from '../config.ts';
 import type { MergeLevel } from '../config.ts';
 import { readLive } from '../live.ts';
+import { approvalCanMerge } from '../merges.ts';
 import { readReleases } from '../releases.ts';
 import type { ReleaseState } from '../releases.ts';
 import { pickTask } from '../picker.ts';
@@ -34,6 +35,8 @@ export interface WaitingItem {
   byHand: string[];
   proposedTask: string | null;
   readyToClose: string | null;
+  // True when approving the task lets the orchestrator merge it (see approvalCanMerge), so the page can say so.
+  autoMerge: boolean;
 }
 
 export interface WorkingItem {
@@ -173,6 +176,7 @@ interface TaskDetail {
 // The free ClickUp plan allows 100 requests a minute: a project is read again at most once a minute while someone looks.
 const FRESH_MS = 60_000;
 const HISTORY_LIMIT = 200;
+const RUNS_FOR_APPROVALS = 500;
 const SNAPSHOT_FILE = 'snapshot.json';
 const NEEDS_ORDER: Record<NeedsKind, number> = { decision: 0, test: 1, review: 2 };
 
@@ -265,6 +269,8 @@ export function createStore(deps: StoreDeps): Store {
     const projects: ProjectSummary[] = [];
     const live: LiveItem[] = [];
     const liveTasks = readLive(deps.home).live;
+    // Newest first: the first run found for a task is its last one.
+    const runs = readRuns(deps.home, RUNS_FOR_APPROVALS);
     const releases = readReleases(deps.home);
     let firstTask: ControlInfo['firstTask'] = null;
     for (const project of config.projects) {
@@ -287,7 +293,8 @@ export function createStore(deps: StoreDeps): Store {
         merge: mergeLevel(project),
         stagingBranch: project.stagingBranch ?? DEFAULT_STAGING_BRANCH,
         productionBranch: project.productionBranch ?? null,
-        release: releases[project.path] === undefined ? null : { state: releases[project.path].state, reason: releases[project.path].reason, pr: releases[project.path].pr },
+        // A release state left from level main, after the level was lowered, is not shown.
+        release: mergeLevel(project) !== 'main' || releases[project.path] === undefined ? null : { state: releases[project.path].state, reason: releases[project.path].reason, pr: releases[project.path].pr },
         analysisDue: agentsOn(project) && analysisDue(deps.home, project.path, deps.now(), config.analysisHours ?? DEFAULT_ANALYSIS_HOURS),
       };
       const analysis = lastAnalysis(deps.home, project.path);
@@ -296,7 +303,8 @@ export function createStore(deps: StoreDeps): Store {
       for (const task of known.tasks) {
         if (task.needs === null) continue;
         summary.waiting[task.needs] += 1;
-        waiting.push(waitingItem(task, known.details[task.id], project.path, projectName));
+        const autoMerge = mergeLevel(project) !== 'none' && approvalCanMerge(runs.find((run) => run.project === project.path && run.task === task.id));
+        waiting.push({ ...waitingItem(task, known.details[task.id], project.path, projectName), autoMerge });
       }
       // Only the live tasks still open: one closed in the task system is done.
       const open = new Set(known.tasks.map((entry) => entry.id));
@@ -372,7 +380,7 @@ export function createStore(deps: StoreDeps): Store {
   };
 }
 
-function waitingItem(task: TaskSummary, detail: TaskDetail | undefined, project: string, projectName: string): WaitingItem {
+function waitingItem(task: TaskSummary, detail: TaskDetail | undefined, project: string, projectName: string): Omit<WaitingItem, 'autoMerge'> {
   const text = detail?.comment?.text ?? '';
   return {
     project,
