@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ProjectConfig } from '../src/config.ts';
 import { LIST_ID, OTHER_FOLDER_ID, WORKSPACE_ID, rawList, rawTask, runCli, sequence } from './helpers.ts';
 
 const listRoute = { [`GET /list/${LIST_ID}`]: { body: rawList() } };
@@ -277,4 +278,38 @@ test('task create and task update send tag names in lowercase', async () => {
     'POST /task/t1/tag/customer%20feedback',
     'DELETE /task/t1/tag/old',
   ]);
+});
+
+const NO_AREA_CONFIG: ProjectConfig = { provider: 'clickup', workspaceId: WORKSPACE_ID, folderId: '900', defaultListId: LIST_ID };
+const AREA_CONFIG: ProjectConfig = { ...NO_AREA_CONFIG, area: 'mobile' };
+
+async function createInArea(args: string[], config: ProjectConfig = AREA_CONFIG) {
+  return runCli(['task', 'create', '--name', 'New', ...args], { config, routes: {
+    ...listRoute,
+    [`POST /list/${LIST_ID}/task`]: { body: rawTask({ id: 'n1', name: 'New' }) },
+  } });
+}
+
+const sentTags = (run: { calls: { method: string; body: unknown }[] }) =>
+  (run.calls.find((c) => c.method === 'POST')?.body as { tags?: string[] }).tags;
+
+test('task create in a project with an area tags the new task with it', async () => {
+  assert.deepEqual(sentTags(await createInArea([])), ['mobile']);
+  assert.deepEqual(sentTags(await createInArea(['--tag', 'bug'])), ['bug', 'mobile']);
+});
+
+test('task create --area tags the task with that area only, once', async () => {
+  assert.deepEqual(sentTags(await createInArea(['--area', 'BE'])), ['be']);
+  assert.deepEqual(sentTags(await createInArea(['--area', 'be', '--tag', 'be'])), ['be']);
+});
+
+test('task create in a project without an area sends no area tag, unless --area is given', async () => {
+  assert.equal(sentTags(await createInArea([], NO_AREA_CONFIG)), undefined);
+  assert.deepEqual(sentTags(await createInArea(['--area', 'fe'], NO_AREA_CONFIG)), ['fe']);
+});
+
+test('task create rejects an --area that is not one word without calling ClickUp', async () => {
+  const run = await createInArea(['--area', 'two words']);
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
 });

@@ -81,6 +81,7 @@ Tasks:
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
                        [--assignee <id|me>]... [--due YYYY-MM-DD] [--parent <id>]
                        [--needs decision|test|review]
+                       [--area <tag>]   the area tag of the task (default: the project's area)
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
                        [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
@@ -190,6 +191,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       due: { type: 'string' },
       parent: { type: 'string' },
       needs: { type: 'string' },
+      area: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,
