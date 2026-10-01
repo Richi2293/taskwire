@@ -6,7 +6,7 @@ import { closeInterruptedClaims, runCycle } from './cycle.ts';
 import type { CycleDeps, CycleResult } from './cycle.ts';
 import type { RunControl } from './control.ts';
 import { pruneOld } from './journal.ts';
-import { processMerges } from './merging.ts';
+import { upkeep as upkeepProject } from './upkeep.ts';
 
 export interface LoopDeps extends CycleDeps {
   // One event per line: what the loop did, for the terminal and later the dashboard.
@@ -18,8 +18,8 @@ export interface LoopDeps extends CycleDeps {
   cycle?: (deps: CycleDeps, project: ProjectEntry) => Promise<CycleResult>;
   // The analysis of one project; replaced in tests.
   analyze?: (deps: CycleDeps, project: ProjectEntry) => Promise<AnalysisRecord>;
-  // Merges the ready tasks of a project; replaced in tests.
-  merge?: (deps: CycleDeps, project: ProjectEntry) => Promise<void>;
+  // Merges, releases and live tasks of a project, at every tick; replaced in tests.
+  upkeep?: (deps: CycleDeps, project: ProjectEntry, working: boolean) => Promise<void>;
   // Play and pause from the dashboard; without it the loop always works.
   control?: RunControl;
   // Told before each wait: when the loop looks for new tasks next, or null while paused.
@@ -30,7 +30,7 @@ export interface LoopDeps extends CycleDeps {
 export async function runLoop(deps: LoopDeps): Promise<void> {
   const cycle = deps.cycle ?? runCycle;
   const analyze = deps.analyze ?? runAnalysis;
-  const merge = deps.merge ?? processMerges;
+  const upkeep = deps.upkeep ?? upkeepProject;
   const at = () => new Date(deps.now()).toISOString();
   pruneOld(deps.home, deps.now());
   deps.log({ event: 'start', at: at() });
@@ -60,10 +60,11 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     // While paused, or on a project with agents off, nothing new starts; agents already at work finish their task.
     const working = deps.control === undefined || deps.control.working();
     const projects = working ? config.projects.filter(agentsOn) : [];
-    // Merges first: they need no agent, and a merged task should not wait for a free slot.
-    for (const project of projects) {
+    // Upkeep first: it needs no agent, and a merged task should not wait for a free slot.
+    // Every project gets it, paused too, but only the ones where agents may work get merges and releases.
+    for (const project of config.projects) {
       try {
-        await merge(cycleDeps, project);
+        await upkeep(cycleDeps, project, working && agentsOn(project));
       } catch (error) {
         deps.log({ event: 'error', at: at(), project: project.path, error: error instanceof Error ? error.message : String(error) });
       }

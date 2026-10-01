@@ -1,6 +1,8 @@
-import { DEFAULT_BLOCK_TAG, loadConfig } from '../config.ts';
+import { DEFAULT_BLOCK_TAG, loadConfig, mergeLevel } from '../config.ts';
 import type { ProjectEntry } from '../config.ts';
 import { usageError } from '../errors.ts';
+import { readMerges, writeMerges } from '../merges.ts';
+import { readRuns } from '../state.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 
 export const ACTIONS = ['answer', 'accept-proposal', 'approve', 'send-back', 'block', 'accept-task', 'reject-task', 'close'] as const;
@@ -67,6 +69,7 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
       await run(['task', 'update', task.id, '--needs', 'none']);
     } else if (request.action === 'approve') {
       await run(['task', 'update', task.id, '--needs', 'none']);
+      queueApproved(deps.home, project, task, () => new Date().toISOString());
     } else if (request.action === 'send-back') {
       await run(['comment', 'add', task.id, '--text', `${PERSON_PREFIX}\n\n${text}`]);
       await run(['task', 'update', task.id, '--needs', 'none', '--status', project.startStatuses?.[0] ?? SEND_BACK_STATUS]);
@@ -81,9 +84,32 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
     } else {
       await run(['task', 'update', task.id, '--add-tag', project.blockTag ?? DEFAULT_BLOCK_TAG]);
     }
+    // Any other answer than an approval withdraws a merge queued for the task: the person did not let it go.
+    if (request.action !== 'approve') dropQueued(deps.home, project, task.id);
     // Every action but block clears the mark: the task no longer waits for the person.
     deps.onChange(project.path, request.action === 'block' ? undefined : task.id);
   };
+}
+
+// With a merge level, the person's approval lets the orchestrator merge the pull request of the task's last run,
+// at the commit that run ended on. A run without a pull request (an old run, a sandboxed agent) leaves the merge to the person.
+function queueApproved(home: string, project: ProjectEntry, task: TaskSummary, now: () => string): void {
+  if (mergeLevel(project) === 'none') return;
+  const last = readRuns(home, RUNS_LOOKED_AT).find((run) => run.project === project.path && run.task === task.id);
+  if (last === undefined || !last.branch || !last.pr || !last.sha) return;
+  // Only work the verifier passed, in full or but for the checks by hand: a run that failed its checks is the person's to merge.
+  if (last.verdict !== 'pass' && last.verdict !== 'manual') return;
+  const queue = readMerges(home).filter((entry) => !(entry.project === project.path && entry.task === task.id));
+  queue.push({ project: project.path, task: task.id, name: task.name, branch: last.branch, pr: last.pr, url: '', sha: last.sha, approvedBy: 'person', queuedAt: now() });
+  writeMerges(home, queue);
+}
+
+const RUNS_LOOKED_AT = 500;
+
+function dropQueued(home: string, project: ProjectEntry, taskId: string): void {
+  const queue = readMerges(home);
+  const kept = queue.filter((entry) => !(entry.project === project.path && entry.task === taskId));
+  if (kept.length !== queue.length) writeMerges(home, kept);
 }
 
 // The project may name it; otherwise it is the last status of the task's list, where ClickUp keeps the closed one.

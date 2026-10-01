@@ -34,6 +34,8 @@ export interface ProjectEntry {
   merge?: MergeLevel;
   // The staging branch, where the orchestrator merges verified tasks; defaults to DEFAULT_STAGING_BRANCH.
   stagingBranch?: string;
+  // The production branch, where releases go; defaults to the default branch of the remote. Set stagingBranch to it when the project has no staging.
+  productionBranch?: string;
 }
 
 export interface OrchestratorConfig {
@@ -129,7 +131,7 @@ function positive(value: unknown, what: string, invalid: (reason: string) => Err
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents, area, group, merge, stagingBranch } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents, area, group, merge, stagingBranch, productionBranch } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
@@ -164,6 +166,7 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
     project.merge = level;
   }
   if (stagingBranch !== undefined) project.stagingBranch = text(stagingBranch, `"stagingBranch" of ${path}`, invalid);
+  if (productionBranch !== undefined) project.productionBranch = text(productionBranch, `"productionBranch" of ${path}`, invalid);
   return project;
 }
 

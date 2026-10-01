@@ -27,3 +27,9 @@ test('an unknown merge level is a configuration error', () => {
   assert.throws(() => loadConfig(configWith({ merge: 'always' })), /"merge" of \/p\/shop must be "none", "dev" or "main"/);
   assert.throws(() => loadConfig(configWith({ stagingBranch: '' })), /"stagingBranch" of \/p\/shop must be a non empty string/);
 });
+
+test('the production branch is read from the config, and an empty one is refused', () => {
+  const [project] = loadConfig(configWith({ productionBranch: 'release' })).projects;
+  assert.equal(project.productionBranch, 'release');
+  assert.throws(() => loadConfig(configWith({ productionBranch: ' ' })), /"productionBranch" of \/p\/shop must be a non empty string/);
+});

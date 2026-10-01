@@ -11,6 +11,8 @@ export interface PendingMerge {
   url: string;
   // The commit the tests and the verifier checked: only this one may be merged.
   sha: string;
+  // Who let the merge go: the verifier (all criteria verified) or the person (It works, Approve); missing means the verifier.
+  approvedBy?: 'verifier' | 'person';
   queuedAt: string;
 }
 
