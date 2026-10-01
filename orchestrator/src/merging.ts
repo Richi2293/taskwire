@@ -7,6 +7,7 @@ import type { PullRequest } from './github.ts';
 import { readMerges, writeMerges } from './merges.ts';
 import type { PendingMerge } from './merges.ts';
 import { setProjectAgents } from './projects.ts';
+import { readClaims } from './state.ts';
 import type { TaskSummary } from './taskwire.ts';
 import { worktreePath } from './worktree.ts';
 
@@ -127,11 +128,17 @@ async function merge(
   note({ event: 'merge', pr: pr.number, branch: entry.branch, base: staging });
 }
 
+// The entry itself, by when it was queued: a new approval of the same task queued meanwhile stays.
+function drop(home: string, entry: PendingMerge): void {
+  writeMerges(home, readMerges(home).filter((item) => !(item.project === entry.project && item.task === entry.task && item.queuedAt === entry.queuedAt)));
+}
+
 // Why the merge may no longer go ahead, or null while the approval still holds:
 // the verifier left the task waiting for review; the person cleared the mark and did not send the task back.
 async function changedSinceApproval(deps: CycleDeps, project: ProjectEntry, entry: PendingMerge): Promise<string | null> {
   const task = (await deps.runTaskwire(['task', 'get', entry.task, '--comments', '0'], project.path)) as Partial<TaskSummary>;
   if (entry.approvedBy === 'person') {
+    if (entry.task in readClaims(deps.home)) return 'an agent works on the task again';
     const sentBack = (project.startStatuses ?? DEFAULT_START_STATUSES).includes(task.status ?? '');
     return task.needs === null && !sentBack ? null : 'the task changed since it was approved';
   }
@@ -154,6 +161,10 @@ async function decide(deps: CycleDeps, project: ProjectEntry, entry: PendingMerg
   if (pr.state === 'CLOSED') return { kind: 'hand-over', reason: 'the pull request was closed without merging' };
   if (pr.baseRefName !== staging) return { kind: 'hand-over', reason: `the pull request targets ${pr.baseRefName}, not ${staging}` };
   if (pr.headRefOid !== entry.sha) return { kind: 'hand-over', reason: 'the pull request has new commits since it was verified' };
+  // The person may have tried the work in the worktree: what they approved must be what is committed.
+  if (entry.approvedBy === 'person' && (await hasUncommittedChanges(deps.runCommand, worktreePath(deps.home, project.path, entry.task)))) {
+    return { kind: 'hand-over', reason: 'the worktree has uncommitted changes, so the pull request is not what was approved' };
+  }
   if (pr.mergeable === 'CONFLICTING') return { kind: 'hand-over', reason: `the pull request has conflicts with ${staging}` };
   if (pr.checks === 'fail') return { kind: 'hand-over', reason: 'the CI of the pull request failed' };
   if (pr.checks === 'none') {
@@ -165,6 +176,3 @@ async function decide(deps: CycleDeps, project: ProjectEntry, entry: PendingMerg
   return { kind: 'merge', pr };
 }
 
-function drop(home: string, entry: PendingMerge): void {
-  writeMerges(home, readMerges(home).filter((item) => !(item.project === entry.project && item.task === entry.task)));
-}

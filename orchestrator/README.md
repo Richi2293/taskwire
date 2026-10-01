@@ -94,7 +94,7 @@ The agent never merges: the orchestrator does, with `gh pr merge --squash`, and 
 - its last commit is the one the tests and the verifier checked, with nothing left uncommitted in the worktree; the merge itself is pinned to that commit (`--match-head-commit`), so a push in the meantime stops it;
 - its CI is green. The orchestrator waits at least 2 minutes after the task is queued, so a slower CI can register; without any check after 10 minutes, the task goes to the person. Without required status checks on GitHub, green means green among the checks registered so far.
 
-Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. A task the verifier could not check in full waits for the person: with a merge level, **It works** or **Approve** on the dashboard queue its merge, at the commit its last run ended on; the merge then needs the mark still clear and the task not sent back. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
+Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. A task the verifier could not check in full waits for the person: with a merge level, **It works** or **Approve** on the dashboard queue its merge, at the commit its last run ended on, when the verifier passed that run in full or but for the checks by hand (a run that failed its checks stays the person's to merge). The merge then needs the mark still clear, the task not sent back, no agent at work on it and nothing uncommitted in its worktree. Any other answer from the dashboard on the task withdraws a queued merge. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
 
 After every pass, failed ones too, the orchestrator also looks at the pull request: if it was merged during the run, the agent merged it on its own. The task goes to the person, and agents are turned off for the project (`"agents": false`).
 
@@ -108,11 +108,11 @@ With level `"main"`, at every tick while agents work, when staging is ahead of p
 2. opens a pull request from staging to production, `release: dev to main`, when there is none;
 3. merges it with a merge commit, pinned to the staging commit, once its CI is green, it has no conflicts and the same staging commit has been there for 2 minutes.
 
-Conflicts, a failed CI, no CI after 10 minutes or a refused merge block the release until it changes; nothing is forced. Where each project stands is kept in `releases.json`.
+Conflicts, a failed CI or no CI after 10 minutes block the release until the pull request changes, and a refused merge is tried again at the next tick; nothing is forced. Closing the release pull request stops the release until staging moves on. Where each project stands is kept in `releases.json`.
 
 ### Live tasks
 
-At every tick, paused too, the orchestrator looks at the pull request of the latest run of each task of the last 30 days, at every merge level: when it is merged and its merge commit is in the production branch, the task is live and recorded in `live.json`, whoever merged and released it. The person then closes it; the orchestrator never does. A pull request closed without merging is not asked again. This only reads (`gh` and `git fetch`).
+At every tick, paused too, the orchestrator looks at the pull request of the latest run of each task of the last 30 days, at every merge level: when it is merged and its merge commit is in the production branch, the task is live and recorded in `live.json`, whoever merged and released it. The person then closes it; the orchestrator never does. A pull request closed without merging is not asked again, an open one at most every 30 minutes, and once merged only `git` checks whether its merge commit reached production. This only reads (`gh` and `git fetch`).
 
 ## Diary and logs
 

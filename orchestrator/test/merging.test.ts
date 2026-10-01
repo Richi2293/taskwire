@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProjectEntry } from '../src/config.ts';
 import { readMerges, writeMerges } from '../src/merges.ts';
+import { writeClaims } from '../src/state.ts';
 import type { PendingMerge } from '../src/merges.ts';
 import { processMerges } from '../src/merging.ts';
 import { fakeCommands, fakeTaskwire, task, tempDir } from './helpers.ts';
@@ -24,11 +25,12 @@ test('the merge queue is kept on disk, and a broken file reads as empty', () => 
 const shop: ProjectEntry = { path: '/p/shop', merge: 'dev' };
 const NOW = Date.parse('2026-09-27T10:05:00.000Z');
 
-function deps(home: string, gh: Record<string, unknown>, needs: string | null | ((args: string[]) => unknown) = 'review', mergeCode = 0) {
+function deps(home: string, gh: Record<string, unknown>, needs: string | null | ((args: string[]) => unknown) = 'review', mergeCode = 0, git: Record<string, () => Partial<{ code: number; stdout: string }>> = {}) {
   const taskGet = typeof needs === 'function' ? needs : { ...task({ status: 'qa' }), needs };
   const taskwire = fakeTaskwire({ 'task get': taskGet, 'task update': {}, 'comment add': { id: 'c1' } });
   const events: Record<string, unknown>[] = [];
   const commands = fakeCommands({
+    ...git,
     'gh pr': (call) => (call.args[1] === 'merge'
       ? { code: mergeCode, stderr: mergeCode === 0 ? '' : 'merge refused' }
       : { stdout: JSON.stringify({ number: 12, url: 'https://github.com/acme/shop/pull/12', state: 'OPEN', baseRefName: 'dev', headRefName: 'feat/discount', headRefOid: 'abc123', mergedAt: null, mergeable: 'MERGEABLE', statusCheckRollup: [{ __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' }], ...gh }) }),
@@ -167,4 +169,36 @@ test('a merge the person approved needs the mark clear and the task not sent bac
     assert.equal(merged(run.commands.calls), merges, `${needs} ${status}`);
     if (!merges) assert.ok(String(run.events.find((event) => event.event === 'merge-skipped')?.reason).includes('changed since it was approved'));
   }
+});
+
+test('a merge the person approved waits for no agent: it is dropped while an agent works on the task', async () => {
+  const home = tempDir('home');
+  writeMerges(home, [pending({ approvedBy: 'person' })]);
+  writeClaims(home, { t1: { project: '/p/shop', name: 'Add a discount', worktree: '/wt', startedAt: '2026-09-27T10:04:00.000Z' } });
+  const run = deps(home, {}, () => ({ ...task({ status: 'in progress' }), needs: null }));
+  await processMerges(run.deps, shop);
+  assert.equal(merged(run.commands.calls), false);
+  assert.deepEqual(readMerges(home), []);
+  assert.ok(String(run.events.find((event) => event.event === 'merge-skipped')?.reason).includes('an agent works on the task'));
+});
+
+test('a merge the person approved with uncommitted changes left in the worktree goes back to the person', async () => {
+  const home = tempDir('home');
+  writeMerges(home, [pending({ approvedBy: 'person' })]);
+  const run = deps(home, {}, () => ({ ...task({ status: 'qa' }), needs: null }), 0, { 'git status': () => ({ stdout: ' M src/cart.ts\n' }) });
+  await processMerges(run.deps, shop);
+  assert.equal(merged(run.commands.calls), false);
+  assert.ok(lines(run.taskwire.calls).some((line) => line.startsWith('comment add t1') && line.includes('uncommitted changes')));
+});
+
+test('an approval queued while the verifier entry is decided is kept', async () => {
+  const home = tempDir('home');
+  writeMerges(home, [pending()]);
+  const run = deps(home, {}, () => {
+    // The person approves while the orchestrator reads the task.
+    writeMerges(home, [...readMerges(home).filter((entry) => entry.approvedBy === 'person'), pending({ approvedBy: 'person', queuedAt: '2026-09-27T10:04:30.000Z' })]);
+    return { ...task({ status: 'qa' }), needs: null };
+  });
+  await processMerges(run.deps, shop);
+  assert.deepEqual(readMerges(home).map((entry) => entry.approvedBy), ['person']);
 });

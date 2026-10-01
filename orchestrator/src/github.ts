@@ -71,7 +71,8 @@ export async function openReleasePullRequest(run: RunCommand, cwd: string, base:
 
 // Brings the remote branches up to date; false when the remote cannot be reached.
 export async function fetchRemote(run: RunCommand, cwd: string): Promise<boolean> {
-  return (await run('git', ['fetch', '--quiet'], { cwd })).code === 0;
+  // Never a prompt for credentials: it would hang the loop.
+  return (await run('git', ['fetch', '--quiet'], { cwd, env: { GIT_TERMINAL_PROMPT: '0' } })).code === 0;
 }
 
 // The commit a remote branch is at, as of the last fetch; null when the branch is unknown.

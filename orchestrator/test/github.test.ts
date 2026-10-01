@@ -81,6 +81,8 @@ test('the git calls of a release: fetch, remote commit, how far ahead, whether a
     'git merge-base': (call) => ({ code: call.args[2] === 'in1' ? 0 : 1 }),
   });
   assert.equal(await fetchRemote(git.run, '/p/shop'), true);
+  // Never a prompt for credentials: it would hang the loop.
+  assert.equal(git.calls[0].env.GIT_TERMINAL_PROMPT, '0');
   assert.equal(await remoteCommit(git.run, '/p/shop', 'dev'), 'dev777');
   assert.equal(await aheadBy(git.run, '/p/shop', 'main', 'dev'), 3);
   assert.equal(await isInBranch(git.run, '/p/shop', 'in1', 'main'), true);

@@ -43,16 +43,28 @@ test('a task whose pull request is merged and in production becomes live, once',
   assert.equal(readLive(home).live.length, 1);
 });
 
-test('a pull request merged into staging only, or still open, is asked again at the next tick', async () => {
-  for (const [pr, options] of [[{}, { inProduction: false }], [{ state: 'OPEN', mergedAt: null, mergeCommit: null }, {}]] as const) {
-    const home = tempDir('home');
-    recordRun(home, {});
-    await trackLive(world(home, pr, options).deps, shop);
-    assert.deepEqual(readLive(home).live, []);
-    const again = world(home, pr, options);
-    await trackLive(again.deps, shop);
-    assert.equal(ghViews(again.commands.calls), 1);
-  }
+test('a pull request merged into staging only is asked once; then its merge commit is checked locally', async () => {
+  const home = tempDir('home');
+  recordRun(home, {});
+  await trackLive(world(home, {}, { inProduction: false }).deps, shop);
+  assert.deepEqual(readLive(home).live, []);
+  const again = world(home, {}, { inProduction: true });
+  await trackLive(again.deps, shop);
+  assert.equal(ghViews(again.commands.calls), 0);
+  assert.deepEqual(readLive(home).live.map((entry) => entry.task), ['t1']);
+});
+
+test('an open pull request is asked again only after a while', async () => {
+  const home = tempDir('home');
+  recordRun(home, {});
+  const open = { state: 'OPEN', mergedAt: null, mergeCommit: null };
+  await trackLive(world(home, open).deps, shop);
+  const soon = world(home, open);
+  await trackLive(soon.deps, shop);
+  assert.equal(ghViews(soon.commands.calls), 0);
+  const later = world(home, open);
+  await trackLive({ ...later.deps, now: () => NOW + 31 * 60_000 }, shop);
+  assert.equal(ghViews(later.commands.calls), 1);
 });
 
 test('a pull request closed without merging is never asked again', async () => {

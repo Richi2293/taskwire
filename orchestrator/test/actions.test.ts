@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createActions } from '../src/dashboard/actions.ts';
-import { readMerges } from '../src/merges.ts';
+import { readMerges, writeMerges } from '../src/merges.ts';
 import { OrchestratorError } from '../src/errors.ts';
 import { fakeTaskwire, projectDir, task, tempDir } from './helpers.ts';
 
@@ -174,5 +174,23 @@ test('without a merge level, or without a pull request in the last run, approvin
     await act({ project, task: 't1', action: 'approve' });
     assert.deepEqual(readMerges(home), []);
     assert.deepEqual(writes(taskwire.calls), [['task', 'update', 't1', '--needs', 'none']]);
+  }
+});
+
+test('sending back or blocking a task drops its queued merge', async () => {
+  for (const action of ['send-back', 'block'] as const) {
+    const { home, project, act } = setup({ merge: 'dev' });
+    writeMerges(home, [{ project, task: 't1', name: 'Task one', branch: 'feat/discount', pr: 12, url: '', sha: 'abc123', approvedBy: 'person', queuedAt: '2026-09-27T09:00:00.000Z' }]);
+    await act({ project, task: 't1', action, text: 'Round the total down.' });
+    assert.deepEqual(readMerges(home), [], action);
+  }
+});
+
+test('approving a task whose last run failed its checks queues nothing: the person merges it', async () => {
+  for (const verdict of ['fail', null]) {
+    const { home, project, act } = setup({ merge: 'dev' });
+    appendFileSync(join(home, 'runs.jsonl'), `${JSON.stringify({ project, task: 'r1', name: 'Task', url: 'u', startedAt: 's', finishedAt: '2026-09-27T09:30:00.000Z', durationMs: 1, costUsd: null, needs: 'review', status: 'qa', summary: '', tests: 'fail', verdict, worktree: '/wt', log: '/l', branch: 'feat/x', pr: 13, sha: 'def456' })}\n`);
+    await act({ project, task: 'r1', action: 'approve' });
+    assert.deepEqual(readMerges(home), [], String(verdict));
   }
 });

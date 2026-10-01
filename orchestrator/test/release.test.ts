@@ -17,6 +17,8 @@ interface Scenario {
   pr?: Record<string, unknown> | null;
   waitingTests?: ReturnType<typeof task>[];
   mergeCode?: number;
+  // The state of a pull request read by number.
+  viewState?: string;
 }
 
 function releasePr(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -46,6 +48,7 @@ function world(home: string, scenario: Scenario = {}) {
     'git rev-parse': () => ({ stdout: `${scenario.staging ?? 'dev777'}\n` }),
     'gh pr': (call: CommandCall) => {
       if (call.args[1] === 'list') return { stdout: JSON.stringify(scenario.pr === null || scenario.pr === undefined ? [] : [scenario.pr]) };
+      if (call.args[1] === 'view') return { stdout: JSON.stringify(releasePr({ state: scenario.viewState ?? 'OPEN' })) };
       if (call.args[1] === 'merge') return { code: scenario.mergeCode ?? 0, stderr: scenario.mergeCode ? 'merge refused' : '' };
       return {};
     },
@@ -142,4 +145,25 @@ test('conflicts, a failed CI or a refused merge block the release, with one even
     assert.ok(state.reason.includes(reason), reason);
     assert.equal(run.events.filter((event) => event.event === 'release-blocked').length, 1, reason);
   }
+});
+
+test('a release pull request closed by a person stops the release until staging moves on', async () => {
+  const home = tempDir('home');
+  await processRelease(world(home, { pr: releasePr({ mergeable: 'UNKNOWN' }) }).deps, shop);
+  const closed = world(home, { pr: null, viewState: 'CLOSED' });
+  await processRelease(closed.deps, shop);
+  assert.equal(ghCalls(closed.commands.calls).includes('pr create'), false);
+  assert.equal(readReleases(home)['/p/shop'].state, 'blocked');
+  assert.ok(readReleases(home)['/p/shop'].reason.includes('closed'));
+  const moved = world(home, { pr: null, viewState: 'CLOSED', staging: 'dev888' });
+  await processRelease(moved.deps, shop);
+  assert.ok(ghCalls(moved.commands.calls).includes('pr create'));
+});
+
+test('a release that went through logs the release, without a waiting event', async () => {
+  const home = tempDir('home');
+  const run = world(home, { pr: releasePr() });
+  await processRelease({ ...run.deps, now: () => NOW - 5 * 60_000 }, shop);
+  await processRelease(run.deps, shop);
+  assert.equal(run.events.some((event) => event.event === 'release-waiting' && event.state === 'released'), false);
 });
