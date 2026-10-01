@@ -299,3 +299,25 @@ test('projects of different groups work at the same time', async () => {
   await runLoop(h.deps);
   assert.deepEqual(h.started, ['/p/api', '/p/crm']);
 });
+
+test('while working, the merge queue of each project with agents on is looked at every tick', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { projects: [{ path: '/p/a' }, { path: '/p/broken' }, { path: '/p/off', agents: false }] });
+  const control = createRunControl();
+  const merged: string[] = [];
+  const h = harness(home, 2, (tick, harnessRef) => {
+    if (tick === 1) {
+      assert.deepEqual(merged, []);
+      control.play();
+    }
+    if (tick === 2) for (const p of ['/p/a', '/p/broken']) harnessRef.finish(p);
+  });
+  h.deps.control = control;
+  h.deps.merge = async (_deps, project) => {
+    merged.push(project.path);
+    if (project.path === '/p/broken') throw new Error('gh is not logged in');
+  };
+  await runLoop(h.deps);
+  assert.deepEqual(merged, ['/p/a', '/p/broken']);
+  assert.ok(h.logs.some((log) => log.event === 'error' && log.project === '/p/broken' && String(log.error).includes('gh is not logged in')));
+});

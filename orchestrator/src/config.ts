@@ -3,6 +3,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { configError } from './errors.ts';
 
+export const MERGE_LEVELS = ['none', 'dev', 'main'] as const;
+export type MergeLevel = (typeof MERGE_LEVELS)[number];
+
 export interface ProjectEntry {
   // Absolute path of the project folder, the one with .taskwire.json.
   path: string;
@@ -26,6 +29,11 @@ export interface ProjectEntry {
   area?: string;
   // The product the project is part of, with the other projects that share its task list (for example the backend and the app).
   group?: string;
+  // Who merges the work of the project: "none" a person (the default), "dev" the orchestrator into the staging branch,
+  // "main" the orchestrator into staging and then production.
+  merge?: MergeLevel;
+  // The staging branch, where the orchestrator merges verified tasks; defaults to DEFAULT_STAGING_BRANCH.
+  stagingBranch?: string;
 }
 
 export interface OrchestratorConfig {
@@ -52,6 +60,7 @@ export const DEFAULT_INTERVAL_MINUTES = 5;
 // Low on purpose while the analysis is being tried out.
 export const DEFAULT_ANALYSIS_HOURS = 1;
 export const DEFAULT_DASHBOARD_PORT = 4777;
+export const DEFAULT_STAGING_BRANCH = 'dev';
 
 const CONFIG_FILE = 'config.json';
 
@@ -106,6 +115,11 @@ export function agentsOn(project: ProjectEntry): boolean {
   return project.agents !== false;
 }
 
+// Who merges the work of the project; a person, unless the entry says otherwise.
+export function mergeLevel(project: ProjectEntry): MergeLevel {
+  return project.merge ?? 'none';
+}
+
 function positive(value: unknown, what: string, invalid: (reason: string) => Error, whole: boolean): number {
   if (typeof value !== 'number' || value <= 0 || (whole && !Number.isInteger(value))) {
     throw invalid(`${what} must be a ${whole ? 'whole ' : ''}number greater than 0`);
@@ -115,7 +129,7 @@ function positive(value: unknown, what: string, invalid: (reason: string) => Err
 
 function parseProject(entry: unknown, invalid: (reason: string) => Error): ProjectEntry {
   if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw invalid('each project must be an object');
-  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents, area, group } = entry as Record<string, unknown>;
+  const { path, testCommand, startStatuses, blockTag, workStatus, closedStatus, sandbox, allowedDomains, agents, area, group, merge, stagingBranch } = entry as Record<string, unknown>;
   if (typeof path !== 'string' || !path.startsWith('/')) throw invalid('each project needs an absolute "path"');
   const project: ProjectEntry = { path };
   if (testCommand !== undefined) project.testCommand = text(testCommand, `"testCommand" of ${path}`, invalid);
@@ -144,6 +158,12 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
     if (!Array.isArray(startStatuses) || startStatuses.length === 0) throw invalid(`"startStatuses" of ${path} must be a non empty array`);
     project.startStatuses = startStatuses.map((status: unknown) => text(status, `"startStatuses" of ${path}`, invalid));
   }
+  if (merge !== undefined) {
+    const level = MERGE_LEVELS.find((entry) => entry === merge);
+    if (level === undefined) throw invalid(`"merge" of ${path} must be "none", "dev" or "main"`);
+    project.merge = level;
+  }
+  if (stagingBranch !== undefined) project.stagingBranch = text(stagingBranch, `"stagingBranch" of ${path}`, invalid);
   return project;
 }
 

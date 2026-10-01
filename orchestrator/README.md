@@ -70,17 +70,39 @@ For each project, `run-once`:
    - starts a separate verifier agent that checks each acceptance criterion as a person would, keeps checked only what it verified, and marks the task `needs-review` (all verified) or `needs-test` (with steps for the criteria only a person can check);
    - if the verifier finds a problem, sends it to the author once, then runs the tests and the verifier again;
 6. marks the task `needs-review` itself, with a comment, when something could not end well: no mark from the agent, a failed run, tests that still fail, a verifier with no verdict or still finding problems;
-7. appends the run to `runs.jsonl` (task, times, every agent session with its cost, tests, verdict, outcome, worktree, log) and keeps the whole output in `logs/` (see Diary and logs).
+7. appends the run to `runs.jsonl` (task, times, every agent session with its cost, tests, verdict, outcome, worktree, branch, pull request, log) and keeps the whole output in `logs/` (see Diary and logs).
 
 Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
 
 The orchestrator needs a taskwire with `needs` (newer than 0.1.6): set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
 
+## Who merges
+
+Each project sets who merges the work of its agents, with `merge` in the config:
+
+- `"none"` (the default): the agent opens a pull request and a person merges it;
+- `"dev"`: the orchestrator merges the verified tasks into the staging branch (`stagingBranch`, `dev` by default);
+- `"main"`: the same for now; releasing staging to production comes next.
+
+The agent never merges: the orchestrator does, with `gh pr merge --squash`, and only when all of these hold at the same moment:
+
+- the verifier confirmed every acceptance criterion (a task left for a test by hand waits for the person);
+- the task still waits for a review, so the person did not act on it meanwhile;
+- the pull request is open, targets the staging branch and has no conflicts;
+- its last commit is the one the tests and the verifier checked, with nothing left uncommitted in the worktree; the merge itself is pinned to that commit (`--match-head-commit`), so a push in the meantime stops it;
+- its CI is green. The orchestrator waits at least 2 minutes after the task is queued, so a slower CI can register; without any check after 10 minutes, the task goes to the person. Without required status checks on GitHub, green means green among the checks registered so far.
+
+Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
+
+After every pass, failed ones too, the orchestrator also looks at the pull request: if it was merged during the run, the agent merged it on its own. The task goes to the person, and agents are turned off for the project (`"agents": false`).
+
+The orchestrator needs `gh`, logged in, on its PATH. It cannot stop an agent that has every permission from running `gh` itself: for a hard stop, protect the staging and production branches on GitHub (required reviews or required status checks).
+
 ## Diary and logs
 
 Everything the orchestrator does is kept in its folder, so a run can be understood afterwards, also by an agent:
 
-- `events.jsonl`: the diary, one JSON event per line, written by `start` (the same events it prints) and by `run-once`. Besides the events of `start`, a run adds `claim` (a task taken), `agent` (an agent session ended: `role` author, nudge, fix-tests, fix-findings, verifier or analysis, `agent`, `sessionId`, `ok`, `costUsd`, `durationMs`), `tests` (command, result, exit code) and `marked` (the orchestrator marked the task for a person, with the reason);
+- `events.jsonl`: the diary, one JSON event per line, written by `start` (the same events it prints) and by `run-once`. Besides the events of `start`, a run adds `claim` (a task taken), `agent` (an agent session ended: `role` author, nudge, fix-tests, fix-findings, verifier or analysis, `agent`, `sessionId`, `ok`, `costUsd`, `durationMs`), `tests` (command, result, exit code) `marked` (the orchestrator marked the task for a person, with the reason), `merge-queued`, `merge` and `merge-skipped` (a merge, with the pull request and the reason when it was skipped) and `agent-merged` (an agent merged on its own);
 - `runs.jsonl` and `analyses.jsonl`: one line per run or analysis, with its `sessions` and the path of its `log`;
 - `logs/`: the whole output of every agent session of a run, each under a heading with its role, agent and session. With Claude Code it is the `stream-json` output, which holds every step of the session.
 
@@ -169,6 +191,8 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].allowedDomains` | extra domains a sandboxed agent may reach |
 | `projects[].area` | tag of the tasks of the project, when it shares its task list with other projects (for example `fe`) |
 | `projects[].group` | the product the project belongs to, with the other projects of its task list |
+| `projects[].merge` | who merges: `"none"` a person (default), `"dev"` the orchestrator into staging, `"main"` staging and later production |
+| `projects[].stagingBranch` | the staging branch the orchestrator merges into (default `dev`) |
 | `projects[].agents` | `false` keeps agents away from the project while it stays followed (default `true`) |
 
 ## Development

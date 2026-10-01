@@ -8,6 +8,7 @@ import type { ProjectEntry } from './config.ts';
 import { configError } from './errors.ts';
 import { logSection, sessionRecord } from './journal.ts';
 import type { Event, Log, Role, SessionRecord } from './journal.ts';
+import { afterPass } from './merging.ts';
 import { pickTask } from './picker.ts';
 import { markPrompt, workPrompt } from './prompts.ts';
 import { appendRun, readClaims, writeClaims } from './state.ts';
@@ -100,8 +101,12 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     costUsd = addCost(costUsd, verification.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
+  const verified = verification !== null && verification.verdict === 'pass' && verification.problem === null && after.needs === 'review';
+  // Also after a failed run: an agent may merge on its own and then fail.
+  const pass = await afterPass(deps, project, { task, worktree, verified, startedAt });
   writeLog(log, outputs, failure);
-  let problem = verification?.problem ?? null;
+  // The agent alarm comes first: its comment must say that agents are now off, even when the verification failed too.
+  let problem = pass.problem ?? verification?.problem ?? null;
   if (problem === null && after.needs === null) {
     problem = failure === null ? 'the agent stopped without marking the task' : `the agent run failed: ${failure}`;
   }
@@ -126,6 +131,8 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     verdict: verification?.verdict ?? null,
     sessions,
     worktree,
+    branch: pass.branch,
+    pr: pass.pr,
     log,
   };
   appendRun(deps.home, record);
@@ -155,7 +162,7 @@ export async function closeInterruptedClaims(deps: CycleDeps): Promise<string[]>
 }
 
 // The orchestrator's own comments are in English: the agent writes in the project language.
-async function markForReview(deps: CycleDeps, project: string, taskId: string, reason: string, worktree: string, log?: string): Promise<void> {
+export async function markForReview(deps: CycleDeps, project: string, taskId: string, reason: string, worktree: string, log?: string): Promise<void> {
   await deps.runTaskwire(['task', 'update', taskId, '--needs', 'review'], project);
   deps.log?.({ event: 'marked', at: new Date(deps.now()).toISOString(), project, task: taskId, needs: 'review', reason });
   const logLine = log === undefined ? '' : ` The agent log is \`${log}\`.`;

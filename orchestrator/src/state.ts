@@ -33,6 +33,9 @@ export interface RunRecord {
   // Every agent session of the run, in order; missing in runs recorded before the diary.
   sessions?: SessionRecord[];
   worktree: string;
+  // The branch the agent left the worktree on and its pull request; null when there is none, missing in older runs.
+  branch?: string | null;
+  pr?: number | null;
   log: string;
 }
 
