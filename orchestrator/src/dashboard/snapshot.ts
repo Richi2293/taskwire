@@ -1,7 +1,11 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { analysisDue, lastAnalysis } from '../analysis.ts';
-import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, agentsOn, loadConfig } from '../config.ts';
+import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_STAGING_BRANCH, DEFAULT_START_STATUSES, agentsOn, loadConfig, mergeLevel } from '../config.ts';
+import type { MergeLevel } from '../config.ts';
+import { readLive } from '../live.ts';
+import { readReleases } from '../releases.ts';
+import type { ReleaseState } from '../releases.ts';
 import { pickTask } from '../picker.ts';
 import { readClaims, readRuns } from '../state.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
@@ -78,6 +82,23 @@ export interface ProjectSummary {
   // The tag of the project's tasks and its group, when it shares its task list; null otherwise.
   area: string | null;
   group: string | null;
+  // Who merges the work of the project, and the branches it goes to; productionBranch is null for the default branch of the remote.
+  merge: MergeLevel;
+  stagingBranch: string;
+  productionBranch: string | null;
+  // Where the release of staging to production stands, with level main; null when there is nothing to release.
+  release: Pick<ReleaseState, 'state' | 'reason' | 'pr'> | null;
+}
+
+// A task whose work reached production, still open: the person may close it.
+export interface LiveItem {
+  project: string;
+  projectName: string;
+  id: string;
+  name: string;
+  url: string;
+  pr: number;
+  at: string;
 }
 
 export interface ControlInfo {
@@ -108,6 +129,7 @@ export interface DashboardState {
   waiting: WaitingItem[];
   working: WorkingItem[];
   history: HistoryItem[];
+  live: LiveItem[];
   problems: { project: string; projectName: string; error: string }[];
 }
 
@@ -241,6 +263,9 @@ export function createStore(deps: StoreDeps): Store {
 
     const waiting: WaitingItem[] = [];
     const projects: ProjectSummary[] = [];
+    const live: LiveItem[] = [];
+    const liveTasks = readLive(deps.home).live;
+    const releases = readReleases(deps.home);
     let firstTask: ControlInfo['firstTask'] = null;
     for (const project of config.projects) {
       const projectName = basename(project.path);
@@ -259,6 +284,10 @@ export function createStore(deps: StoreDeps): Store {
         analysis: null,
         area: project.area ?? null,
         group: project.group ?? null,
+        merge: mergeLevel(project),
+        stagingBranch: project.stagingBranch ?? DEFAULT_STAGING_BRANCH,
+        productionBranch: project.productionBranch ?? null,
+        release: releases[project.path] === undefined ? null : { state: releases[project.path].state, reason: releases[project.path].reason, pr: releases[project.path].pr },
         analysisDue: agentsOn(project) && analysisDue(deps.home, project.path, deps.now(), config.analysisHours ?? DEFAULT_ANALYSIS_HOURS),
       };
       const analysis = lastAnalysis(deps.home, project.path);
@@ -268,6 +297,13 @@ export function createStore(deps: StoreDeps): Store {
         if (task.needs === null) continue;
         summary.waiting[task.needs] += 1;
         waiting.push(waitingItem(task, known.details[task.id], project.path, projectName));
+      }
+      // Only the live tasks still open: one closed in the task system is done.
+      const open = new Set(known.tasks.map((entry) => entry.id));
+      for (const entry of liveTasks) {
+        if (entry.project === project.path && open.has(entry.task)) {
+          live.push({ project: project.path, projectName, id: entry.task, name: entry.name, url: entry.url, pr: entry.pr, at: entry.at });
+        }
       }
       if (firstTask === null && busy === null && summary.agents) {
         const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG, area: project.area });
@@ -306,6 +342,7 @@ export function createStore(deps: StoreDeps): Store {
       waiting,
       working,
       history,
+      live,
       problems: projects.filter((p) => p.error !== null).map((p) => ({ project: p.project, projectName: p.projectName, error: p.error ?? '' })),
     };
   };

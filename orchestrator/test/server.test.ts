@@ -16,6 +16,7 @@ const state: DashboardState = {
     goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null,
   }],
   history: [],
+  live: [],
   problems: [],
 };
 
