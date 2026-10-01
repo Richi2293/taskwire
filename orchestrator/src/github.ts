@@ -14,11 +14,14 @@ export interface PullRequest {
   headRefOid: string;
   // When it was merged, null while it is not.
   mergedAt: string | null;
+  // The commit the merge made, null while it is not merged.
+  mergeCommit: string | null;
+  createdAt: string;
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   checks: ChecksState;
 }
 
-const PR_FIELDS = 'number,url,state,baseRefName,headRefName,headRefOid,mergedAt,mergeable,statusCheckRollup';
+const PR_FIELDS = 'number,url,state,baseRefName,headRefName,headRefOid,mergedAt,mergeCommit,createdAt,mergeable,statusCheckRollup';
 const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
 const FAILED = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'ERROR']);
 
@@ -63,9 +66,23 @@ export async function findPullRequest(run: RunCommand, cwd: string, branch: stri
     headRefName: String(data.headRefName ?? ''),
     headRefOid: String(data.headRefOid ?? ''),
     mergedAt: typeof data.mergedAt === 'string' ? data.mergedAt : null,
+    mergeCommit: mergeCommitOf(data.mergeCommit),
+    createdAt: String(data.createdAt ?? ''),
     mergeable: data.mergeable === 'MERGEABLE' || data.mergeable === 'CONFLICTING' ? data.mergeable : 'UNKNOWN',
     checks: checksState(data.statusCheckRollup),
   };
+}
+
+function mergeCommitOf(value: unknown): string | null {
+  const oid = typeof value === 'object' && value !== null ? (value as { oid?: unknown }).oid : undefined;
+  return typeof oid === 'string' && oid !== '' ? oid : null;
+}
+
+// The default branch of the remote, such as main; null when git cannot tell.
+export async function defaultBranch(run: RunCommand, cwd: string): Promise<string | null> {
+  const result = await run('git', ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd });
+  const ref = result.code === 0 ? result.stdout.trim() : '';
+  return ref === '' ? null : ref.replace(/^origin\//, '');
 }
 
 // The checks of a pull request as one state: GitHub Actions report check runs, other CI tools report status contexts.

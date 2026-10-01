@@ -307,6 +307,7 @@ test('without a merge level nothing is queued, and the run records the branch an
   const record = JSON.parse(readFileSync(join(home, 'runs.jsonl'), 'utf8').trim()) as { branch: string; pr: number };
   assert.equal(record.branch, 'feat/discount');
   assert.equal(record.pr, 12);
+  assert.equal((record as { sha?: string }).sha, 'abc123');
 });
 
 test('a task the verifier left for a test by hand is not queued', async () => {

@@ -36,6 +36,8 @@ export interface RunRecord {
   // The branch the agent left the worktree on and its pull request; null when there is none, missing in older runs.
   branch?: string | null;
   pr?: number | null;
+  // The commit the worktree was at when the pass ended: the one a person approves with the task.
+  sha?: string | null;
   log: string;
 }
 

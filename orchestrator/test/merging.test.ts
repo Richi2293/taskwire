@@ -152,3 +152,19 @@ test('an entry that fails does not hold back the others of the project', async (
   assert.deepEqual(readMerges(home), []);
   assert.ok(run.events.some((event) => event.event === 'error' && event.task === 't0' && String(event.error).includes('Task t0 not found')));
 });
+
+test('a merge the person approved needs the mark clear and the task not sent back', async () => {
+  const cases: [string | null, string, boolean][] = [
+    [null, 'qa', true],
+    ['review', 'qa', false],
+    [null, 'to do', false],
+  ];
+  for (const [needs, status, merges] of cases) {
+    const home = tempDir('home');
+    writeMerges(home, [pending({ approvedBy: 'person' })]);
+    const run = deps(home, {}, () => ({ ...task({ status }), needs }));
+    await processMerges(run.deps, { ...shop, startStatuses: ['backlog', 'to do'] });
+    assert.equal(merged(run.commands.calls), merges, `${needs} ${status}`);
+    if (!merges) assert.ok(String(run.events.find((event) => event.event === 'merge-skipped')?.reason).includes('changed since it was approved'));
+  }
+});

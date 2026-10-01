@@ -133,6 +133,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     worktree,
     branch: pass.branch,
     pr: pass.pr,
+    sha: pass.sha,
     log,
   };
   appendRun(deps.home, record);
