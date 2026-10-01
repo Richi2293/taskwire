@@ -23,7 +23,7 @@ export interface LoopDeps extends CycleDeps {
   onWait?: (until: number | null) => void;
 }
 
-// Runs cycles until stopped: at most maxAgents at once, one per project, taking projects in turn.
+// Runs cycles until stopped: at most maxAgents at once, one per project and one per group, taking projects in turn.
 export async function runLoop(deps: LoopDeps): Promise<void> {
   const cycle = deps.cycle ?? runCycle;
   const analyze = deps.analyze ?? runAnalysis;
@@ -33,10 +33,11 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
   for (const taskId of await closeInterruptedClaims(deps)) deps.log({ event: 'interrupted', at: at(), task: taskId });
 
   const running = new Map<string, Promise<void>>();
-  // Groups with an analysis at work: two projects of a group share tasks, so they are analysed one at a time.
-  const analysing = new Set<string>();
-  // The index, in the project list, where the next pass starts, so every project gets its turn.
-  let turn = 0;
+  // Groups with an agent at work: the projects of a group share local ports, databases and tasks, so one works at a time.
+  const busyGroups = new Set<string>();
+  // When each project last got a slot, so the one that waited longest goes first and every project gets its turn.
+  const lastStarted = new Map<string, number>();
+  let starts = 0;
   while (!deps.stopped()) {
     // Read at every tick, so projects added meanwhile join without a restart.
     let config: OrchestratorConfig;
@@ -55,29 +56,25 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
     // While paused, or on a project with agents off, nothing new starts; agents already at work finish their task.
     const working = deps.control === undefined || deps.control.working();
     const projects = working ? config.projects.filter(agentsOn) : [];
-    const first = turn;
-    for (let offset = 0; offset < projects.length && running.size < maxAgents; offset++) {
-      const index = (first + offset) % projects.length;
-      const project = projects[index];
-      if (running.has(project.path)) continue;
-      turn = index + 1;
+    // A project never started comes first, in config order; the sort is stable.
+    const queue = [...projects].sort((a, b) => (lastStarted.get(a.path) ?? 0) - (lastStarted.get(b.path) ?? 0));
+    for (const project of queue) {
+      if (running.size >= maxAgents) break;
+      const group = project.group;
+      if (running.has(project.path) || (group !== undefined && busyGroups.has(group))) continue;
+      starts += 1;
+      lastStarted.set(project.path, starts);
+      if (group !== undefined) busyGroups.add(group);
       const logError = (error: unknown) => {
         deps.log({ event: 'error', at: at(), project: project.path, error: error instanceof Error ? error.message : String(error) });
       };
       // A due analysis comes first, in the same slot, so the task picked next reflects it. A failed analysis does not stop the task.
-      // A project whose group is being analysed waits for the next tick for its own analysis, and works meanwhile.
-      const group = project.group;
-      const due = analysisDue(deps.home, project.path, deps.now(), analysisHours) && (group === undefined || !analysing.has(group));
-      if (due && group !== undefined) analysing.add(group);
-      const analysis = due
+      const analysis = analysisDue(deps.home, project.path, deps.now(), analysisHours)
         ? analyze(cycleDeps, project)
           .then((record) => {
             deps.log({ event: 'analysis', at: at(), project: project.path, ok: record.ok, summary: record.summary, costUsd: record.costUsd });
           })
           .catch(logError)
-          .finally(() => {
-            if (group !== undefined) analysing.delete(group);
-          })
         : Promise.resolve();
       const work = analysis
         .then(() => cycle(cycleDeps, project))
@@ -85,7 +82,10 @@ export async function runLoop(deps: LoopDeps): Promise<void> {
           if (result.task !== null) deps.log({ event: 'run', at: at(), project: project.path, ...result.task });
         })
         .catch(logError)
-        .finally(() => running.delete(project.path));
+        .finally(() => {
+          running.delete(project.path);
+          if (group !== undefined) busyGroups.delete(group);
+        });
       running.set(project.path, work);
     }
     deps.onWait?.(working ? deps.now() + intervalMs : null);

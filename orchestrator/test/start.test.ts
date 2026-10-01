@@ -270,7 +270,32 @@ test('two projects of the same group are never analysed at once, so they do not 
     for (const p of ['/p/api', '/p/web', '/p/blog']) harnessRef.finish(p);
   });
   await runLoop(h.deps);
-  // web waits for the analysis of api; blog is in no group and goes on.
+  // web waits until the group is free; blog is in no group and goes on.
   assert.deepEqual(analysedAtTick[0], ['/p/api', '/p/blog']);
   assert.deepEqual(h.analysed, ['/p/api', '/p/blog', '/p/web']);
+});
+
+test('one agent at a time works in a group, and the projects of the group take turns', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { maxAgents: 3, projects: [{ path: '/p/api', group: 'Shop' }, { path: '/p/web', group: 'Shop' }, { path: '/p/blog' }] });
+  const runningAtTick: string[][] = [];
+  const h = harness(home, 3, (tick, harnessRef) => {
+    runningAtTick.push([...harnessRef.running].sort());
+    if (tick === 1) harnessRef.finish('/p/api');
+    if (tick === 3) for (const p of ['/p/api', '/p/web', '/p/blog']) harnessRef.finish(p);
+  });
+  await runLoop(h.deps);
+  // api and web never work together, even with a free slot; once api is done, the turn goes to web, not to api again.
+  assert.deepEqual(runningAtTick, [['/p/api', '/p/blog'], ['/p/blog', '/p/web'], ['/p/blog', '/p/web']]);
+  assert.deepEqual(h.started, ['/p/api', '/p/blog', '/p/web']);
+});
+
+test('projects of different groups work at the same time', async () => {
+  const home = tempDir('home');
+  writeConfig(home, { maxAgents: 3, projects: [{ path: '/p/api', group: 'Shop' }, { path: '/p/web', group: 'Shop' }, { path: '/p/crm', group: 'Office' }] });
+  const h = harness(home, 1, (_tick, harnessRef) => {
+    for (const p of ['/p/api', '/p/web', '/p/crm']) harnessRef.finish(p);
+  });
+  await runLoop(h.deps);
+  assert.deepEqual(h.started, ['/p/api', '/p/crm']);
 });

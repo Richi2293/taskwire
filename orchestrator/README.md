@@ -22,7 +22,7 @@ orchestrator/bin/taskwire-orchestrator start
 Projects can also be added and removed from the dashboard (see below).
 - `next` shows, for each project, the task an agent would work on next. It changes nothing. A project with agents off shows `"agents": false` and no task, without reading its tasks.
 - `run-once` makes one pass: for each project with agents on, an agent works on the next task (see below).
-- `start` opens the dashboard and runs until you press Ctrl+C. It starts **paused**: no agent takes a task until you press **Start working** on the dashboard, and **Pause** stops new work while agents already at work finish their task. Every start begins paused. While working, every `intervalMinutes` (5 by default) it starts a pass on each project that is free (preceded by an analysis of the project when one is due, see below), with at most `maxAgents` agents at once (2 by default) and never two on the same project; pressing Start working starts the first pass at once. Projects take turns, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`dashboard`, `start`, `interrupted`, `play`, `pause`, `analysis`, `run`, `action`, `error`, `stop`); an error in a project is logged and the others go on. An `action` event tells which action the dashboard sent on which task and whether it was done, refused or failed, with the reason; it never contains the text you wrote, which is in the task comment. After Ctrl+C it starts nothing new and waits for the running passes.
+- `start` opens the dashboard and runs until you press Ctrl+C. It starts **paused**: no agent takes a task until you press **Start working** on the dashboard, and **Pause** stops new work while agents already at work finish their task. Every start begins paused. While working, every `intervalMinutes` (5 by default) it starts a pass on each project that is free (preceded by an analysis of the project when one is due, see below), with at most `maxAgents` agents at once (2 by default), never two on the same project and never two in the same group (see Projects that share a task list); pressing Start working starts the first pass at once. Projects take turns: the one that waited longest goes first, so each gets its chance. It reads the config at every tick, so a project added with `add` joins without a restart. It prints one JSON event per line (`dashboard`, `start`, `interrupted`, `play`, `pause`, `analysis`, `run`, `action`, `error`, `stop`); an error in a project is logged and the others go on. An `action` event tells which action the dashboard sent on which task and whether it was done, refused or failed, with the reason; it never contains the text you wrote, which is in the task comment. After Ctrl+C it starts nothing new and waits for the running passes.
 
 ## Dashboard
 
@@ -116,8 +116,9 @@ Several projects (for example the backend, the frontend and the app of one produ
 
 - An agent of a project with an area takes only the tasks with that tag. A task with no area tag is taken by no agent of the group, so no work lands in the wrong repository.
 - A task that touches several areas becomes a container with one subtask per area, each with its tag. A dependency (`blocked by`) sets their order: a task that waits for an open task is not taken.
-- The analysis leaves alone the tasks of the other areas. It adds the area tag to a task whose area is clear, asks when it is not, and proposes the subtasks of a task that touches several areas; once the person accepts, the next analysis creates them. Two projects of a group are never analysed at once.
+- The analysis leaves alone the tasks of the other areas. It adds the area tag to a task whose area is clear, asks when it is not, and proposes the subtasks of a task that touches several areas; once the person accepts, the next analysis creates them.
 - The agent working on a task does only the part of its area, and says in its comment what the other areas must do.
+- One agent at a time works in a group, on a task or an analysis, even when `maxAgents` leaves room: the projects of a product often share local ports, databases and services, so two agents at once would get in each other's way when they run the tests. The projects of the group take turns; projects of other groups, or with no group, still work at the same time.
 
 A project without an area takes every task, as before.
 
@@ -152,7 +153,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 
 | Field | Meaning |
 |---|---|
-| `maxAgents` | how many agents may work at once, across projects (default 2) |
+| `maxAgents` | how many agents may work at once, across projects (default 2); a group counts as one |
 | `intervalMinutes` | minutes between two looks at the projects in `start` (default 5) |
 | `analysisHours` | hours between two analyses of the same project in `start` (default 1) |
 | `dashboardPort` | port of the dashboard on 127.0.0.1 (default 4777) |
