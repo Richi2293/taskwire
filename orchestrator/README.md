@@ -82,7 +82,9 @@ Each project sets who merges the work of its agents, with `merge` in the config:
 
 - `"none"` (the default): the agent opens a pull request and a person merges it;
 - `"dev"`: the orchestrator merges the verified tasks into the staging branch (`stagingBranch`, `dev` by default);
-- `"main"`: the same for now; releasing staging to production comes next.
+- `"main"`: the same, and then the orchestrator releases staging to production (see below).
+
+A project without a staging branch sets `stagingBranch` to its production branch: the orchestrator then merges task pull requests straight into production, and there is no release step.
 
 The agent never merges: the orchestrator does, with `gh pr merge --squash`, and only when all of these hold at the same moment:
 
@@ -92,17 +94,31 @@ The agent never merges: the orchestrator does, with `gh pr merge --squash`, and 
 - its last commit is the one the tests and the verifier checked, with nothing left uncommitted in the worktree; the merge itself is pinned to that commit (`--match-head-commit`), so a push in the meantime stops it;
 - its CI is green. The orchestrator waits at least 2 minutes after the task is queued, so a slower CI can register; without any check after 10 minutes, the task goes to the person. Without required status checks on GitHub, green means green among the checks registered so far.
 
-Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
+Verified tasks wait in `merges.json`, and `start` looks at them at every tick while agents work, before new tasks start. `run-once` only queues them. A task the verifier could not check in full waits for the person: with a merge level, **It works** or **Approve** on the dashboard queue its merge, at the commit its last run ended on; the merge then needs the mark still clear and the task not sent back. After the merge the orchestrator clears the mark and comments with the pull request; it never closes the task. When a condition fails, the task goes to the person with the reason. Lowering the level to `"none"` stops the merges still queued.
 
 After every pass, failed ones too, the orchestrator also looks at the pull request: if it was merged during the run, the agent merged it on its own. The task goes to the person, and agents are turned off for the project (`"agents": false`).
 
 The orchestrator needs `gh`, logged in, on its PATH. It cannot stop an agent that has every permission from running `gh` itself: for a hard stop, protect the staging and production branches on GitHub (required reviews or required status checks).
 
+### Release to production
+
+With level `"main"`, at every tick while agents work, when staging is ahead of production (`productionBranch`, the default branch of the remote by default), the orchestrator:
+
+1. waits while a task of the project (of its area, when it has one) waits for a test by hand;
+2. opens a pull request from staging to production, `release: dev to main`, when there is none;
+3. merges it with a merge commit, pinned to the staging commit, once its CI is green, it has no conflicts and the same staging commit has been there for 2 minutes.
+
+Conflicts, a failed CI, no CI after 10 minutes or a refused merge block the release until it changes; nothing is forced. Where each project stands is kept in `releases.json`.
+
+### Live tasks
+
+At every tick, paused too, the orchestrator looks at the pull request of the latest run of each task of the last 30 days, at every merge level: when it is merged and its merge commit is in the production branch, the task is live and recorded in `live.json`, whoever merged and released it. The person then closes it; the orchestrator never does. A pull request closed without merging is not asked again. This only reads (`gh` and `git fetch`).
+
 ## Diary and logs
 
 Everything the orchestrator does is kept in its folder, so a run can be understood afterwards, also by an agent:
 
-- `events.jsonl`: the diary, one JSON event per line, written by `start` (the same events it prints) and by `run-once`. Besides the events of `start`, a run adds `claim` (a task taken), `agent` (an agent session ended: `role` author, nudge, fix-tests, fix-findings, verifier or analysis, `agent`, `sessionId`, `ok`, `costUsd`, `durationMs`), `tests` (command, result, exit code) `marked` (the orchestrator marked the task for a person, with the reason), `merge-queued`, `merge` and `merge-skipped` (a merge, with the pull request and the reason when it was skipped) and `agent-merged` (an agent merged on its own);
+- `events.jsonl`: the diary, one JSON event per line, written by `start` (the same events it prints) and by `run-once`. Besides the events of `start`, a run adds `claim` (a task taken), `agent` (an agent session ended: `role` author, nudge, fix-tests, fix-findings, verifier or analysis, `agent`, `sessionId`, `ok`, `costUsd`, `durationMs`), `tests` (command, result, exit code) `marked` (the orchestrator marked the task for a person, with the reason), `merge-queued`, `merge` and `merge-skipped` (a merge, with the pull request and the reason when it was skipped) `agent-merged` (an agent merged on its own), `release-opened`, `release-waiting`, `release-blocked` and `release` (where a release stands, one event when it changes) and `live` (a task whose work reached production);
 - `runs.jsonl` and `analyses.jsonl`: one line per run or analysis, with its `sessions` and the path of its `log`;
 - `logs/`: the whole output of every agent session of a run, each under a heading with its role, agent and session. With Claude Code it is the `stream-json` output, which holds every step of the session.
 
@@ -193,6 +209,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].group` | the product the project belongs to, with the other projects of its task list |
 | `projects[].merge` | who merges: `"none"` a person (default), `"dev"` the orchestrator into staging, `"main"` staging and later production |
 | `projects[].stagingBranch` | the staging branch the orchestrator merges into (default `dev`) |
+| `projects[].productionBranch` | the production branch releases go to (default: the default branch of the remote) |
 | `projects[].agents` | `false` keeps agents away from the project while it stays followed (default `true`) |
 
 ## Development
