@@ -12,6 +12,8 @@ class FakeNode {
   hidden = false;
   disabled = false;
   value = '';
+  open = false;
+  onclick: ((event: { stopPropagation: () => void }) => void) | null = null;
   readonly tag: string;
   constructor(tag: string) {
     this.tag = tag;
@@ -22,6 +24,9 @@ class FakeNode {
   querySelectorAll(): unknown[] { return []; }
   querySelector(): null { return null; }
   scrollIntoView(): void {}
+  showModal(): void { this.open = true; }
+  close(): void { this.open = false; }
+  click(): void { this.onclick?.({ stopPropagation: () => {} }); }
   focus(): void {}
   addEventListener(): void {}
 }
@@ -50,6 +55,7 @@ function renderScript(state: DashboardState): (id: string) => FakeNode {
   };
   const document = {
     createElement: (tag: string) => new FakeNode(tag),
+    createElementNS: (_namespace: string, tag: string) => new FakeNode(tag),
     getElementById: (id: string) => (id === 'initial-state' ? { textContent: initial } : get(id)),
     querySelector: (selector: string) => (selector.startsWith('meta') ? { content: 'token' } : null),
     querySelectorAll: () => [],
@@ -105,7 +111,8 @@ test('a live task selected in the queue shows its detail with Close the task', (
 
 test('the same task waiting and live shows as two items, one of them selected', () => {
   const get = renderScript(state({ waiting: [waiting()], live: [live] }));
-  const items = nodes(get('queue'), (node) => node.tag === 'button' && node.className.startsWith('item '));
+  // A waiting item is a button; a live item is a row with its own Close button.
+  const items = nodes(get('queue'), (node) => node.className.startsWith('item '));
   assert.equal(items.length, 2);
   assert.equal(items.filter((node) => node.attrs['aria-pressed'] === 'true').length, 1);
 });
@@ -125,4 +132,31 @@ test('a release line ends with one period, and only for a project with level mai
   const blocked = { state: 'blocked' as const, reason: 'the merge failed: gh pr merge failed: Not mergeable.', pr: 30 };
   assert.match(text(renderScript(state({ projects: [project({ merge: 'main', release: blocked })] }))('projects')), /Not mergeable\.(?!\.)/);
   assert.doesNotMatch(text(renderScript(state({ projects: [project({ merge: 'dev', release: blocked })] }))('projects')), /Release to/);
+});
+
+const pill = (get: (id: string) => FakeNode) => nodes(get('projects'), (node) => node.tag === 'button' && node.className.startsWith('merge-pill'))[0];
+
+test('the merge level pill has its own column and an icon, and opens a modal to change it', () => {
+  const get = renderScript(state({ projects: [project({ merge: 'dev' })] }));
+  const row = nodes(get('projects'), (node) => node.className.startsWith('row'))[0];
+  assert.ok(row.children.indexOf(pill(get)) === 1, 'the pill is the column after the name');
+  assert.equal(nodes(pill(get), (node) => node.tag === 'svg').length, 1);
+  pill(get).click();
+  const dialog = get('merge-dialog');
+  assert.equal(dialog.open, true);
+  assert.match(text(dialog), /Who merges the work of shop/);
+  const options = nodes(dialog, (node) => node.attrs.role === 'radio');
+  assert.deepEqual(options.map((node) => node.attrs['aria-checked']), ['false', 'true', 'false']);
+  // The project name is asked only once Auto to main is chosen.
+  assert.doesNotMatch(text(dialog), /Type the project name/);
+  options[2].click();
+  assert.match(text(get('merge-dialog')), /Type the project name to confirm/);
+  nodes(get('merge-dialog'), (node) => node.tag === 'button' && text(node).trim() === 'Cancel')[0].click();
+  assert.equal(get('merge-dialog').open, false);
+});
+
+test('a live task has Close the task in its queue row', () => {
+  const get = renderScript(state({ live: [live] }));
+  const row = nodes(get('queue'), (node) => node.className.startsWith('item live'))[0];
+  assert.ok(nodes(row, (node) => node.tag === 'button' && /Close the task/.test(text(node))).length === 1);
 });
