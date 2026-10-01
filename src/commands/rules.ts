@@ -18,12 +18,15 @@ export interface RulesOut {
   rulesSource: string;
   rules: string;
   conventions: { language: string; instructions: string | null };
+  // The area of the project in a shared task list, explained at the end of the rules; null when it has none.
+  area: string | null;
   // A newer taskwire on npm, or null when there is none or the check was skipped.
   update: UpdateNotice | null;
 }
 
 // The rules ship with taskwire, so every project reads the ones of the installed version.
 const DEFAULT_RULES_URL = new URL('../../rules/tasks.md', import.meta.url);
+const AREA_RULES_URL = new URL('../../rules/areas.md', import.meta.url);
 
 export async function rules(ctx: Context): Promise<RulesOut> {
   const config = projectConfig(ctx);
@@ -40,8 +43,11 @@ export async function rules(ctx: Context): Promise<RulesOut> {
       throw configError(`Cannot read the rules file ${rulesSource}`, 'Fix "conventions.rulesFile" in .taskwire.json, or remove it to use the default rules');
     }
   }
+  // The area section explains taskwire's own options, so it is added to a project rules file too.
+  const area = config.area ?? null;
+  if (area !== null) text = `${text}\n${readFileSync(AREA_RULES_URL, 'utf8').replaceAll('{area}', area)}`;
   const update = await ctx.checkUpdate();
-  return { version: packageInfo().version, scope: RULES_SCOPE, rulesSource, rules: text, conventions: conventions(ctx), update };
+  return { version: packageInfo().version, scope: RULES_SCOPE, rulesSource, rules: text, conventions: conventions(ctx), area, update };
 }
 
 // --pretty shows the rules as plain markdown, which reads better than escaped JSON.

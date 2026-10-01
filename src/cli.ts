@@ -15,6 +15,7 @@ import { checkForUpdate } from './update-check.ts';
 import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
+import { projectInfo, setArea } from './commands/project.ts';
 import { formatSetup, setup } from './commands/setup-guide.ts';
 import type { SetupOut } from './commands/setup-guide.ts';
 import type { RulesOut } from './commands/rules.ts';
@@ -57,11 +58,15 @@ Setup:
   taskwire setup                  how an agent sets up taskwire in this project (guide and AGENTS.md block)
   taskwire whoami
   taskwire folders
-  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <l>] [--instructions <text>] [--force]
+  taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <l>] [--instructions <text>]
+                [--area <tag>] [--force]
                   --scope-list limits the project to some lists of the folder, --list is the default list,
-                  --language and --instructions set the project conventions
+                  --language and --instructions set the project conventions,
+                  --area the tag of the project's tasks when several projects share the task list
   taskwire rules                  how agents must manage tasks in this project (rules and conventions)
   taskwire conventions            the project conventions only (language, instructions)
+  taskwire project                the project configuration (folder, lists, account, area)
+  taskwire area set <tag>|none    the area of the project in a task list shared by several projects
 
 Lists:
   taskwire lists [--folder <id>]      --folder shows the lists of any folder, also before init
@@ -74,12 +79,14 @@ Tasks:
                  [--top-level]        leave out subtasks
                  [--limit <n>]        the n most recently created tasks
                  [--needs decision|test|review|any]   tasks waiting for a person, for that reason
+                 [--area <tag> | --all-areas]   the tasks of another area or of every area (default: the project's area)
   taskwire tags                       the tags used in the project, with their number of tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
                        [--assignee <id|me>]... [--due YYYY-MM-DD] [--parent <id>]
                        [--needs decision|test|review]
+                       [--area <tag>]   the area tag of the task (default: the project's area)
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
                        [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
@@ -128,6 +135,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'scope-list': { type: 'string', multiple: true },
       language: { type: 'string' },
       instructions: { type: 'string' },
+      area: { type: 'string' },
       force: { type: 'boolean' },
     },
     positionals: 0,
@@ -142,6 +150,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     formatPretty: (result) => formatRules(result as RulesOut),
   },
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
+  project: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => projectInfo(ctx) },
+  'area set': { options: {}, positionals: 1, needsConfig: true, run: async (ctx, input) => setArea(ctx, input) },
   lists: { options: { folder: { type: 'string' } }, positionals: 0, needsConfig: 'optional', run: (ctx, input) => listLists(ctx, input) },
   'list create': {
     options: { name: { type: 'string' } },
@@ -162,6 +172,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'top-level': { type: 'boolean' },
       limit: { type: 'string' },
       needs: { type: 'string' },
+      area: { type: 'string' },
+      'all-areas': { type: 'boolean' },
     },
     positionals: 0,
     needsConfig: true,
@@ -187,6 +199,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       due: { type: 'string' },
       parent: { type: 'string' },
       needs: { type: 'string' },
+      area: { type: 'string' },
     },
     positionals: 0,
     needsConfig: true,

@@ -69,7 +69,7 @@ Next session, ask your agent: *"What was I doing yesterday?"*
 
 | Area | Commands |
 |---|---|
-| Setup | `setup`, `whoami`, `folders`, `init`, `rules`, `conventions` |
+| Setup | `setup`, `whoami`, `folders`, `init`, `rules`, `conventions`, `project`, `area set` |
 | Tasks | `tasks`, `task get`, `task create`, `task update`, `task delete --yes` |
 | Lists and tags | `lists`, `list create`, `tags` |
 | Comments | `comment add`, `comment update` |
@@ -83,6 +83,7 @@ Run `taskwire --help` for every option. A few things worth knowing:
 - **Due dates** (`--due YYYY-MM-DD`) are midnight in your system time zone. Set `TZ` to use another one.
 - **Descriptions and comments** are markdown.
 - **Waiting for a person:** `taskwire task update <id> --needs decision|test|review` marks why a task waits for you, with a tag (`needs-decision`, `needs-test`, `needs-review`). `taskwire tasks --needs any` lists those tasks, and every task shows it in its `needs` field. You clear it (`--needs none`, or remove the tag) as the go-ahead.
+- **Shared task lists:** when several projects (for example the backend, the frontend and the app of one product) share one task list, each project sets its `area`, a tag such as `be`, `fe` or `mobile`. `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for another one, `--all-areas` for every task) and `taskwire task create` adds the tag. Set it with `taskwire area set <tag>`, or `init --area`.
 - **Exit codes:** `0` success, `1` provider or network error, `2` wrong usage, `3` configuration problem.
 
 ## Configuration
@@ -97,6 +98,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
   "folderId": "901234567",
   "listIds": ["901234890"],
   "defaultListId": "901234890",
+  "area": "be",
   "needsTags": { "test": "to-test" },
   "conventions": {
     "language": "English",
@@ -111,12 +113,13 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
 | `provider` | the task system; defaults to `clickup` |
 | `account` | a name for the account of the task system this project uses, when you have more than one; its token is read from the Keychain service `taskwire:<account>` or from `TASKWIRE_API_TOKEN_<ACCOUNT>`. Leave it out to use the default token |
 | `workspaceId`, `folderId`, `listIds`, `defaultListId` | where the project lives in the task system, and its default list. `listIds` lets several projects share one container, each limited to its own lists. The exact fields depend on the provider: see [its page](docs/providers/clickup.md). |
+| `area` | the tag of this project's tasks when several projects share one task list, for example `be`, `fe` or `mobile`. Leave it out to see every task |
 | `needsTags` | other tag names for the needs kinds (`decision`, `test`, `review`), for example in the project language; the others keep their default name |
 | `conventions.language` | language of task names, descriptions, comments and checklists (default English) |
 | `conventions.instructions` | any other rule for agents, added on top of the defaults and winning when they conflict |
 | `conventions.rulesFile` | a markdown file, relative to `.taskwire.json`, that replaces the default rules entirely |
 
-`taskwire init --force` rewrites the ids and keeps the conventions and the account.
+`taskwire init --force` rewrites the ids and keeps the conventions, the account and the area. `taskwire project` prints the configuration as JSON, for tools that work on several projects.
 
 **Several accounts.** Give each account a name, store its token under that name, and set it in the project with `taskwire init --account <name>`. `--account <name>` also works on any command, for example `taskwire folders --account acme` before `init`. With an account, taskwire never falls back to the default token.
 

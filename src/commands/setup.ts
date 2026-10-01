@@ -1,7 +1,8 @@
 import type { CommandInput } from '../args.ts';
 import { flag, optString, optStrings, reqString } from '../args.ts';
 import type { RawUser } from '../clickup-types.ts';
-import { readConventions, readListIds, writeConfig } from '../config.ts';
+import { AREA_HINT, normalizeArea } from '../area.ts';
+import { readArea, readConventions, readListIds, writeConfig } from '../config.ts';
 import type { ProjectConfig, TaskConventions } from '../config.ts';
 import { usageError } from '../errors.ts';
 import { loadListInFolder } from '../guard.ts';
@@ -42,6 +43,7 @@ interface InitResult {
   folderName: string;
   listIds: string[] | null;
   defaultListId: string | null;
+  area: string | null;
 }
 
 export async function init(ctx: Context, input: CommandInput): Promise<InitResult> {
@@ -50,6 +52,7 @@ export async function init(ctx: Context, input: CommandInput): Promise<InitResul
   const listId = optString(input.values, 'list');
   const scopeListIds = readScopeLists(input, listId);
   const newConventions = readConventionFlags(input);
+  const newArea = readAreaFlag(input);
   const folder = await ctx.client.request<Named & { space: { id: string } }>('GET', `/folder/${folderId}`);
   const workspaceId = await findWorkspaceId(ctx.client, folder.space.id);
 
@@ -67,11 +70,23 @@ export async function init(ctx: Context, input: CommandInput): Promise<InitResul
   if (ctx.account !== null) config.account = ctx.account;
   if (listIds !== undefined) config.listIds = listIds;
   if (defaultListId !== undefined) config.defaultListId = defaultListId;
+  // --force keeps the area already there unless --area replaces it.
+  const area = newArea ?? readArea(ctx.cwd);
+  if (area !== undefined) config.area = area;
   // --force keeps the conventions already there; --language and --instructions replace only their own field.
   const conventions: TaskConventions = { ...readConventions(ctx.cwd), ...newConventions };
   if (Object.keys(conventions).length > 0) config.conventions = conventions;
   const path = writeConfig(ctx.cwd, config, flag(input.values, 'force'));
-  return { path, workspaceId, folderId, folderName: folder.name, listIds: listIds ?? null, defaultListId: defaultListId ?? null };
+  return { path, workspaceId, folderId, folderName: folder.name, listIds: listIds ?? null, defaultListId: defaultListId ?? null, area: area ?? null };
+}
+
+// The --area value, checked before any network call.
+function readAreaFlag(input: CommandInput): string | undefined {
+  const value = optString(input.values, 'area');
+  if (value === undefined) return undefined;
+  const area = normalizeArea(value);
+  if (area === null) throw usageError(`Invalid --area "${value}"`, AREA_HINT);
+  return area;
 }
 
 // The --language and --instructions values, checked before any network call.

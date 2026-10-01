@@ -142,3 +142,13 @@ test('rejects an account name that is not lowercase letters, digits and dashes',
     assert.throws(() => parseConfig(text, '/x'), (e: unknown) => e instanceof TaskwireError && e.exitCode === 3, text);
   }
 });
+
+test('reads the area of the project in lowercase', () => {
+  assert.equal(parseConfig('{"folderId":"1","area":" Mobile "}', '/x').area, 'mobile');
+});
+
+test('rejects an area that is not one word', () => {
+  for (const area of ['"two words"', '""', '3', '"-be"']) {
+    assert.throws(() => parseConfig(`{"folderId":"1","area":${area}}`, '/x'), (e: unknown) => e instanceof TaskwireError && e.exitCode === 3);
+  }
+});

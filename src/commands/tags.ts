@@ -8,7 +8,8 @@ export interface TagOut {
 
 // Tags come from the project's tasks, not from the ClickUp space, whose tags also belong to other folders and projects.
 export async function listTags(ctx: Context): Promise<TagOut[]> {
-  const input = { positionals: [], values: { 'include-closed': true } };
+  // Every area, so that an agent finds the tags of the other areas of a shared task list.
+  const input = { positionals: [], values: { 'include-closed': true, 'all-areas': true } };
   const tasks = await listTasks(ctx, input, 'Some tags may be missing: they come from the tasks read so far');
   const counts = new Map<string, number>();
   for (const task of tasks) {

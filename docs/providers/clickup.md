@@ -44,6 +44,7 @@ taskwire lists                                     # lists of the project and th
 - `taskwire tasks --search` filters the tasks after reading them, on the name and `text_content` (the plain text of the description), because the API has no text search (see below).
 - `taskwire tags` reads the tasks of the project, open and closed, subtasks included, and counts their tags. It does not use the space tags (`GET /space/{id}/tag`): they include the tags of other folders and of other projects of the same folder. A tag created in ClickUp but not used by any task of the project is not listed.
 - `--needs` adds or removes the needs tag through the tag endpoints, and removes only the needs tags the task has. `taskwire tasks --needs` filters the tasks after reading them, like `--search`, so it reads every task of the query.
+- The area of a project (`area`) is a tag. `taskwire tasks` filters on it after reading the tasks, like `--search`, so that it adds to `--tag` instead of widening it: it reads every task of the query.
 - Checklist items are found through the task given with `--task`, so an item or checklist of another task is refused before any write.
 - Lists can be created (`taskwire list create`) but not deleted; archive them in the ClickUp UI.
 - With `listIds`:
