@@ -160,3 +160,8 @@ test('a live task has Close the task in its queue row', () => {
   const row = nodes(get('queue'), (node) => node.className.startsWith('item live'))[0];
   assert.ok(nodes(row, (node) => node.tag === 'button' && /Close the task/.test(text(node))).length === 1);
 });
+
+test('the items of a More menu stack one under the other', () => {
+  const css = renderPage(state({}), 'token');
+  assert.match(css, /details\.menu div \{[^}]*display: flex; flex-direction: column;/);
+});

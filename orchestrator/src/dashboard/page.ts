@@ -296,7 +296,7 @@ details.menu { position: relative; font-size: 13px; color: var(--muted); }
 #projects-result { margin-top: 8px; }
 details.menu summary { cursor: pointer; list-style: none; }
 details.menu summary::-webkit-details-marker { display: none; }
-details.menu div { position: absolute; right: 0; top: 24px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; z-index: 2; white-space: nowrap; }
+details.menu div { display: flex; flex-direction: column; gap: 2px; position: absolute; right: 0; top: 24px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; z-index: 2; white-space: nowrap; }
 details.menu div button { background: none; border: 0; padding: 6px 10px; border-radius: 6px; width: 100%; text-align: left; }
 details.menu div button:hover { background: var(--bg); }
 .after { font-size: 13px; color: var(--muted); }
