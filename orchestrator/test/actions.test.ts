@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createActions } from '../src/dashboard/actions.ts';
+import { readMerges } from '../src/merges.ts';
 import { OrchestratorError } from '../src/errors.ts';
 import { fakeTaskwire, projectDir, task, tempDir } from './helpers.ts';
 
@@ -23,7 +24,7 @@ function setup(projectOptions: Record<string, unknown> = {}) {
   });
   const changed: [string, string | undefined][] = [];
   const act = createActions({ home, runTaskwire: taskwire.run, onChange: (path, task) => { changed.push([path, task]); } });
-  return { project, taskwire, act, changes: () => changed.length, changed };
+  return { home, project, taskwire, act, changes: () => changed.length, changed };
 }
 
 const writes = (calls: { args: string[] }[]) => calls.filter((call) => call.args[0] !== 'tasks').map((call) => call.args);
@@ -150,4 +151,28 @@ test('close fits only a review, accept and reject only a decision, and nothing c
     await assert.rejects(act(request), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 2, JSON.stringify(request));
   }
   assert.deepEqual(writes(taskwire.calls).filter((args) => args[0] !== 'lists'), []);
+});
+
+// A run of the task as runs.jsonl keeps it, with the branch, pull request and commit the pass ended on.
+function recordRun(home: string, project: string, fields: Record<string, unknown>): void {
+  const run = { project, task: 't1', name: 'Task one', url: 'u', startedAt: '2026-09-27T09:00:00.000Z', finishedAt: '2026-09-27T09:30:00.000Z', durationMs: 1, costUsd: null, needs: 'test', status: 'qa', summary: '', tests: null, verdict: 'manual', worktree: '/wt', log: '/l', ...fields };
+  appendFileSync(join(home, 'runs.jsonl'), `${JSON.stringify(run)}\n`);
+}
+
+test('with a merge level, approving a task queues its merge with the commit of its last run', async () => {
+  const { home, project, act } = setup({ merge: 'dev' });
+  recordRun(home, project, { branch: 'feat/old', pr: 10, sha: 'old111', finishedAt: '2026-09-26T09:00:00.000Z' });
+  recordRun(home, project, { branch: 'feat/discount', pr: 12, sha: 'abc123' });
+  await act({ project, task: 't1', action: 'approve' });
+  assert.deepEqual(readMerges(home).map((entry) => [entry.task, entry.branch, entry.pr, entry.sha, entry.approvedBy]), [['t1', 'feat/discount', 12, 'abc123', 'person']]);
+});
+
+test('without a merge level, or without a pull request in the last run, approving queues nothing', async () => {
+  for (const [options, fields] of [[{}, { branch: 'feat/discount', pr: 12, sha: 'abc123' }], [{ merge: 'dev' }, { branch: null, pr: null, sha: null }]] as const) {
+    const { home, project, act, taskwire } = setup(options);
+    recordRun(home, project, fields);
+    await act({ project, task: 't1', action: 'approve' });
+    assert.deepEqual(readMerges(home), []);
+    assert.deepEqual(writes(taskwire.calls), [['task', 'update', 't1', '--needs', 'none']]);
+  }
 });
