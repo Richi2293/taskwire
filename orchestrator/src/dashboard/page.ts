@@ -16,22 +16,26 @@ export function renderPage(state: DashboardState, token: string): string {
 </head>
 <body>
 <main class="page">
-  <header class="panel control" aria-label="Agents">
-    <div class="control-row">
-      <div class="control-state">
-        <p class="state-line"><span class="brand"><strong>taskwire</strong> <span>orchestrator</span></span><span id="state-dot" class="dot"></span><span id="state" class="state"></span><span id="state-hint" class="state-hint"></span></p>
-        <div class="sub-line">
-          <p class="sync" role="status"><span id="sync-spinner" class="spinner" hidden></span><span id="sync-text"></span><button id="refresh" class="link" type="button">Refresh now</button></p>
-          <button id="details-toggle" class="link" type="button" aria-expanded="false" aria-controls="details"></button>
+  <div class="top">
+    <p class="brand"><strong>taskwire</strong> <span>orchestrator</span></p>
+    <header class="control" aria-label="Agents">
+      <div class="control-row">
+        <p class="control-state"><span id="state-chip" class="state-chip"><span id="state-dot" class="dot"></span><span id="state" class="state"></span></span><span id="state-hint" class="state-hint"></span></p>
+        <div class="control-side">
+          <p class="meta">
+            <span id="sync" class="sync" role="status"><span id="sync-spinner" class="spinner" hidden></span><span id="sync-text"></span></span>
+            <button id="refresh" class="quiet" type="button">Refresh</button>
+            <button id="details-toggle" class="quiet" type="button" aria-expanded="false" aria-controls="details"></button>
+          </p>
+          <button id="switch" type="button"></button>
         </div>
       </div>
-      <button id="switch" type="button"></button>
-    </div>
-    <div id="details" class="details" hidden>
-      <p id="details-title" class="section-label"></p>
-      <div id="details-cols" class="details-cols"></div>
-    </div>
-  </header>
+      <div id="details" class="details" hidden>
+        <p id="details-title" class="section-label"></p>
+        <div id="details-cols" class="details-cols"></div>
+      </div>
+    </header>
+  </div>
 
   <section aria-labelledby="projects-title">
     <div class="section-head">
@@ -131,22 +135,31 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--code); bor
 .link:disabled { color: var(--muted); cursor: default; }
 .quiet { background: none; border: 0; padding: 0; color: var(--muted); font-size: 13px; }
 
-.control-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 12px 20px; flex-wrap: wrap; }
-.control-state { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-.brand { font-size: 15px; padding-right: 12px; margin-right: 2px; border-right: 1px solid var(--line-strong); }
-.brand span { color: var(--muted); margin-left: 4px; }
-.state-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.state { font-size: 17px; font-weight: 600; }
-.sub-line { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.top { display: flex; flex-direction: column; gap: 10px; }
+.brand { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.brand strong { font-weight: 600; }
+.brand span { margin-left: 2px; }
+.control { background: var(--panel); border-radius: 12px; }
+.control-row { display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; padding: 12px 14px 12px 12px; flex-wrap: wrap; }
+.control-state { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.state-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--bg); font-size: 13px; }
+.state-chip .dot { width: 7px; height: 7px; }
+.state { font-weight: 500; }
 .state.alive { color: var(--alive); }
-.state-hint { color: var(--muted); }
-.sync { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.state-hint { color: var(--muted); font-size: 13px; }
+.control-side { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.meta .quiet { font-size: 12px; }
+.meta .quiet:hover { color: var(--ink); }
+.meta > :not([hidden]) ~ :not([hidden])::before { content: '\\00B7'; color: var(--line-strong); margin-right: 8px; }
+.sync { display: inline-flex; align-items: center; gap: 8px; }
 .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--line-strong); border-top-color: var(--test); border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-color: var(--test); } }
 .projects .name { display: inline-flex; align-items: center; gap: 8px; }
-#switch { padding: 8px 18px; font-size: 15px; }
-.details { border-top: 1px solid var(--line); padding: 16px 24px 20px; }
+#switch { padding: 7px 14px; font-size: 13px; background: var(--bg); border-color: transparent; }
+#switch.soft { background: var(--review-soft); color: var(--review); font-weight: 600; }
+.details { border-top: 1px solid var(--line); padding: 14px 14px 16px; }
 .details-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .details-cols div { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
 .details-cols strong { display: block; margin-bottom: 4px; }
@@ -396,23 +409,23 @@ function renderControl(state) {
   title.className = working ? 'state alive' : 'state';
   let hint;
   if (working) {
-    const next = c.nextCheckAt ? ' Next check for new tasks at ' + clock(c.nextCheckAt) + ', in ' + duration(new Date(c.nextCheckAt) - now) + '.' : ' Looking for tasks now.';
+    const next = c.nextCheckAt ? ' Next check at ' + clock(c.nextCheckAt) + '.' : ' Looking for tasks now.';
     hint = (c.agentsAtWork ? plural(c.agentsAtWork, 'agent') + ' at work.' : 'No agent at work right now.') + next;
   } else if (c.agentsAtWork) {
-    hint = plural(c.agentsAtWork, 'agent') + ' finishing a task. No new task starts until you press Start agents.';
+    hint = plural(c.agentsAtWork, 'agent') + ' finishing a task. No new task starts.';
   } else {
-    hint = 'No agent is working, and none will start until you press Start agents.';
+    hint = 'No agent is working. Start them when you are ready.';
   }
   document.getElementById('state-hint').textContent = hint;
 
   const button = document.getElementById('switch');
-  button.className = working ? 'btn' : 'btn primary';
+  button.className = working ? 'btn' : 'btn soft';
   button.replaceChildren(working ? 'Pause' : 'Start agents');
   button.disabled = false;
   button.onclick = () => switchMode(working ? 'pause' : 'play', button);
 
   const toggle = document.getElementById('details-toggle');
-  toggle.textContent = (working ? 'What is happening' : 'What happens when I start') + (ui.details ? ' \\u25B4' : ' \\u25BE');
+  toggle.textContent = 'Details' + (ui.details ? ' \\u25B4' : ' \\u25BE');
   toggle.setAttribute('aria-expanded', String(ui.details));
   toggle.onclick = () => { ui.details = !ui.details; renderControl(ui.state); };
   document.getElementById('details').hidden = !ui.details;
@@ -471,10 +484,11 @@ function renderSync(state) {
   if (!state.projects.length) text = '';
   else if (sync.reading && !sync.readAt) text = 'Reading your projects from ClickUp.';
   else if (sync.reading) text = 'Updating from ClickUp. Showing data from ' + ago(sync.readAt, now) + '.';
-  else if (sync.readAt) text = 'Updated ' + ago(sync.readAt, now) + '.';
+  else if (sync.readAt) text = 'Updated ' + ago(sync.readAt, now);
   else text = 'Not read from ClickUp yet.';
-  if (failed && !sync.reading) text += ' ' + (failed === 1 ? 'One project' : failed + ' projects') + ' could not be updated.';
+  if (failed && !sync.reading) text += (text.endsWith('.') ? ' ' : '. ') + (failed === 1 ? 'One project' : failed + ' projects') + ' could not be updated.';
   document.getElementById('sync-text').textContent = text;
+  document.getElementById('sync').hidden = !text;
   document.getElementById('sync-spinner').hidden = !sync.reading;
   const button = document.getElementById('refresh');
   button.hidden = !state.projects.length;
@@ -948,6 +962,7 @@ document.getElementById('refresh').onclick = async () => {
     await post('/api/refresh', {});
   } catch (error) {
     document.getElementById('sync-text').textContent = error.message;
+    document.getElementById('sync').hidden = false;
   }
   refresh(true);
 };

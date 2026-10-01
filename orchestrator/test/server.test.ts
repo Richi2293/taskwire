@@ -37,8 +37,11 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /\/api\/projects/);
   assert.match(response.body, /Remove project/);
   assert.match(response.body, /'Added ' \+/);
+  // A light control bar: the brand sits above it, and the state comes in a chip.
+  assert.match(response.body, /<p class="brand">[\s\S]*<header class="control"/);
+  assert.match(response.body, /id="state-chip"/);
   // The page tells how old the data is and when it is being read again.
-  assert.match(response.body, /Refresh now/);
+  assert.match(response.body, />Refresh<\/button>/);
   assert.match(response.body, /Updating from ClickUp/);
   assert.match(response.body, /\/api\/refresh/);
 });
