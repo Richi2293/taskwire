@@ -25,6 +25,7 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 - `orchestrator/` holds an experimental, unpublished package (`taskwire-orchestrator`) that lets agents work on the tasks of several projects. It is not part of the taskwire npm package.
 - It talks to taskwire only through the CLI and its JSON output, never by importing `src/`, so every taskwire check applies to it. When it needs something taskwire lacks, add it to the CLI.
 - The tech constraints below apply to it too. Its tests live in `orchestrator/test/` and never run a real taskwire or a real agent.
+- The dashboard is designed first in `orchestrator/design/dashboard.pen` (Pencil): a UI change updates the design and waits for the user's approval before the code. A change made only in the code is brought back into the design. The design uses neutral names and English texts, like the fixtures. See Design first in `orchestrator/README.md`.
 - `orchestrator/README.md` explains how it works: the pass on a task, the project analysis, areas and groups, the dashboard, the config and the files it keeps. Read it before changing the orchestrator.
 - To understand what happened in a real run (when the user tested something, or an agent did something unexpected), read the files in its folder, `~/.config/taskwire-orchestrator` (or `TASKWIRE_ORCHESTRATOR_HOME`), before asking the user. They are local to the user's Mac, never in the repo:
   1. `events.jsonl`, the diary: what the orchestrator did and when, one event per line. Filter it by `task` or `project`;
