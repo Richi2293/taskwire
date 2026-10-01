@@ -74,6 +74,7 @@ Tasks:
                  [--top-level]        leave out subtasks
                  [--limit <n>]        the n most recently created tasks
                  [--needs decision|test|review|any]   tasks waiting for a person, for that reason
+                 [--area <tag> | --all-areas]   the tasks of another area or of every area (default: the project's area)
   taskwire tags                       the tags used in the project, with their number of tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
@@ -162,6 +163,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'top-level': { type: 'boolean' },
       limit: { type: 'string' },
       needs: { type: 'string' },
+      area: { type: 'string' },
+      'all-areas': { type: 'boolean' },
     },
     positionals: 0,
     needsConfig: true,

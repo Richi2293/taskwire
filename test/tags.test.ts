@@ -84,3 +84,12 @@ test('tags warns that some tags may be missing when it stops before the last pag
   assert.match(run.stderr, /Some tags may be missing/);
   assert.doesNotMatch(run.stderr, /--status/);
 });
+
+test('tags in a project with an area counts the tags of every area', async () => {
+  const config: ProjectConfig = { provider: 'clickup', workspaceId: WORKSPACE_ID, folderId: FOLDER_ID, defaultListId: LIST_ID, area: 'mobile' };
+  const tasks = [rawTask({ id: 't1', tags: [tag('mobile')] }), rawTask({ id: 't2', tags: [tag('be')] })];
+  const run = await runCli(['tags'], { config, routes: {
+    'GET /team/1/task': { body: { tasks, last_page: true } },
+  } });
+  assert.deepEqual(run.json(), [{ name: 'be', tasks: 1 }, { name: 'mobile', tasks: 1 }]);
+});
