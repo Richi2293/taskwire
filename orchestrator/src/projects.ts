@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { expandHome, loadConfig, normalizeArea, saveConfig } from './config.ts';
-import type { OrchestratorConfig, ProjectEntry } from './config.ts';
+import type { MergeLevel, OrchestratorConfig, ProjectEntry } from './config.ts';
 import { configError, usageError } from './errors.ts';
 import { readClaims } from './state.ts';
 import type { RunTaskwire } from './taskwire.ts';
@@ -86,6 +86,17 @@ export function setProjectPlace(home: string, folder: string, place: { area?: st
 }
 
 const MAX_GROUP = 100;
+
+// Sets who merges the work of a followed project. PR only is the default, so it removes the field.
+export function setProjectMerge(home: string, folder: string, level: MergeLevel): void {
+  const path = resolve(expandHome(folder));
+  const config = loadConfig(home);
+  const project = config.projects.find((entry) => entry.path === path);
+  if (project === undefined) throw usageError(`${path} is not followed`);
+  if (level === 'none') delete project.merge;
+  else project.merge = level;
+  saveConfig(home, config);
+}
 
 export interface DiscoverOptions {
   roots: string[];
