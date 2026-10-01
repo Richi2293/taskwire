@@ -4,6 +4,11 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- Projects that share one task list can each set their `area`, a tag such as `be`, `fe` or `mobile` (`taskwire area set <tag>`, or `init --area`). `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for another one, `--all-areas` for every task), `taskwire task create` adds the tag (`--area` for another one), and `taskwire rules` explains it to agents.
+- `taskwire project` prints the project configuration as JSON, never the token.
+
 ### Changed
 
 - The agent rules ask to move a task to its in-progress status as the first step, before any design, plan or code, and put this rule right after the search for a related task. The block for `AGENTS.md` repeats it.

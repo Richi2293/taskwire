@@ -15,11 +15,12 @@ Ask the user only for the real choices (folder, lists, language, commit of the c
 4. **Lists.** Ask whether the folder belongs to this project only, or is shared with other projects (for example one folder per company and one list per project).
    - If it is shared, run `taskwire lists --folder <id>`, show the lists and ask which ones belong to this project. These become `--scope-list`.
    - Ask which list new tasks go to by default (`--list`). With a single project list, that list is already the default.
+   - Ask whether other projects (for example the backend, the frontend or the app of the same product) share this project's task list. If they do, ask the short tag of this project's tasks, such as `be`, `fe` or `mobile`: it becomes `--area`. Use the same tag the other projects already use for their tasks, if any. Skip it for a monorepo with a single `.taskwire.json`.
 5. **Conventions.** Ask the language of tasks and comments (default: English). Ask whether there are project habits for tasks, for example a status flow such as "complete only after the merge". Skip `--instructions` when there are none.
 6. **Init.** Run one command with every choice:
 
    ```
-   taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <language>] [--instructions <text>] [--account <name>]
+   taskwire init --folder <id> [--scope-list <id>]... [--list <id>] [--language <language>] [--instructions <text>] [--area <tag>] [--account <name>]
    ```
 
    If it fails with exit code 2 because the config exists and the user asked to replace it, add `--force`.
@@ -28,6 +29,6 @@ Ask the user only for the real choices (folder, lists, language, commit of the c
    - If it already has a `## Project tasks (taskwire)` section, replace that section with the block.
    - If the project has a `CLAUDE.md` that does not reference `AGENTS.md`, add a line to it that does (for example `@AGENTS.md`).
 8. **Commit of the config.** Ask the user whether to commit `.taskwire.json`. It holds only ids and conventions, no secrets, but in a public repository the user may prefer to keep the workspace ids out. If not, add `.taskwire.json` to `.git/info/exclude`, so it stays local without touching `.gitignore`.
-9. **Check.** Run `taskwire rules`: it must succeed. Then tell the user in a few lines what was set up (folder, lists, default list, language, instructions, files changed) and that from now on agents follow `taskwire rules` for tasks.
+9. **Check.** Run `taskwire rules`: it must succeed. Then tell the user in a few lines what was set up (folder, lists, default list, area, language, instructions, files changed) and that from now on agents follow `taskwire rules` for tasks.
 
 If `update` in the output of `taskwire setup` is not `null`, tell the user before step 2 and ask whether to update first with its `command`. It updates taskwire for the whole machine.
