@@ -85,6 +85,7 @@ export function renderPage(state: DashboardState, token: string): string {
     <div class="section-head"><h2 id="history-title">Done recently</h2></div>
     <div id="history"></div>
   </section>
+  <dialog id="merge-dialog" class="merge-dialog" aria-labelledby="merge-title"></dialog>
 </main>
 <script id="initial-state" type="application/json">${initial}</script>
 <script>${SCRIPT}</script>
@@ -181,7 +182,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .found .row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .found .row small { display: block; font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .path-row { display: flex; gap: 10px; }
-.projects .row { display: grid; grid-template-columns: 140px minmax(220px, 380px) minmax(0, 1fr) auto auto auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.projects .row { display: grid; grid-template-columns: 140px auto minmax(200px, 340px) minmax(0, 1fr) auto auto auto; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .projects .row:last-child { border-bottom: 0; }
 .projects .name { font-weight: 600; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -242,6 +243,37 @@ button.chip:hover { text-decoration: underline; text-underline-offset: 3px; }
 .pill.decision { background: var(--decision-soft); color: var(--decision); }
 .pill.test { background: var(--test-soft); color: var(--test); }
 .pill.review { background: var(--review-soft); color: var(--review); }
+.pill.live { background: var(--bg); color: var(--ink); }
+.group.live { color: var(--ink); } .group.live i { background: var(--muted); }
+.item[aria-pressed="true"].live { background: var(--bg); border-left-color: var(--muted); }
+.merge-pill { display: inline-flex; align-items: center; gap: 6px; justify-self: start; border: 1px solid var(--line-strong); background: transparent; color: var(--muted); border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.merge-pill.dev { border-color: var(--test); color: var(--test); background: var(--test-soft); }
+.merge-pill.main { border-color: var(--decision); color: var(--decision); background: var(--decision-soft); }
+.icon { display: inline-flex; flex: none; }
+.icon svg { display: block; }
+.merge-dialog { width: min(540px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--ink); }
+.merge-dialog::backdrop { background: rgba(7, 9, 13, 0.6); }
+.merge-dialog h2 { font-size: 16px; }
+.merge-dialog .sub { color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+.merge-options { display: flex; flex-direction: column; gap: 8px; }
+.merge-option { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.merge-option .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line-strong); flex: none; margin-top: 2px; }
+.merge-option[aria-checked="true"] .radio { border: 5px solid currentColor; }
+.merge-option b { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.merge-option small { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+.merge-option.none .icon { color: var(--muted); }
+.merge-option.dev .icon { color: var(--test); }
+.merge-option.main .icon { color: var(--decision); }
+.merge-option[aria-checked="true"].none { border-color: var(--line-strong); }
+.merge-option[aria-checked="true"].dev { border-color: var(--test); background: var(--test-soft); color: var(--test); }
+.merge-option[aria-checked="true"].main { border-color: var(--decision); background: var(--decision-soft); color: var(--decision); }
+.merge-confirm { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
+.merge-confirm input { font-family: var(--mono); }
+.merge-dialog .branches { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 14px; }
+.merge-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.item.live { cursor: pointer; }
+.item .status { font-size: 12px; color: var(--muted); }
+.group.live .icon { color: var(--ink); }
 .detail h3 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 6px; font-weight: 600; }
 .detail h3 a { text-decoration: none; }
 .goal { color: var(--muted); }
@@ -305,11 +337,31 @@ details.menu div button:hover { background: var(--bg); }
 const SCRIPT = `
 const TOKEN = document.querySelector('meta[name="action-token"]').content;
 const KIND = {
+  live: { pill: 'In production', group: 'Live, close it', filter: 'To close' },
   decision: { pill: 'Your decision', group: 'Decide', filter: 'Decide' },
   test: { pill: 'Try it by hand', group: 'Try by hand', filter: 'Try by hand' },
   review: { pill: 'Review and merge', group: 'Review and merge', filter: 'Review' },
 };
 const ORDER = ['decision', 'test', 'review'];
+// Lucide icons (ISC license), as shapes drawn with the DOM: the page loads nothing from outside and writes no HTML.
+const ICONS = {
+  none: [['rect', { width: '18', height: '11', x: '3', y: '11', rx: '2', ry: '2' }], ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }]],
+  dev: [['circle', { cx: '18', cy: '18', r: '3' }], ['circle', { cx: '6', cy: '6', r: '3' }], ['path', { d: 'M6 21V9a9 9 0 0 0 9 9' }]],
+  main: [
+    ['path', { d: 'M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z' }],
+    ['path', { d: 'm12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z' }],
+    ['path', { d: 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0' }],
+    ['path', { d: 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5' }],
+  ],
+};
+const SVG_NS = 'http://www.w3.org/2000/svg';
+// The queue also lists the live tasks, after what waits for a decision, a test or a review.
+const QUEUE_ORDER = [...ORDER, 'live'];
+const MERGE = {
+  none: { label: 'PR only', text: 'Agents open a pull request. You review and merge it.' },
+  dev: { label: 'Auto to dev', text: 'The orchestrator merges verified tasks into staging. You release staging to production.' },
+  main: { label: 'Auto to main', text: 'Also releases staging to production after each task, when its CI is green and no task waits for a test by hand.' },
+};
 const GROUP_LIMIT = 3;
 const REFRESH_MS = 30000;
 // While the orchestrator reads the task system, the page asks more often, to show the new data as soon as it arrives.
@@ -323,6 +375,7 @@ const DONE = {
   'accept-task': 'Task accepted. An agent may take it at the next check.',
   'reject-task': 'Task rejected and closed.',
   close: 'Task closed.',
+  'close-live': 'Task closed.',
 };
 
 // The projects the queue is narrowed to, kept in this browser only: an empty set shows every project.
@@ -345,7 +398,7 @@ function saveProjects() {
   }
 }
 
-const ui = { state: null, selected: null, filter: 'all', projects: savedProjects(), open: new Set(), details: false, placing: null };
+const ui = { state: null, selected: null, filter: 'all', projects: savedProjects(), open: new Set(), details: false, placing: null, merge: null };
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -385,6 +438,19 @@ function short(ms) {
   return Math.round(minutes / 1440) + ' d';
 }
 
+// One of the icons above.
+function icon(name) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const attrs = { viewBox: '0 0 24 24', width: '13', height: '13', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' };
+  for (const [key, value] of Object.entries(attrs)) svg.setAttribute(key, value);
+  for (const [tag, shape] of ICONS[name]) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(shape)) node.setAttribute(key, value);
+    svg.append(node);
+  }
+  return el('span', { className: 'icon' }, svg);
+}
+
 function plural(n, word) {
   return n + ' ' + word + (n === 1 ? '' : 's');
 }
@@ -396,7 +462,8 @@ function sameText(a, b) {
 }
 
 function keyOf(item) {
-  return item.project + '#' + item.id;
+  // A task can be live and waiting again (sent back after its release): the two items need their own keys.
+  return (item.needs === 'live' ? 'live:' : '') + item.project + '#' + item.id;
 }
 
 function renderControl(state) {
@@ -517,6 +584,7 @@ function renderProjects(state) {
     if (!p.readAt) empty = p.reading ? 'Reading from ClickUp' : 'Not read yet';
     return el('div', { className: p.agents ? 'row' : 'row off' },
       el('span', { className: 'name' }, el('span', {}, p.projectName, placeText(p) ? el('small', { text: placeText(p) }) : null), p.reading ? el('span', { className: 'spinner', title: 'Updating from ClickUp', 'aria-label': 'Updating from ClickUp' }) : null),
+      el('button', { type: 'button', className: 'merge-pill ' + p.merge, title: 'Who merges the work of ' + p.projectName + '. Press to change it.', onclick: () => openMerge(p) }, icon(p.merge), MERGE[p.merge].label),
       el('div', { className: 'chips' }, chips.length ? chips : el('span', { className: 'muted small', text: empty })),
       work,
       el('span', { className: 'done', text: p.doneToday ? p.doneToday + ' done today' : 'Nothing done today' }),
@@ -526,6 +594,7 @@ function renderProjects(state) {
           el('button', { type: 'button', text: 'Set area and group', onclick: () => { ui.placing = p.project; renderProjects(ui.state); } }),
           el('button', { type: 'button', text: 'Remove project', onclick: () => unfollow(p) }))),
       ui.placing === p.project ? placeForm(p) : null,
+      releaseLine(p),
       analysisLine(p, now));
   });
   const box = document.getElementById('projects');
@@ -568,6 +637,71 @@ async function savePlace(p, area, group, form) {
     return;
   }
   refresh(true);
+}
+
+// Who merges the work of the project, in a modal. Production without a person asks to type the project name, as the server does.
+function openMerge(p) {
+  ui.merge = { project: p.project, level: p.merge, confirm: '' };
+  renderMergeDialog();
+  document.getElementById('merge-dialog').showModal();
+}
+
+function renderMergeDialog() {
+  const dialog = document.getElementById('merge-dialog');
+  const p = ui.merge && ui.state.projects.find((entry) => entry.project === ui.merge.project);
+  if (!p) {
+    dialog.close();
+    return;
+  }
+  const options = Object.keys(MERGE).map((key) => el('button', {
+    type: 'button', role: 'radio', 'aria-checked': String(ui.merge.level === key), className: 'merge-option ' + key,
+    onclick: () => { ui.merge.level = key; renderMergeDialog(); },
+  }, el('span', { className: 'radio' }), el('span', {}, el('b', {}, icon(key), MERGE[key].label), el('small', { text: MERGE[key].text }))));
+  const input = el('input', { type: 'text', value: ui.merge.confirm, placeholder: p.projectName, 'aria-label': 'Project name', autocomplete: 'off', spellcheck: false });
+  input.oninput = () => { ui.merge.confirm = input.value; };
+  const result = el('p', { className: 'result', role: 'status' });
+  const parts = [
+    el('h2', { id: 'merge-title', text: 'Who merges the work of ' + p.projectName }),
+    el('p', { className: 'sub', text: 'Agents never merge. The orchestrator merges only tasks that pass the tests, the independent check and the CI of the pull request.' }),
+    el('div', { className: 'merge-options', role: 'radiogroup', 'aria-label': 'Who merges' }, ...options),
+    ui.merge.level === 'main' && p.merge !== 'main'
+      ? el('label', { className: 'merge-confirm' }, el('span', { text: 'Work reaches production without a person. Type the project name to confirm.' }), input)
+      : null,
+    el('p', { className: 'branches', text: 'Staging ' + p.stagingBranch + ', production ' + (p.productionBranch || 'the default branch') }),
+    result,
+    el('footer', {},
+      el('button', { type: 'button', className: 'btn', text: 'Cancel', onclick: () => dialog.close() }),
+      el('button', { type: 'button', className: 'btn primary', text: 'Save', onclick: () => saveMerge(p, dialog, result) })),
+  ];
+  dialog.replaceChildren(...parts.filter((part) => part !== null));
+}
+
+async function saveMerge(p, dialog, result) {
+  // Nothing changed: close, without asking for the project name again.
+  if (ui.merge.level === p.merge) {
+    dialog.close();
+    return;
+  }
+  for (const control of dialog.querySelectorAll('button, input')) control.disabled = true;
+  try {
+    await post('/api/projects', { action: 'merge-level', project: p.project, level: ui.merge.level, confirm: ui.merge.confirm.trim() });
+  } catch (error) {
+    result.className = 'result failed';
+    result.textContent = error.message;
+    for (const control of dialog.querySelectorAll('button, input')) control.disabled = false;
+    return;
+  }
+  dialog.close();
+  refresh(true);
+}
+
+// Where the release of staging to production stands, while it waits or is blocked.
+function releaseLine(p) {
+  if (p.merge !== 'main' || !p.release || p.release.state === 'released') return null;
+  const target = 'Release to ' + (p.productionBranch || 'production');
+  const reason = p.release.reason.replace(/\\.?$/, '.');
+  const text = p.release.state === 'blocked' ? target + ' is blocked: ' + reason : target + ' waits: ' + reason;
+  return el('p', { className: p.release.state === 'blocked' ? 'analysis error' : 'analysis', text });
 }
 
 // What the last analysis of the project found, in the words of its agent.
@@ -697,7 +831,8 @@ function renderProjectFilters(state) {
   const followed = new Set(state.projects.map((p) => p.project));
   // A project no longer followed leaves the choice.
   for (const path of [...ui.projects]) if (!followed.has(path)) ui.projects.delete(path);
-  const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review;
+  const live = state.live || [];
+  const count = (p) => p.waiting.decision + p.waiting.test + p.waiting.review + live.filter((i) => i.project === p.project).length;
   const shown = state.projects.filter((p) => count(p) > 0 || ui.projects.has(p.project));
   const box = document.getElementById('project-filters');
   // With a single project followed there is nothing to choose.
@@ -708,21 +843,30 @@ function renderProjectFilters(state) {
       p.projectName, el('small', { text: String(count(p)) }))));
 }
 
+// What waits for the person, then the live tasks to close, as one list.
+function queueItems(state) {
+  const live = (state.live || []).map((i) => ({ project: i.project, projectName: i.projectName, id: i.id, name: i.name, url: i.url, needs: 'live', since: i.at, pr: i.pr }));
+  return [...state.waiting, ...live];
+}
+
 function renderQueue(state) {
   const now = new Date(state.generatedAt);
   renderProjectFilters(state);
-  const items = ui.projects.size ? state.waiting.filter((i) => ui.projects.has(i.project)) : state.waiting;
+  const all = queueItems(state);
+  const items = ui.projects.size ? all.filter((i) => ui.projects.has(i.project)) : all;
   document.getElementById('queue-count').textContent = String(items.length);
   const counts = { all: items.length };
-  for (const k of ORDER) counts[k] = items.filter((i) => i.needs === k).length;
-  document.getElementById('filters').replaceChildren(...['all', ...ORDER].map((f) =>
+  for (const k of QUEUE_ORDER) counts[k] = items.filter((i) => i.needs === k).length;
+  // The To close filter shows only when there is something to close.
+  const filters = QUEUE_ORDER.filter((k) => k !== 'live' || counts.live || ui.filter === 'live');
+  document.getElementById('filters').replaceChildren(...['all', ...filters].map((f) =>
     el('button', { type: 'button', 'aria-pressed': String(ui.filter === f), onclick: () => { ui.filter = f; renderQueue(ui.state); renderDetail(ui.state); } },
       f === 'all' ? 'All' : KIND[f].filter, el('small', { text: String(counts[f]) }))));
 
   // The detail always shows a task the queue shows: the first one when the filters hide the task selected.
   const visible = ui.filter === 'all' ? items : items.filter((i) => i.needs === ui.filter);
   if (!visible.find((i) => keyOf(i) === ui.selected)) ui.selected = visible.length ? keyOf(visible[0]) : null;
-  const kinds = ui.filter === 'all' ? ORDER : [ui.filter];
+  const kinds = ui.filter === 'all' ? QUEUE_ORDER : [ui.filter];
   const blocks = [];
   for (const kind of kinds) {
     const group = items.filter((i) => i.needs === kind);
@@ -730,17 +874,15 @@ function renderQueue(state) {
     const limited = ui.filter === 'all' && !ui.open.has(kind);
     const selectedIndex = group.findIndex((i) => keyOf(i) === ui.selected);
     const shown = limited ? group.filter((_, index) => index < GROUP_LIMIT || index === selectedIndex) : group;
-    blocks.push(el('p', { className: 'group ' + kind }, el('i'), KIND[kind].group, el('small', { text: String(group.length) })));
+    blocks.push(el('p', { className: 'group ' + kind }, kind === 'live' ? icon('main') : el('i'), KIND[kind].group, el('small', { text: String(group.length) })));
     for (const item of shown) {
+      if (kind === 'live') {
+        blocks.push(liveRow(item, now));
+        continue;
+      }
       blocks.push(el('button', {
         type: 'button', className: 'item ' + kind, 'aria-pressed': String(keyOf(item) === ui.selected),
-        onclick: () => {
-          ui.selected = keyOf(item);
-          renderQueue(ui.state);
-          renderDetail(ui.state);
-          // On a narrow screen the detail is below the list: bring it into view.
-          if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('detail').scrollIntoView();
-        },
+        onclick: () => selectItem(item),
       }, el('span', {}, item.name, el('small', { text: item.projectName })), item.since ? el('time', { text: short(now - new Date(item.since)) }) : null));
     }
     if (shown.length < group.length) {
@@ -754,10 +896,35 @@ function renderQueue(state) {
   if (!blocks.length) list.replaceChildren(el('p', { className: 'empty', text: empty }));
 }
 
+function selectItem(item) {
+  ui.selected = keyOf(item);
+  renderQueue(ui.state);
+  renderDetail(ui.state);
+  // On a narrow screen the detail is below the list: bring it into view.
+  if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('detail').scrollIntoView();
+}
+
+// A live task closes from its row; the row also selects it, like the other items.
+function liveRow(item, now) {
+  const status = el('span', { className: 'status', role: 'status' });
+  const close = el('button', { type: 'button', className: 'btn small-btn', text: 'Close the task' });
+  const row = el('div', {
+    className: 'item live', role: 'button', tabIndex: 0, 'aria-pressed': String(keyOf(item) === ui.selected),
+    onclick: () => selectItem(item),
+    onkeydown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectItem(item); } },
+  }, el('span', {}, item.name, el('small', { text: item.projectName + ', pull request #' + item.pr })), close, status, item.since ? el('time', { text: short(now - new Date(item.since)) }) : null);
+  close.onclick = (event) => {
+    event.stopPropagation();
+    send(item, 'close-live', undefined, row, status);
+  };
+  return row;
+}
+
 function renderDetail(state) {
   const box = document.getElementById('detail');
-  const item = state.waiting.find((i) => keyOf(i) === ui.selected);
-  if (!item && state.waiting.length) {
+  const all = queueItems(state);
+  const item = all.find((i) => keyOf(i) === ui.selected);
+  if (!item && all.length) {
     box.replaceChildren(el('p', { className: 'muted', text: 'No task matches the filters. Press All' + (ui.projects.size ? ' projects' : '') + ' to see the others.' }));
     return;
   }
@@ -773,6 +940,16 @@ function renderDetail(state) {
     el('div', { className: 'meta' }, el('span', { className: 'pill ' + item.needs, text: item.proposedTask ? 'New task proposed' : item.readyToClose ? 'Ready to close' : KIND[item.needs].pill }), item.projectName + (item.since ? ', waiting for ' + duration(now - new Date(item.since)) : '')),
     el('div', {}, el('h3', {}, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: item.name })), item.goal && !sameText(item.goal, item.name) ? el('p', { className: 'goal' }, ...inline(item.goal)) : null),
   ];
+  if (item.needs === 'live') {
+    parts.push(el('p', { text: 'Pull request #' + item.pr + ' is in production.' }));
+    parts.push(el('div', { className: 'actions' },
+      el('div', { className: 'main' }, el('button', { type: 'button', className: 'btn primary', text: 'Close the task', onclick: () => send(item, 'close-live', undefined, box, result) })),
+      el('div', { className: 'side' }, el('a', { href: item.url, target: '_blank', rel: 'noopener', text: 'Open in ClickUp' }))));
+    parts.push(el('p', { className: 'after', text: 'Close the task moves it to the closed status of its list. The orchestrator never closes a task on its own.' }));
+    parts.push(result);
+    box.replaceChildren(...parts);
+    return;
+  }
   const note = item.note.length ? el('div', {}, el('p', { className: 'section-label', text: 'The agent says' }), el('ul', { className: 'note' }, item.note.map((line) => el('li', {}, ...inline(line))))) : null;
   const field = (label, placeholder) => el('textarea', { 'aria-label': label, placeholder });
   const side = el('div', { className: 'side' },
@@ -831,7 +1008,11 @@ function renderDetail(state) {
         el('button', { type: 'button', className: 'btn', text: wrong, onclick: () => { feedback.hidden = false; text.focus(); } })),
       side));
     parts.push(feedback);
-    parts.push(el('p', { className: 'after', text: ok + ' takes the task out of your queue; ' + (item.needs === 'test' ? 'merging the branch stays with you. ' : 'merging and closing it stay with you. ') + wrong + ' sends your note back to the agent.' }));
+    // Only when the orchestrator will merge it: a run that failed its checks stays the person's to merge.
+    const merges = item.autoMerge;
+    let after = ok + ' takes the task out of your queue; ' + (item.needs === 'test' ? 'merging the branch stays with you. ' : 'merging and closing it stay with you. ');
+    if (merges) after = ok + ' lets the orchestrator merge ' + (item.needs === 'test' ? 'the branch' : 'it') + ' once its checks pass; closing it stays with you. ';
+    parts.push(el('p', { className: 'after', text: after + wrong + ' sends your note back to the agent.' }));
   }
   parts.push(result);
   box.replaceChildren(...parts);
@@ -910,7 +1091,8 @@ function busy() {
   return [...document.querySelectorAll('textarea')].some((area) => area.value.trim() !== '')
     || Boolean(document.querySelector('#detail button:disabled'))
     || Boolean(document.querySelector('details.menu[open]'))
-    || Boolean(document.querySelector('.place-form'));
+    || Boolean(document.querySelector('.place-form'))
+    || Boolean(document.querySelector('dialog[open]'));
 }
 
 // A More menu closes like a menu: a click outside it, choosing an item, Escape or opening another menu.

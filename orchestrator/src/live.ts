@@ -51,6 +51,13 @@ export function readLive(home: string): LiveFile {
   }
 }
 
+// The person closed the task: it leaves the live list.
+export function removeLive(home: string, project: string, task: string): void {
+  const file = readLive(home);
+  file.live = file.live.filter((entry) => !(entry.project === project && entry.task === task));
+  writeLive(home, file);
+}
+
 function writeLive(home: string, file: LiveFile): void {
   mkdirSync(home, { recursive: true });
   const path = join(home, LIVE_FILE);

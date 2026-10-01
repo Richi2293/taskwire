@@ -146,3 +146,21 @@ test('a project no longer followed leaves the state', async () => {
   assert.deepEqual(store.state().projects, []);
   assert.deepEqual(store.state().waiting, []);
 });
+
+test('each project shows who merges it and where its release stands, and the live tasks still open are listed', async () => {
+  const website = projectDir('website');
+  const dir = tempDir('home');
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ projects: [{ path: website, merge: 'main', stagingBranch: 'develop' }] }));
+  writeFileSync(join(dir, 'releases.json'), JSON.stringify({ [website]: { state: 'waiting-test', reason: '1 task waits for a test by hand', pr: null, head: null, headSeenAt: null, at: '2026-09-28T09:00:00.000Z' } }));
+  const entry = (id: string) => ({ project: website, task: id, name: `Task ${id}`, url: `https://app.clickup.com/t/${id}`, pr: 12, at: '2026-09-28T09:30:00.000Z' });
+  writeFileSync(join(dir, 'live.json'), JSON.stringify({ live: [entry('l1'), entry('gone')], closed: [], merged: {}, asked: {} }));
+  const store = createStore({ home: dir, runTaskwire: fakeTaskwire({ tasks: [task({ id: 'l1', status: 'qa' })] }).run, now: () => NOW });
+  await store.refresh();
+  const state = store.state();
+  assert.equal(state.projects[0].merge, 'main');
+  assert.equal(state.projects[0].stagingBranch, 'develop');
+  assert.equal(state.projects[0].productionBranch, null);
+  assert.deepEqual(state.projects[0].release, { state: 'waiting-test', reason: '1 task waits for a test by hand', pr: null });
+  // "gone" was closed in the task system: it is not among the open tasks any more.
+  assert.deepEqual(state.live.map((item) => [item.id, item.name, item.projectName, item.pr]), [['l1', 'Task l1', 'website', 12]]);
+});

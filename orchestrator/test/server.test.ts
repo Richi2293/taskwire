@@ -13,9 +13,10 @@ const state: DashboardState = {
   working: [],
   waiting: [{
     project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog',
-    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null,
+    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null, autoMerge: false,
   }],
   history: [],
+  live: [],
   problems: [],
 };
 
@@ -36,6 +37,10 @@ test('the page is served as HTML, with the current state embedded for the first 
   assert.match(response.body, /\/api\/discover/);
   assert.match(response.body, /\/api\/projects/);
   assert.match(response.body, /Remove project/);
+  // Who merges each project, and the live tasks to close.
+  assert.match(response.body, /'merge-level'/);
+  assert.match(response.body, /'close-live'/);
+  assert.match(response.body, /Live, close it/);
   assert.match(response.body, /'Added ' \+/);
   // A light control bar: the brand sits above it, and the state comes in a chip.
   assert.match(response.body, /<p class="brand">[\s\S]*<header class="control"/);

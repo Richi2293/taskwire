@@ -68,3 +68,19 @@ test('place sets the area and the group of a followed project, and empty values 
   await assert.rejects(act({ action: 'place', project: shop, area: 'front end' }), refusedWith(/area/));
   await assert.rejects(act({ action: 'place', project: shop, group: 'x'.repeat(101) }), refusedWith(/group/));
 });
+
+test('the merge level is set from the dashboard; main needs the project name typed to confirm', async () => {
+  const { act, projects } = setup();
+  const shop = projectDir('shop');
+  await act({ action: 'follow', project: shop });
+  await act({ action: 'merge-level', project: shop, level: 'dev' });
+  assert.deepEqual(projects(), [{ path: shop, merge: 'dev' }]);
+  await assert.rejects(act({ action: 'merge-level', project: shop, level: 'main' }), refusedWith(/type the project name "shop"/));
+  await assert.rejects(act({ action: 'merge-level', project: shop, level: 'main', confirm: 'website' }), refusedWith(/type the project name "shop"/));
+  await act({ action: 'merge-level', project: shop, level: 'main', confirm: 'shop' });
+  assert.deepEqual(projects(), [{ path: shop, merge: 'main' }]);
+  // Lowering the level needs no confirmation, and PR only removes the field.
+  await act({ action: 'merge-level', project: shop, level: 'none' });
+  assert.deepEqual(projects(), [{ path: shop }]);
+  await assert.rejects(act({ action: 'merge-level', project: shop, level: 'always' }), refusedWith(/must be none, dev or main/));
+});

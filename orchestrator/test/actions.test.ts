@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createActions } from '../src/dashboard/actions.ts';
 import { readMerges, writeMerges } from '../src/merges.ts';
@@ -193,4 +193,25 @@ test('approving a task whose last run failed its checks queues nothing: the pers
     await act({ project, task: 'r1', action: 'approve' });
     assert.deepEqual(readMerges(home), [], String(verdict));
   }
+});
+
+test('a live task is closed from the dashboard, and a task that is not live is refused', async () => {
+  const home = tempDir('home');
+  const project = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: project }] }));
+  writeFileSync(join(home, 'live.json'), JSON.stringify({ live: [{ project, task: 'l1', name: 'Show the total', url: 'u', pr: 12, at: '2026-09-28T09:30:00.000Z' }], closed: [], merged: {}, asked: {} }));
+  const taskwire = fakeTaskwire({
+    tasks: [task({ id: 'l1', status: 'qa', list: { id: 'l1list', name: 'Backlog' } }), task({ id: 'o1', status: 'qa' })],
+    lists: [{ id: 'l1list', name: 'Backlog', statuses: ['backlog', 'qa', 'complete'] }],
+    'task update': {},
+    'comment add': { id: 'c1' },
+  });
+  const act = createActions({ home, runTaskwire: taskwire.run, onChange: () => {} });
+  await act({ project, task: 'l1', action: 'close-live' });
+  assert.deepEqual(writes(taskwire.calls).filter((args) => args[0] !== 'lists'), [
+    ['comment', 'add', 'l1', '--text', 'Answer from the person, via the dashboard:\n\nClosed: the work is in production.'],
+    ['task', 'update', 'l1', '--needs', 'none', '--status', 'complete'],
+  ]);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, 'live.json'), 'utf8')).live, []);
+  await assert.rejects(act({ project, task: 'o1', action: 'close-live' }), (error: unknown) => error instanceof OrchestratorError && /is not live/.test(error.message));
 });
