@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-02
+
 ### Added
 
 - Projects that share one task list can each set their `area`, a tag such as `be`, `fe` or `mobile` (`taskwire area set <tag>`, or `init --area`). `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for another one, `--all-areas` for every task), `taskwire task create` adds the tag (`--area` for another one), and `taskwire rules` explains it to agents.
@@ -106,7 +108,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/Richi2293/taskwire/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/Richi2293/taskwire/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Richi2293/taskwire/compare/v0.1.3...v0.1.4
