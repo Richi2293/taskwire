@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-02
+
 ### Added
 
 - The agent rules have a default status flow: `backlog` (not planned yet, where new tasks start), `todo`, `inProgress`, `review` (used with `--needs test|review`) and `closed` (merged and verified). The project `instructions` still win over it.
@@ -117,7 +119,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/Richi2293/taskwire/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Richi2293/taskwire/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/Richi2293/taskwire/compare/v0.1.4...v0.1.5
