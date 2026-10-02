@@ -36,3 +36,18 @@ test('with the same priority, picks the oldest task', () => {
   const tasks = [task({ id: 'newest' }), task({ id: 'older' }), task({ id: 'oldest' })];
   assert.equal(pickTask(tasks, options)?.id, 'oldest');
 });
+
+test('a project with an area picks only the tasks with its area tag', () => {
+  const tasks = [task({ id: 'backend', tags: ['be'] }), task({ id: 'none' }), task({ id: 'frontend', tags: ['fe', 'bug'] })];
+  assert.equal(pickTask(tasks, { ...options, area: 'fe' })?.id, 'frontend');
+  assert.equal(pickTask(tasks, { ...options, area: 'mobile' }), null);
+  // Without an area every task may be picked, as before.
+  assert.equal(pickTask(tasks, options)?.id, 'frontend');
+});
+
+test('leaves out a task that waits for an open task, and takes it once that task is closed', () => {
+  const tasks = [task({ id: 'ui', blockedBy: ['api'] }), task({ id: 'api', status: 'in progress' })];
+  assert.equal(pickTask(tasks, options), null);
+  // A closed task is not in the list of open tasks any more.
+  assert.equal(pickTask([tasks[0]], options)?.id, 'ui');
+});

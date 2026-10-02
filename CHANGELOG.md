@@ -4,8 +4,19 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-02
+
+### Added
+
+- Projects that share one task list can each set their `area`, a tag such as `be`, `fe` or `mobile` (`taskwire area set <tag>`, or `init --area`). `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for another one, `--all-areas` for every task), `taskwire task create` adds the tag (`--area` for another one), and `taskwire rules` explains it to agents.
+- `taskwire project` prints the project configuration as JSON, never the token.
+- Tasks can be marked as waiting for a person, with the reason: `taskwire task update <id> --needs decision|test|review` (`--needs none` clears it), `task create --needs <kind>`, and `taskwire tasks --needs <kind>|any` to list them. Every task has a `needs` field. The mark is a tag (`needs-decision`, `needs-test`, `needs-review`), so it also shows in the task system; `needsTags` in `.taskwire.json` renames the tags.
+- Named accounts, for projects in different accounts of the same task system: `"account": "<name>"` in `.taskwire.json`, `--account <name>` on every command, or `init --account <name>`. A named account reads its own token (Keychain service `taskwire:<name>`, or `TASKWIRE_API_TOKEN_<NAME>`) and never falls back to the default one. `whoami` shows the account used.
+- Every task in `taskwire tasks` has `blockedBy`, the ids of the tasks it waits for, at no extra API call.
+
 ### Changed
 
+- The agent rules tell agents when to mark a task as waiting for a person, to leave marked tasks alone and never to clear the mark themselves. The comment of a marked task opens with fixed sections, in English whatever the project language, so tools can read them: `### Questions` and `### Proposal` for a decision, `### Checked` and `### By hand` for a test.
 - The agent rules ask to move a task to its in-progress status as the first step, before any design, plan or code, and put this rule right after the search for a related task. The block for `AGENTS.md` repeats it.
 
 ## [0.1.6] - 2026-09-27
@@ -97,7 +108,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/Richi2293/taskwire/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/Richi2293/taskwire/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Richi2293/taskwire/compare/v0.1.3...v0.1.4

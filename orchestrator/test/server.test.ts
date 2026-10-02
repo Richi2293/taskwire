@@ -7,14 +7,16 @@ import type { DashboardState } from '../src/dashboard/snapshot.ts';
 
 const state: DashboardState = {
   generatedAt: '2026-09-27T15:32:00.000Z',
+  sync: { readAt: '2026-09-27T15:31:00.000Z', reading: false },
   control: { mode: 'paused', intervalMinutes: 5, maxAgents: 2, agentsAtWork: 0, nextCheckAt: null, busyProjects: [], firstTask: null },
   projects: [],
   working: [],
   waiting: [{
     project: '/code/shop', projectName: 'shop', id: 'd1', name: '<img src=x onerror=alert(1)>', url: 'https://app.clickup.com/t/d1', needs: 'decision', status: 'backlog',
-    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [],
+    goal: null, since: null, note: [], questions: [], proposal: null, checked: [], byHand: [], proposedTask: null, readyToClose: null, autoMerge: false,
   }],
   history: [],
+  live: [],
   problems: [],
 };
 
@@ -30,6 +32,57 @@ test('the page is served as HTML, with the current state embedded for the first 
   // The switch between paused and working is on the page.
   assert.match(response.body, /Start agents/);
   assert.match(response.body, /\/api\/control/);
+  // Projects are added and removed from the page too.
+  assert.match(response.body, /Add project/);
+  assert.match(response.body, /\/api\/discover/);
+  assert.match(response.body, /\/api\/projects/);
+  assert.match(response.body, /Remove project/);
+  // Who merges each project, and the live tasks to close.
+  assert.match(response.body, /'merge-level'/);
+  assert.match(response.body, /'close-live'/);
+  assert.match(response.body, /Live, close it/);
+  assert.match(response.body, /'Added ' \+/);
+  // A light control bar: the brand sits above it, and the state comes in a chip.
+  assert.match(response.body, /<p class="brand">[\s\S]*<header class="control"/);
+  assert.match(response.body, /id="state-chip"/);
+  // The page tells how old the data is and when it is being read again.
+  assert.match(response.body, />Refresh<\/button>/);
+  assert.match(response.body, /Updating from ClickUp/);
+  assert.match(response.body, /\/api\/refresh/);
+});
+
+test('an element with the hidden attribute stays hidden, even when its class sets a display', async () => {
+  const response = await get('/');
+  assert.match(response.body, /\[hidden\] \{ display: none !important; \}/);
+});
+
+test('a More menu closes like a menu, and a refresh never closes it under the pointer', async () => {
+  const response = await get('/');
+  // A click outside, Escape or opening another menu closes it; choosing an item closes it too.
+  assert.match(response.body, /function closeMenus\(/);
+  assert.match(response.body, /document\.addEventListener\('click'/);
+  assert.match(response.body, /event\.key === 'Escape'/);
+  assert.match(response.body, /addEventListener\('toggle'/);
+  // The page does not refresh while a menu is open.
+  assert.match(response.body, /document\.querySelector\('details\.menu\[open\]'\)/);
+});
+
+test('each project row has a switch for its agents', async () => {
+  const response = await get('/');
+  assert.match(response.body, /role: 'switch'/);
+  assert.match(response.body, /'agents-on' : 'agents-off'/);
+  assert.match(response.body, /Agents off/);
+  assert.match(response.body, /\.projects \.row\.off/);
+});
+
+test('the queue can be narrowed to some projects, and the choice is kept in the browser', async () => {
+  const response = await get('/');
+  assert.match(response.body, /id="project-filters"/);
+  assert.match(response.body, /All projects/);
+  assert.match(response.body, /Nothing waits for you in the selected projects/);
+  assert.match(response.body, /localStorage\.setItem\(PROJECTS_KEY/);
+  // The waiting chips of a project row narrow the queue to that project and kind.
+  assert.match(response.body, /function focusQueue\(/);
 });
 
 test('task text from the task system is never turned into HTML', async () => {
@@ -135,4 +188,57 @@ test('every action from the page is reported with its outcome, without the text 
     { project: null, task: null, action: null, outcome: 'refused', error: 'Reload the dashboard: this page is from an earlier start' },
   ]);
   assert.ok(!JSON.stringify(events).includes('private words'));
+});
+
+test('following and unfollowing a project need the token, and are reported without the test command', async () => {
+  const received: unknown[] = [];
+  const events: unknown[] = [];
+  const handle = createHandler({
+    snapshot: async () => state,
+    token: 'secret-token',
+    projects: async (body) => {
+      received.push(body);
+      if ((body as { project: string }).project === '/busy') throw new OrchestratorError('An agent is working in /busy', 2);
+    },
+    onAction: (event) => events.push(event),
+  });
+  const send = (body: unknown, token?: string) => handle({
+    method: 'POST',
+    url: '/api/projects',
+    headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) },
+    body: JSON.stringify(body),
+  });
+  assert.equal((await send({ action: 'follow', project: '/code/shop' })).status, 403);
+  assert.deepEqual(received, []);
+  const ok = await send({ action: 'follow', project: '/code/shop', testCommand: 'npm test' }, 'secret-token');
+  assert.equal(ok.status, 200);
+  assert.equal((await send({ action: 'unfollow', project: '/busy' }, 'secret-token')).status, 400);
+  assert.deepEqual(received, [{ action: 'follow', project: '/code/shop', testCommand: 'npm test' }, { action: 'unfollow', project: '/busy' }]);
+  assert.deepEqual(events, [
+    { project: null, task: null, action: null, outcome: 'refused', error: 'Reload the dashboard: this page is from an earlier start' },
+    { project: '/code/shop', task: null, action: 'follow', outcome: 'done' },
+    { project: '/busy', task: null, action: 'unfollow', outcome: 'refused', error: 'An agent is working in /busy' },
+  ]);
+  assert.ok(!JSON.stringify(events).includes('npm test'));
+});
+
+test('the search for projects to add needs the token, since it lists folders of the Mac', async () => {
+  const found = { roots: ['/code'], projects: [{ path: '/code/shop', name: 'shop' }], truncated: false };
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', discover: () => found });
+  const ask = (token?: string) => handle({ method: 'GET', url: '/api/discover', headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) }, body: '' });
+  assert.equal((await ask()).status, 403);
+  const response = await ask('secret-token');
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(response.body), found);
+});
+
+test('refresh now needs the token, and starts a read without waiting for it', async () => {
+  let refreshes = 0;
+  const handle = createHandler({ snapshot: async () => state, token: 'secret-token', refresh: () => { refreshes += 1; } });
+  const send = (token?: string) => handle({ method: 'POST', url: '/api/refresh', headers: { host: '127.0.0.1', ...(token === undefined ? {} : { 'x-action-token': token }) }, body: '' });
+  assert.equal((await send()).status, 403);
+  assert.equal(refreshes, 0);
+  const ok = await send('secret-token');
+  assert.equal(ok.status, 200);
+  assert.equal(refreshes, 1);
 });

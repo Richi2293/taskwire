@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configError } from './errors.ts';
+import type { SessionRecord } from './journal.ts';
 
 // A task the orchestrator is working on. Kept on disk, so a run cut short is found at the next start.
 export interface Claim {
@@ -8,6 +9,8 @@ export interface Claim {
   name: string;
   worktree: string;
   startedAt: string;
+  // An analysis of the project, not a task: keyed "analysis:<project>" and never marked for a person.
+  kind?: 'analysis';
 }
 
 // One agent run, appended to runs.jsonl: the history the dashboard shows.
@@ -27,7 +30,14 @@ export interface RunRecord {
   tests: 'pass' | 'fail' | null;
   // What the verifier agent concluded, null when it did not run or gave no verdict.
   verdict: 'pass' | 'manual' | 'fail' | null;
+  // Every agent session of the run, in order; missing in runs recorded before the diary.
+  sessions?: SessionRecord[];
   worktree: string;
+  // The branch the agent left the worktree on and its pull request; null when there is none, missing in older runs.
+  branch?: string | null;
+  pr?: number | null;
+  // The commit the worktree was at when the pass ended: the one a person approves with the task.
+  sha?: string | null;
   log: string;
 }
 

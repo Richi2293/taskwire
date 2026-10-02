@@ -15,7 +15,9 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
   - Due dates use midnight in the system time zone. No hardcoded time zone.
   - ClickUp is the only provider. Do not build a provider abstraction until a second provider is actually planned; keep ClickUp code in `client.ts`, `clickup-types.ts` and `shape.ts`.
 - `docs/specs/` and `docs/plans/` are local working notes: they are gitignored and must never be committed (no `git add -f`).
-- `main` is protected: changes reach it only through a pull request, merged with squash once CI passes. The PR title becomes the commit on `main`, so it follows Conventional Commits.
+- Branches: `dev` is for development and testing, `main` holds only what the user has tested, and releases are tagged only on `main`. Both are protected and never deleted.
+  - Each task gets its own branch from the latest `dev`, and its pull request goes to `dev`, merged with squash once CI passes. The PR title becomes the commit on `dev`, so it follows Conventional Commits.
+  - When the user says `dev` is ready, a pull request from `dev` to `main` is merged with a merge commit, not squash, so the two branches keep the same history.
 - The work on taskwire may be tracked with taskwire itself, through a local `.taskwire.json` that is never committed. When it exists, run `taskwire rules` before reading or writing tasks and follow its writing format, instead of copying the format of existing comments.
 
 ## Orchestrator
@@ -23,6 +25,14 @@ Rules for AI agents working on the taskwire codebase. The rules for agents that 
 - `orchestrator/` holds an experimental, unpublished package (`taskwire-orchestrator`) that lets agents work on the tasks of several projects. It is not part of the taskwire npm package.
 - It talks to taskwire only through the CLI and its JSON output, never by importing `src/`, so every taskwire check applies to it. When it needs something taskwire lacks, add it to the CLI.
 - The tech constraints below apply to it too. Its tests live in `orchestrator/test/` and never run a real taskwire or a real agent.
+- The dashboard is designed first in `orchestrator/design/dashboard.pen` (Pencil): a UI change updates the design and waits for the user's approval before the code. A change made only in the code is brought back into the design. The design uses neutral names and English texts, like the fixtures. See Design first in `orchestrator/README.md`.
+- `orchestrator/README.md` explains how it works: the pass on a task, the project analysis, areas and groups, the dashboard, the config and the files it keeps. Read it before changing the orchestrator.
+- To understand what happened in a real run (when the user tested something, or an agent did something unexpected), read the files in its folder, `~/.config/taskwire-orchestrator` (or `TASKWIRE_ORCHESTRATOR_HOME`), before asking the user. They are local to the user's Mac, never in the repo:
+  1. `events.jsonl`, the diary: what the orchestrator did and when, one event per line. Filter it by `task` or `project`;
+  2. `runs.jsonl` and `analyses.jsonl`: one line per run or analysis, with its sessions, outcome and the path of its `log`;
+  3. that log in `logs/`: the whole output of every agent session of the run, under a heading with its role;
+  4. `config.json` for the projects followed, and `claims.json` for the work in progress right now.
+- These files hold real project data: quote from them only what is needed, and never copy them into the repo, a task or a pull request.
 
 ## Tech constraints
 

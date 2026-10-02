@@ -96,3 +96,26 @@ test('init --force keeps the task conventions of the existing config', async () 
     conventions,
   });
 });
+
+test('init --area writes the project area in lowercase', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-init-'));
+  const run = await runCli(['init', '--folder', FOLDER_ID, '--area', 'BE'], { cwd, routes: { ...folderRoute, ...oneWorkspace } });
+  assert.equal(run.code, 0);
+  assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).area, 'be');
+  assert.equal((run.json() as { area: string }).area, 'be');
+});
+
+test('init rejects an --area that is not one word before calling ClickUp', async () => {
+  const run = await runCli(['init', '--folder', FOLDER_ID, '--area', 'two words'], { config: null });
+  assert.equal(run.code, 2);
+  assert.equal(run.calls.length, 0);
+});
+
+test('init --force keeps the area of the existing config unless --area is given', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'taskwire-init-'));
+  writeFileSync(join(cwd, '.taskwire.json'), JSON.stringify({ folderId: '1', area: 'mobile' }));
+  await runCli(['init', '--folder', FOLDER_ID, '--force'], { cwd, routes: { ...folderRoute, ...oneWorkspace } });
+  assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).area, 'mobile');
+  await runCli(['init', '--folder', FOLDER_ID, '--force', '--area', 'fe'], { cwd, routes: { ...folderRoute, ...oneWorkspace } });
+  assert.equal(JSON.parse(readFileSync(join(cwd, '.taskwire.json'), 'utf8')).area, 'fe');
+});

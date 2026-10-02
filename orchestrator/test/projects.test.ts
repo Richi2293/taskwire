@@ -52,6 +52,23 @@ test('add reports a taskwire failure in the project as a configuration problem',
   assert.match(JSON.parse(run.stderr).error, /No ClickUp token found/);
 });
 
+test('remove stops following a project and keeps the others', async () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website }, { path: shop }] }));
+  const run = await runOrchestrator(['remove', website], { home });
+  assert.equal(run.code, 0);
+  assert.deepEqual(run.json(), { removed: website });
+  assert.deepEqual((await runOrchestrator(['list'], { home })).json(), [{ path: shop }]);
+});
+
+test('remove refuses a project that is not followed', async () => {
+  const run = await runOrchestrator(['remove', '/code/website']);
+  assert.equal(run.code, 2);
+  assert.match(JSON.parse(run.stderr).error, /not followed/);
+});
+
 test('a broken config file is a configuration error', async () => {
   const home = tempDir('home');
   writeFileSync(join(home, 'config.json'), '{"projects": "nope"}');
@@ -70,9 +87,21 @@ test('next shows the task each project would work on, without writing anything',
   });
   const run = await runOrchestrator(['next'], { home, taskwire: taskwire.run });
   assert.equal(run.code, 0);
-  assert.deepEqual(taskwire.calls, [{ args: ['tasks'], cwd: website }, { args: ['tasks'], cwd: shop }]);
+  const read = (cwd: string) => [{ args: ['tasks', '--all-areas'], cwd }, { args: ['project'], cwd }];
+  assert.deepEqual(taskwire.calls, [...read(website), ...read(shop)]);
   const rows = run.json() as { project: string; task: { id: string } | null }[];
   assert.deepEqual(rows.map((row) => [row.project, row.task?.id ?? null]), [[website, 'b'], [shop, 'a']]);
+});
+
+test('next leaves out the task of a project with agents off, without reading it', async () => {
+  const home = tempDir('home');
+  const website = projectDir('website');
+  const shop = projectDir('shop');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website }, { path: shop, agents: false }] }));
+  const taskwire = fakeTaskwire({ tasks: [task({ id: 'a' })] });
+  const run = await runOrchestrator(['next'], { home, taskwire: taskwire.run });
+  assert.deepEqual(taskwire.calls, [{ args: ['tasks', '--all-areas'], cwd: website }, { args: ['project'], cwd: website }]);
+  assert.deepEqual(run.json(), [{ project: website, agents: true, task: task({ id: 'a' }) }, { project: shop, agents: false, task: null }]);
 });
 
 test('an unknown command exits 2', async () => {

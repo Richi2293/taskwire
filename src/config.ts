@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { AREA_HINT, normalizeArea } from './area.ts';
 import { configError, usageError } from './errors.ts';
 import { DEFAULT_NEEDS_TAGS, NEEDS_KINDS, isNeedsKind } from './needs.ts';
 import type { NeedsTags } from './needs.ts';
@@ -27,6 +28,8 @@ export interface ProjectConfig {
   // Lists of the folder that belong to this project, for folders shared by several projects. Missing means the whole folder.
   listIds?: string[];
   defaultListId?: string;
+  // The tag of this project's tasks when several projects share the task list; missing means every task.
+  area?: string;
   // Tag names that replace the default needs tags (needs-decision, needs-test, needs-review), in lowercase like ClickUp.
   needsTags?: Partial<NeedsTags>;
   conventions?: TaskConventions;
@@ -69,7 +72,7 @@ export function parseConfig(text: string, path: string): ProjectConfig {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw configError(`${path} must contain a JSON object`);
   }
-  const { provider, account, workspaceId, folderId, listIds, defaultListId, needsTags, conventions } = data as Record<string, unknown>;
+  const { provider, account, workspaceId, folderId, listIds, defaultListId, area, needsTags, conventions } = data as Record<string, unknown>;
   const config: ProjectConfig = {
     provider: parseProvider(provider, path),
     folderId: checkId(folderId, 'folderId', path, 'Run "taskwire folders" to find the folder id'),
@@ -88,6 +91,9 @@ export function parseConfig(text: string, path: string): ProjectConfig {
     if (config.listIds !== undefined && !config.listIds.includes(config.defaultListId)) {
       throw configError(`${path}: "defaultListId" must be one of "listIds"`, 'Add it to "listIds" or pick one of them');
     }
+  }
+  if (area !== undefined) {
+    config.area = parseArea(area, path);
   }
   if (needsTags !== undefined) {
     config.needsTags = parseNeedsTags(needsTags, path);
@@ -111,6 +117,12 @@ function parseListIds(value: unknown, path: string): string[] {
     ids.push(id);
   }
   return ids;
+}
+
+function parseArea(value: unknown, path: string): string {
+  const tag = typeof value === 'string' ? normalizeArea(value) : null;
+  if (tag === null) throw configError(`${path}: "area" must be one word`, AREA_HINT);
+  return tag;
 }
 
 function parseAccount(value: unknown, path: string): string {
@@ -196,6 +208,19 @@ export function readAccount(dir: string): string | undefined {
     const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
     if (typeof data !== 'object' || data === null || !('account' in data)) return undefined;
     return parseAccount(data.account, path);
+  } catch {
+    return undefined;
+  }
+}
+
+// The area of the config file in dir, read leniently like readConventions, so that "init --force" keeps it.
+export function readArea(dir: string): string | undefined {
+  const path = join(dir, CONFIG_FILE);
+  if (!existsSync(path)) return undefined;
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (typeof data !== 'object' || data === null || !('area' in data)) return undefined;
+    return parseArea(data.area, path);
   } catch {
     return undefined;
   }

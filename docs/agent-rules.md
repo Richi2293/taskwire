@@ -35,6 +35,12 @@ The defaults apply unless the project chooses otherwise, in the `conventions` of
 }
 ```
 
+## Projects that share a task list
+
+Several projects of one product (for example the backend, the frontend and the app) may share one task list. Each project then sets its `area` in `.taskwire.json`, a tag such as `be`, `fe` or `mobile`, with `taskwire area set <tag>` or `taskwire init --area <tag>`. The area is meant for projects in separate repositories: a monorepo with a single `.taskwire.json` leaves it out and sees every task.
+
+With an area, `taskwire tasks` shows only the tasks with its tag, `taskwire task create` adds the tag, and `taskwire rules` ends with a section ([rules/areas.md](../rules/areas.md)) that tells agents how to reach the other areas and how to split a task that touches several of them. Writes are not limited to the area: an agent may comment on a task of another area or create its subtask there.
+
 ## Tasks waiting for a person
 
 The rules ask agents to mark a task when the work stops because a person is needed, with `taskwire task update <id> --needs decision|test|review`, and to explain in a comment what the person must do. The mark is a tag, so it also shows and filters in the task system UI. Agents leave these tasks alone and never clear the mark: the person clears it (`--needs none`, or by removing the tag) as the go-ahead. The tag names can be changed with `needsTags` in `.taskwire.json`.

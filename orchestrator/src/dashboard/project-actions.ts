@@ -1,0 +1,50 @@
+import { basename, resolve } from 'node:path';
+import { MERGE_LEVELS, expandHome } from '../config.ts';
+import { usageError } from '../errors.ts';
+import { followProject, setProjectAgents, setProjectGroup, setProjectMerge, unfollowProject } from '../projects.ts';
+import type { RunTaskwire } from '../taskwire.ts';
+
+export interface ProjectActionDeps {
+  home: string;
+  runTaskwire: RunTaskwire;
+  // Called with the project after a change, so the dashboard reads a project just followed at once.
+  onChange: (project: string) => void;
+}
+
+const MAX_TEST_COMMAND = 1000;
+
+// Following and unfollowing projects from the dashboard, with the same checks as "add" and "remove", and switching their agents.
+export function createProjectActions(deps: ProjectActionDeps): (body: unknown) => Promise<void> {
+  return async (body) => {
+    if (typeof body !== 'object' || body === null) throw usageError('The request must be a JSON object');
+    const { action, project, testCommand, group, level, confirm } = body as Record<string, unknown>;
+    if (typeof project !== 'string' || project.trim() === '') throw usageError('The request needs the "project" folder');
+    if (action === 'follow') {
+      if (testCommand !== undefined && (typeof testCommand !== 'string' || testCommand.length > MAX_TEST_COMMAND)) {
+        throw usageError(`"testCommand" must be a string of at most ${MAX_TEST_COMMAND} characters`);
+      }
+      // The page sends an empty field when the person leaves it blank.
+      const command = typeof testCommand === 'string' && testCommand.trim() !== '' ? testCommand : undefined;
+      const entry = await followProject(deps, project, command);
+      deps.onChange(entry.path);
+    } else if (action === 'unfollow') {
+      // The state lists only the projects in the config, so there is nothing to read again.
+      unfollowProject(deps.home, project);
+    } else if (action === 'agents-on' || action === 'agents-off') {
+      // The state reads the config at every look, so the switch shows at once.
+      setProjectAgents(deps.home, project, action === 'agents-on');
+    } else if (action === 'group') {
+      if (typeof group !== 'string') throw usageError('"group" must be a string');
+      setProjectGroup(deps.home, project, group);
+    } else if (action === 'merge-level') {
+      const merge = MERGE_LEVELS.find((entry) => entry === level);
+      if (merge === undefined) throw usageError('The merge level must be none, dev or main');
+      // Production without a person is a choice made on purpose: the page asks to type the project name, and so does the server.
+      const name = basename(resolve(expandHome(project)));
+      if (merge === 'main' && confirm !== name) throw usageError(`To let the orchestrator release to production, type the project name "${name}"`);
+      setProjectMerge(deps.home, project, merge);
+    } else {
+      throw usageError(`Unknown action ${JSON.stringify(action)}`, 'Actions: follow, unfollow, agents-on, agents-off, group, merge-level');
+    }
+  };
+}

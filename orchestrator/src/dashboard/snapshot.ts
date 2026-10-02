@@ -1,7 +1,15 @@
-import { basename } from 'node:path';
-import { DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_START_STATUSES, loadConfig } from '../config.ts';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { analysisDue, lastAnalysis } from '../analysis.ts';
+import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_STAGING_BRANCH, DEFAULT_START_STATUSES, agentsOn, loadConfig, mergeLevel } from '../config.ts';
+import type { MergeLevel, ProjectEntry } from '../config.ts';
+import { readLive } from '../live.ts';
+import { approvalCanMerge } from '../merges.ts';
+import { readReleases } from '../releases.ts';
+import type { ReleaseState } from '../releases.ts';
 import { pickTask } from '../picker.ts';
 import { readClaims, readRuns } from '../state.ts';
+import { readArea } from '../taskwire.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 import { goalFrom, readSections } from './sections.ts';
 
@@ -26,6 +34,10 @@ export interface WaitingItem {
   proposal: string | null;
   checked: string[];
   byHand: string[];
+  proposedTask: string | null;
+  readyToClose: string | null;
+  // True when approving the task lets the orchestrator merge it (see approvalCanMerge), so the page can say so.
+  autoMerge: boolean;
 }
 
 export interface WorkingItem {
@@ -34,6 +46,8 @@ export interface WorkingItem {
   task: string;
   name: string;
   startedAt: string;
+  // Set when the agent analyses the project instead of working on a task.
+  kind?: 'analysis';
 }
 
 export interface HistoryItem {
@@ -57,8 +71,38 @@ export interface ProjectSummary {
   waiting: Record<NeedsKind, number>;
   working: WorkingItem | null;
   doneToday: number;
-  // Why the project could not be read (a missing token, for example); null when it was read.
+  // Why the last read of the project failed (a missing token, for example); the data shown is then from readAt.
   error: string | null;
+  // When the tasks of the project were last read from the task system; null before the first read.
+  readAt: string | null;
+  // True while the project is being read again.
+  reading: boolean;
+  // False when agents are off for the project: it stays followed, and what waits for the person still shows.
+  agents: boolean;
+  // The last analysis of the project, when it ended and what the agent said; null before the first one.
+  analysis: { at: string; ok: boolean; summary: string } | null;
+  // True when an analysis runs before the next task of the project, once agents work.
+  analysisDue: boolean;
+  // The tag of the project's tasks and its group, when it shares its task list; null otherwise.
+  area: string | null;
+  group: string | null;
+  // Who merges the work of the project, and the branches it goes to; productionBranch is null for the default branch of the remote.
+  merge: MergeLevel;
+  stagingBranch: string;
+  productionBranch: string | null;
+  // Where the release of staging to production stands, with level main; null when there is nothing to release.
+  release: Pick<ReleaseState, 'state' | 'reason' | 'pr'> | null;
+}
+
+// A task whose work reached production, still open: the person may close it.
+export interface LiveItem {
+  project: string;
+  projectName: string;
+  id: string;
+  name: string;
+  url: string;
+  pr: number;
+  at: string;
 }
 
 export interface ControlInfo {
@@ -74,17 +118,26 @@ export interface ControlInfo {
   firstTask: { project: string; projectName: string; id: string; name: string; status: string } | null;
 }
 
+export interface SyncInfo {
+  // The oldest read among the projects: all the data shown is at least this recent. Null while a project was never read.
+  readAt: string | null;
+  // True while any project is being read.
+  reading: boolean;
+}
+
 export interface DashboardState {
   generatedAt: string;
+  sync: SyncInfo;
   control: ControlInfo;
   projects: ProjectSummary[];
   waiting: WaitingItem[];
   working: WorkingItem[];
   history: HistoryItem[];
+  live: LiveItem[];
   problems: { project: string; projectName: string; error: string }[];
 }
 
-export interface SnapshotDeps {
+export interface StoreDeps {
   home: string;
   runTaskwire: RunTaskwire;
   now: () => number;
@@ -92,29 +145,110 @@ export interface SnapshotDeps {
   nextCheckAt?: () => number | null;
 }
 
-// The free ClickUp plan allows 100 requests a minute: the page refreshes often, the task system is read at most once a minute.
-const CACHE_MS = 60_000;
+export interface Store {
+  // The state to show, at once: the last data read from the task system, and fresh local files (claims, runs, config).
+  state: () => DashboardState;
+  // Someone looks at the page: projects read more than a minute ago are read again in the background.
+  look: () => void;
+  // Reads one project, or all of them, now (Refresh now on the page).
+  refresh: (project?: string) => Promise<void>;
+  // An action changed a task: it leaves the queue at once, and its project is read again.
+  changed: (project: string, task?: string) => void;
+  // Resolves once no read is in progress; for tests and for a clean stop.
+  idle: () => Promise<void>;
+}
+
+// What the dashboard keeps of a project between reads, in memory and in snapshot.json.
+interface ProjectCache {
+  readAt: string | null;
+  error: string | null;
+  // The open tasks of the project's task list in every area, as "taskwire tasks --all-areas" lists them.
+  tasks: TaskSummary[];
+  // The area of the project, from its taskwire; null without one. Missing in a snapshot written before areas.
+  area?: string | null;
+  // The detail of each task waiting for a person, with the updatedAt it was read at.
+  details: Record<string, TaskDetail>;
+}
+
+interface TaskDetail {
+  updatedAt: string | null;
+  description: string;
+  comment: { text: string; date: string | null } | null;
+}
+
+// The free ClickUp plan allows 100 requests a minute: a project is read again at most once a minute while someone looks.
+const FRESH_MS = 60_000;
 const HISTORY_LIMIT = 200;
+const RUNS_FOR_APPROVALS = 500;
+const SNAPSHOT_FILE = 'snapshot.json';
 const NEEDS_ORDER: Record<NeedsKind, number> = { decision: 0, test: 1, review: 2 };
 
-export type Snapshot = (() => Promise<DashboardState>) & {
-  // Forgets the cached reads, after a change made from the dashboard.
-  clear: () => void;
-};
+export function createStore(deps: StoreDeps): Store {
+  const cache = loadSnapshot(deps.home);
+  const reading = new Map<string, Promise<void>>();
+  // Projects to read once more after the read in progress, because an action changed them meanwhile.
+  const again = new Set<string>();
+  // When a read was last tried, so a failing project is not tried at every look.
+  const triedAt = new Map<string, number>();
 
-// Returns a function that builds the dashboard state, reading the task system through a short cache.
-export function createSnapshot(deps: SnapshotDeps): Snapshot {
-  const cache = new Map<string, { at: number; value: unknown }>();
-  const cached = async (args: string[], cwd: string): Promise<unknown> => {
-    const key = `${cwd}\n${args.join(' ')}`;
-    const hit = cache.get(key);
-    if (hit !== undefined && deps.now() - hit.at < CACHE_MS) return hit.value;
-    const value = await deps.runTaskwire(args, cwd);
-    cache.set(key, { at: deps.now(), value });
-    return value;
+  const readOnce = async (path: string): Promise<void> => {
+    triedAt.set(path, deps.now());
+    const previous = cache.get(path) ?? emptyCache();
+    try {
+      const tasks = (await deps.runTaskwire(['tasks', '--all-areas'], path)) as TaskSummary[];
+      const area = await readArea(deps.runTaskwire, path);
+      const areas = followedAreas();
+      areas.set(path, area);
+      const details: Record<string, TaskDetail> = {};
+      // Only the tasks the project shows: the others belong to another project of the group.
+      await Promise.all(shownTasks(path, tasks, areas, loadConfig(deps.home).projects).filter((task) => task.needs !== null).map(async (task) => {
+        const known = previous.details[task.id];
+        // A comment changes updatedAt too, so an unchanged task has nothing new to read.
+        if (known !== undefined && task.updatedAt !== undefined && known.updatedAt === task.updatedAt) {
+          details[task.id] = known;
+          return;
+        }
+        details[task.id] = await readDetail(task, path);
+      }));
+      cache.set(path, { readAt: new Date(deps.now()).toISOString(), error: null, tasks, area, details });
+    } catch (error) {
+      cache.set(path, { ...previous, error: error instanceof Error ? error.message : String(error) });
+    }
+    saveSnapshot(deps.home, cache);
   };
 
-  const read = async (): Promise<DashboardState> => {
+  const readDetail = async (task: TaskSummary, path: string): Promise<TaskDetail> => {
+    const detail = (await deps.runTaskwire(['task', 'get', task.id, '--comments', '1'], path)) as {
+      description?: string;
+      comments?: { text: string; date: string | null }[];
+    };
+    const last = detail.comments?.[0];
+    return { updatedAt: task.updatedAt ?? null, description: detail.description ?? '', comment: last === undefined ? null : { text: last.text, date: last.date } };
+  };
+
+  // One read per project at a time: a second call joins it, or asks for one more read after it.
+  const read = (path: string, readAgain = false): Promise<void> => {
+    const current = reading.get(path);
+    if (current !== undefined) {
+      if (readAgain) again.add(path);
+      return current;
+    }
+    const work = (async () => {
+      do {
+        again.delete(path);
+        await readOnce(path);
+      } while (again.has(path));
+      reading.delete(path);
+    })();
+    reading.set(path, work);
+    return work;
+  };
+
+  const followed = (): string[] => loadConfig(deps.home).projects.map((project) => project.path);
+  // The area of each project read so far.
+  const followedAreas = (): Map<string, string | null> => new Map([...cache].map(([path, entry]) => [path, entry.area ?? null]));
+
+  const state = (): DashboardState => {
     const config = loadConfig(deps.home);
     const working = Object.entries(readClaims(deps.home)).map(([task, claim]) => ({
       project: claim.project,
@@ -122,6 +256,7 @@ export function createSnapshot(deps: SnapshotDeps): Snapshot {
       task,
       name: claim.name,
       startedAt: claim.startedAt,
+      ...(claim.kind === undefined ? {} : { kind: claim.kind }),
     }));
     const history = readRuns(deps.home, HISTORY_LIMIT).map((run) => ({
       project: run.project,
@@ -141,41 +276,77 @@ export function createSnapshot(deps: SnapshotDeps): Snapshot {
 
     const waiting: WaitingItem[] = [];
     const projects: ProjectSummary[] = [];
+    const live: LiveItem[] = [];
+    const liveTasks = readLive(deps.home).live;
+    // Newest first: the first run found for a task is its last one.
+    const runs = readRuns(deps.home, RUNS_FOR_APPROVALS);
+    const releases = readReleases(deps.home);
     let firstTask: ControlInfo['firstTask'] = null;
+    const areas = followedAreas();
     for (const project of config.projects) {
       const projectName = basename(project.path);
       const busy = working.find((item) => item.project === project.path) ?? null;
+      const known = cache.get(project.path) ?? emptyCache();
       const summary: ProjectSummary = {
         project: project.path,
         projectName,
         waiting: { decision: 0, test: 0, review: 0 },
         working: busy,
         doneToday: history.filter((run) => run.project === project.path && new Date(run.finishedAt).toDateString() === today).length,
-        error: null,
+        error: known.error,
+        readAt: known.readAt,
+        reading: reading.has(project.path),
+        agents: agentsOn(project),
+        analysis: null,
+        area: known.area ?? null,
+        group: project.group ?? null,
+        merge: mergeLevel(project),
+        stagingBranch: project.stagingBranch ?? DEFAULT_STAGING_BRANCH,
+        productionBranch: project.productionBranch ?? null,
+        // A release state left from level main, after the level was lowered, is not shown.
+        release: mergeLevel(project) !== 'main' || releases[project.path] === undefined ? null : { state: releases[project.path].state, reason: releases[project.path].reason, pr: releases[project.path].pr },
+        analysisDue: agentsOn(project) && analysisDue(deps.home, project.path, deps.now(), config.analysisHours ?? DEFAULT_ANALYSIS_HOURS),
       };
+      const analysis = lastAnalysis(deps.home, project.path);
+      if (analysis !== null) summary.analysis = { at: analysis.finishedAt, ok: analysis.ok, summary: analysis.summary };
       projects.push(summary);
-      try {
-        const tasks = (await cached(['tasks', '--needs', 'any'], project.path)) as TaskSummary[];
-        for (const task of tasks) {
-          if (task.needs === null) continue;
-          summary.waiting[task.needs] += 1;
-          waiting.push(await waitingItem(task, project.path, projectName));
+      for (const task of shownTasks(project.path, known.tasks, areas, config.projects)) {
+        if (task.needs === null) continue;
+        summary.waiting[task.needs] += 1;
+        const autoMerge = mergeLevel(project) !== 'none' && approvalCanMerge(runs.find((run) => run.project === project.path && run.task === task.id));
+        waiting.push({ ...waitingItem(task, known.details[task.id], project.path, projectName), autoMerge });
+      }
+      // Only the live tasks still open: one closed in the task system is done.
+      const open = new Set(known.tasks.map((entry) => entry.id));
+      for (const entry of liveTasks) {
+        if (entry.project === project.path && open.has(entry.task)) {
+          live.push({ project: project.path, projectName, id: entry.task, name: entry.name, url: entry.url, pr: entry.pr, at: entry.at });
         }
-        if (firstTask === null && busy === null) {
-          const all = (await cached(['tasks'], project.path)) as TaskSummary[];
-          const next = pickTask(all, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG });
-          if (next !== null) firstTask = { project: project.path, projectName, id: next.id, name: next.name, status: next.status };
-        }
-      } catch (error) {
-        summary.error = error instanceof Error ? error.message : String(error);
+      }
+      if (firstTask === null && busy === null && summary.agents) {
+        const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG, area: known.area ?? undefined });
+        if (next !== null) firstTask = { project: project.path, projectName, id: next.id, name: next.name, status: next.status };
       }
     }
     waiting.sort((a, b) => NEEDS_ORDER[a.needs] - NEEDS_ORDER[b.needs]);
+    // The projects of a group come together, where the first of them is in the config.
+    const firstOfGroup = new Map<string, number>();
+    projects.forEach((p, index) => {
+      if (p.group !== null && !firstOfGroup.has(p.group)) firstOfGroup.set(p.group, index);
+    });
+    const position = (p: ProjectSummary, index: number) => (p.group === null ? index : firstOfGroup.get(p.group) ?? index);
+    const ordered = projects.map((p, index) => ({ p, index })).sort((a, b) => position(a.p, a.index) - position(b.p, b.index) || a.index - b.index);
+    projects.splice(0, projects.length, ...ordered.map(({ p }) => p));
 
+    const reads = projects.map((p) => p.readAt);
     const mode = deps.working?.() ? 'working' : 'paused';
     const nextCheckAt = mode === 'working' ? deps.nextCheckAt?.() ?? null : null;
     return {
       generatedAt: new Date(deps.now()).toISOString(),
+      sync: {
+        readAt: reads.length === 0 || reads.includes(null) ? null : reads.reduce((oldest, at) => (at !== null && oldest !== null && at < oldest ? at : oldest)),
+        reading: projects.some((p) => p.reading),
+      },
       control: {
         mode,
         intervalMinutes: config.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES,
@@ -189,32 +360,110 @@ export function createSnapshot(deps: SnapshotDeps): Snapshot {
       waiting,
       working,
       history,
+      live,
       problems: projects.filter((p) => p.error !== null).map((p) => ({ project: p.project, projectName: p.projectName, error: p.error ?? '' })),
     };
   };
 
-  const waitingItem = async (task: TaskSummary, project: string, projectName: string): Promise<WaitingItem> => {
-    const detail = (await cached(['task', 'get', task.id, '--comments', '1'], project)) as {
-      description?: string;
-      comments?: { text: string; date: string | null }[];
-    };
-    const last = detail.comments?.[0];
-    return {
-      project,
-      projectName,
-      id: task.id,
-      name: task.name,
-      url: task.url,
-      needs: task.needs ?? 'review',
-      status: task.status,
-      goal: goalFrom(detail.description ?? ''),
-      since: last?.date ?? null,
-      note: noteForPeople(last?.text ?? ''),
-      ...readSections(last?.text ?? ''),
-    };
+  return {
+    state,
+    look: () => {
+      for (const path of followed()) {
+        const known = cache.get(path);
+        const last = Math.max(known?.readAt ? Date.parse(known.readAt) : 0, triedAt.get(path) ?? 0);
+        if (!reading.has(path) && deps.now() - last >= FRESH_MS) void read(path);
+      }
+    },
+    refresh: async (project) => {
+      await Promise.all((project === undefined ? followed() : [project]).map((path) => read(path)));
+    },
+    changed: (project, task) => {
+      const known = cache.get(project);
+      if (known !== undefined && task !== undefined) {
+        known.tasks = known.tasks.map((entry) => (entry.id === task ? { ...entry, needs: null } : entry));
+      }
+      void read(project, true);
+    },
+    idle: async () => {
+      while (reading.size > 0) await Promise.all(reading.values());
+    },
   };
+}
 
-  return Object.assign(read, { clear: () => cache.clear() });
+function waitingItem(task: TaskSummary, detail: TaskDetail | undefined, project: string, projectName: string): Omit<WaitingItem, 'autoMerge'> {
+  const text = detail?.comment?.text ?? '';
+  return {
+    project,
+    projectName,
+    id: task.id,
+    name: task.name,
+    url: task.url,
+    needs: task.needs ?? 'review',
+    status: task.status,
+    goal: goalFrom(detail?.description ?? ''),
+    since: detail?.comment?.date ?? null,
+    note: noteForPeople(text),
+    ...readSections(text),
+  };
+}
+
+function emptyCache(): ProjectCache {
+  return { readAt: null, error: null, tasks: [], area: null, details: {} };
+}
+
+// The tasks a project shows on the dashboard. Without an area, every task of its list. With one, the tasks of its area,
+// and the tasks with none of the areas the orchestrator knows, these only in the first project with an area of its group,
+// so a task with no area shows once. No agent takes those: they wait for the person, for example to say their area.
+function shownTasks(path: string, tasks: TaskSummary[], areas: Map<string, string | null>, projects: ProjectEntry[]): TaskSummary[] {
+  const area = areas.get(path) ?? null;
+  if (area === null) return tasks;
+  const known = new Set([...areas.values()].filter((tag): tag is string => tag !== null));
+  const group = projects.find((project) => project.path === path)?.group;
+  const first = group === undefined ? path : projects.find((project) => project.group === group && (areas.get(project.path) ?? null) !== null)?.path;
+  return tasks.filter((task) => task.tags.includes(area) || (first === path && !task.tags.some((tag) => known.has(tag))));
+}
+
+// The last data read, so that the page has something to show at once after a restart. A missing or broken file means no data yet.
+function loadSnapshot(home: string): Map<string, ProjectCache> {
+  const path = join(home, SNAPSHOT_FILE);
+  const cache = new Map<string, ProjectCache>();
+  if (!existsSync(path)) return cache;
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    const projects = typeof data === 'object' && data !== null ? (data as { projects?: unknown }).projects : undefined;
+    if (typeof projects !== 'object' || projects === null) return cache;
+    for (const [project, entry] of Object.entries(projects as Record<string, unknown>)) {
+      if (isProjectCache(entry)) cache.set(project, entry);
+    }
+  } catch {
+    // Written by the dashboard itself: if it is broken, the next read replaces it.
+  }
+  return cache;
+}
+
+function isProjectCache(value: unknown): value is ProjectCache {
+  if (typeof value !== 'object' || value === null) return false;
+  const { readAt, error, tasks, area, details } = value as Record<string, unknown>;
+  return (readAt === null || typeof readAt === 'string')
+    && (error === null || typeof error === 'string')
+    && Array.isArray(tasks)
+    && (area === undefined || area === null || typeof area === 'string')
+    && typeof details === 'object' && details !== null;
+}
+
+// Written to a temporary file first, so a stop in the middle never leaves half a file.
+function saveSnapshot(home: string, cache: Map<string, ProjectCache>): void {
+  let followed: Set<string> | null = null;
+  try {
+    followed = new Set(loadConfig(home).projects.map((project) => project.path));
+  } catch {
+    // A broken config: keep every project for now.
+  }
+  const projects: Record<string, ProjectCache> = {};
+  for (const [path, entry] of cache) if (followed === null || followed.has(path)) projects[path] = entry;
+  const file = join(home, SNAPSHOT_FILE);
+  writeFileSync(`${file}.tmp`, `${JSON.stringify({ projects })}\n`);
+  renameSync(`${file}.tmp`, file);
 }
 
 // taskwire comments open with a quote for people ("> **Next:** ..."): that is what the dashboard shows.

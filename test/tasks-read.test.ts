@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FOLDER_ID, LIST_ID, OTHER_FOLDER_ID, rawList, rawTask, runCli } from './helpers.ts';
 import type { FakeCall } from './helpers.ts';
+import type { ProjectConfig } from '../src/config.ts';
 
 test('tasks without --list searches the whole folder through the team endpoint', async () => {
   const run = await runCli(['tasks'], { routes: {
@@ -359,4 +360,60 @@ test('tasks --tag filters by the lowercase tag name', async () => {
   } });
   assert.equal(run.code, 0);
   assert.deepEqual(run.calls[1].url.searchParams.getAll('tags[]'), ['backend']);
+});
+
+const AREA_CONFIG: ProjectConfig = { provider: 'clickup', workspaceId: '1', folderId: FOLDER_ID, defaultListId: LIST_ID, area: 'mobile' };
+const AREA_TASKS = [
+  rawTask({ id: 'mobile', tags: [{ name: 'mobile' }] }),
+  rawTask({ id: 'mobile-bug', name: 'Login crash', tags: [{ name: 'mobile' }, { name: 'bug' }, { name: 'needs-test' }] }),
+  rawTask({ id: 'be', tags: [{ name: 'be' }] }),
+  rawTask({ id: 'be-bug', name: 'Login error', tags: [{ name: 'be' }, { name: 'bug' }, { name: 'needs-test' }] }),
+  rawTask({ id: 'none', tags: [] }),
+];
+
+async function areaRun(args: string[], config: ProjectConfig = AREA_CONFIG) {
+  return runCli(['tasks', ...args], { config, routes: {
+    'GET /team/1/task': (call) => {
+      const wanted = call.url.searchParams.getAll('tags[]');
+      const tasks = AREA_TASKS.filter((task) => wanted.every((name) => task.tags.some((tag) => tag.name === name)));
+      return { body: { tasks, last_page: true } };
+    },
+  } });
+}
+
+const ids = (run: { json: () => unknown }) => (run.json() as { id: string }[]).map((t) => t.id);
+
+test('tasks in a project with an area keeps only the tasks of its area, filtered after reading', async () => {
+  const run = await areaRun([]);
+  assert.equal(run.code, 0);
+  assert.deepEqual(ids(run), ['mobile', 'mobile-bug']);
+  assert.deepEqual(run.calls[0].url.searchParams.getAll('tags[]'), []);
+});
+
+test('tasks --tag in a project with an area keeps the tasks with both tags', async () => {
+  assert.deepEqual(ids(await areaRun(['--tag', 'bug'])), ['mobile-bug']);
+});
+
+test('tasks --search and --needs keep the area filter', async () => {
+  assert.deepEqual(ids(await areaRun(['--search', 'login'])), ['mobile-bug']);
+  assert.deepEqual(ids(await areaRun(['--needs', 'any'])), ['mobile-bug']);
+});
+
+test('tasks --area shows another area and --all-areas shows every task', async () => {
+  assert.deepEqual(ids(await areaRun(['--area', 'BE'])), ['be', 'be-bug']);
+  assert.deepEqual(ids(await areaRun(['--all-areas'])), ['mobile', 'mobile-bug', 'be', 'be-bug', 'none']);
+});
+
+test('tasks --area works in a project without an area, which otherwise sees every task', async () => {
+  const config: ProjectConfig = { provider: 'clickup', workspaceId: '1', folderId: FOLDER_ID, defaultListId: LIST_ID };
+  assert.deepEqual(ids(await areaRun([], config)), ['mobile', 'mobile-bug', 'be', 'be-bug', 'none']);
+  assert.deepEqual(ids(await areaRun(['--area', 'be'], config)), ['be', 'be-bug']);
+});
+
+test('tasks rejects --area with --all-areas, and an --area that is not one word, without calling ClickUp', async () => {
+  for (const args of [['--area', 'be', '--all-areas'], ['--area', 'two words']]) {
+    const run = await areaRun(args);
+    assert.equal(run.code, 2);
+    assert.equal(run.calls.length, 0);
+  }
 });

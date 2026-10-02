@@ -6,10 +6,14 @@ import type { RunCommand } from './commands.ts';
 import { DEFAULT_BLOCK_TAG, DEFAULT_START_STATUSES, DEFAULT_WORK_STATUS } from './config.ts';
 import type { ProjectEntry } from './config.ts';
 import { configError } from './errors.ts';
+import { logSection, sessionRecord } from './journal.ts';
+import type { Event, Log, Role, SessionRecord } from './journal.ts';
+import { afterPass } from './merging.ts';
 import { pickTask } from './picker.ts';
 import { markPrompt, workPrompt } from './prompts.ts';
 import { appendRun, readClaims, writeClaims } from './state.ts';
 import type { RunRecord } from './state.ts';
+import { readArea } from './taskwire.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 import { addCost, verifyWork } from './verify.ts';
 import type { Verification } from './verify.ts';
@@ -22,6 +26,8 @@ export interface CycleDeps {
   now: () => number;
   // The taskwire the orchestrator uses, when it is not the one on the PATH; the agent must use it too.
   taskwireCommand?: string;
+  // The diary of what the orchestrator does; without it nothing is recorded.
+  log?: Log;
 }
 
 export interface CycleResult {
@@ -29,20 +35,39 @@ export interface CycleResult {
   task: { id: string; name: string; needs: string | null; status: string | null } | null;
 }
 
-// One pass on a project: pick a task, let an agent work on it in its own worktree, and make sure it ends marked for a person.
-export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<CycleResult> {
-  const tasks = (await deps.runTaskwire(['tasks'], project.path)) as TaskSummary[];
+// The task an agent would take next in the project, and the project's area from taskwire. It reads every area:
+// a task may wait for an open task of another area, which taskwire leaves out by default.
+export async function nextTask(runTaskwire: RunTaskwire, project: ProjectEntry): Promise<{ task: TaskSummary | null; area: string | null }> {
+  const tasks = (await runTaskwire(['tasks', '--all-areas'], project.path)) as TaskSummary[];
   assertNeedsSupport(tasks);
+  const area = await readArea(runTaskwire, project.path);
   const task = pickTask(tasks, {
     statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
     blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
+    area: area ?? undefined,
   });
+  return { task, area };
+}
+
+// One pass on a project: pick a task, let an agent work on it in its own worktree, and make sure it ends marked for a person.
+export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<CycleResult> {
+  const { task, area } = await nextTask(deps.runTaskwire, project);
   if (task === null) return { project: project.path, task: null };
 
   const startedAt = new Date(deps.now()).toISOString();
   const worktree = worktreePath(deps.home, project.path, task.id);
   await deps.runTaskwire(['task', 'update', task.id, '--status', project.workStatus ?? DEFAULT_WORK_STATUS], project.path);
   writeClaims(deps.home, { ...readClaims(deps.home), [task.id]: { project: project.path, name: task.name, worktree, startedAt } });
+  const note = (event: Event): void => deps.log?.({ ...event, at: new Date(deps.now()).toISOString(), project: project.path, task: task.id });
+  note({ event: 'claim', name: task.name });
+  const sessions: SessionRecord[] = [];
+  const outputs: string[] = [];
+  const track = (role: Role, result: AgentResult): void => {
+    const session = sessionRecord(role, result);
+    sessions.push(session);
+    outputs.push(logSection(session, result.output));
+    note({ event: 'agent', ...session });
+  };
 
   const agentOptions: AgentOptions = {
     sandbox: project.sandbox ?? false,
@@ -50,13 +75,12 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     env: agentEnv(deps.home, deps.taskwireCommand),
   };
   const log = logPath(deps.home, task.id, startedAt);
-  const outputs: string[] = [];
   let agent: AgentResult | null = null;
   let failure: string | null = null;
   try {
     await createWorktree(deps.runCommand, project.path, worktree);
-    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task), cwd: worktree }, agentOptions);
-    outputs.push(agent.output);
+    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task, project, area), cwd: worktree }, agentOptions);
+    track('author', agent);
     if (!agent.ok) failure = agent.summary;
   } catch (error) {
     failure = error instanceof Error ? error.message : String(error);
@@ -66,7 +90,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   let after = await readTask(deps, project.path, task.id);
   if (after.needs === null && failure === null && agent?.sessionId) {
     const nudge = await runClaude(deps.runCommand, { prompt: markPrompt(task), cwd: worktree, resume: agent.sessionId }, agentOptions);
-    outputs.push(nudge.output);
+    track('nudge', nudge);
     costUsd = addCost(costUsd, nudge.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
@@ -79,13 +103,19 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
       testCommand: project.testCommand,
       authorSession: agent?.sessionId ?? null,
       agentOptions,
+      report: note,
     });
     outputs.push(...verification.outputs);
+    sessions.push(...verification.sessions);
     costUsd = addCost(costUsd, verification.costUsd);
     after = await readTask(deps, project.path, task.id);
   }
+  const verified = verification !== null && verification.verdict === 'pass' && verification.problem === null && after.needs === 'review';
+  // Also after a failed run: an agent may merge on its own and then fail.
+  const pass = await afterPass(deps, project, { task, worktree, verified, startedAt });
   writeLog(log, outputs, failure);
-  let problem = verification?.problem ?? null;
+  // The agent alarm comes first: its comment must say that agents are now off, even when the verification failed too.
+  let problem = pass.problem ?? verification?.problem ?? null;
   if (problem === null && after.needs === null) {
     problem = failure === null ? 'the agent stopped without marking the task' : `the agent run failed: ${failure}`;
   }
@@ -108,7 +138,11 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
     summary: problem ?? agent?.summary ?? '',
     tests: verification?.tests ?? null,
     verdict: verification?.verdict ?? null,
+    sessions,
     worktree,
+    branch: pass.branch,
+    pr: pass.pr,
+    sha: pass.sha,
     log,
   };
   appendRun(deps.home, record);
@@ -123,6 +157,12 @@ export async function closeInterruptedClaims(deps: CycleDeps): Promise<string[]>
   const claims = readClaims(deps.home);
   const closed: string[] = [];
   for (const [taskId, claim] of Object.entries(claims)) {
+    // An analysis cut short changed no task of its own: it runs again at the next start.
+    if (claim.kind === 'analysis') {
+      delete claims[taskId];
+      writeClaims(deps.home, claims);
+      continue;
+    }
     await markForReview(deps, claim.project, taskId, `the orchestrator was interrupted while an agent worked on it (started ${claim.startedAt}).`, claim.worktree);
     delete claims[taskId];
     writeClaims(deps.home, claims);
@@ -132,8 +172,9 @@ export async function closeInterruptedClaims(deps: CycleDeps): Promise<string[]>
 }
 
 // The orchestrator's own comments are in English: the agent writes in the project language.
-async function markForReview(deps: CycleDeps, project: string, taskId: string, reason: string, worktree: string, log?: string): Promise<void> {
+export async function markForReview(deps: CycleDeps, project: string, taskId: string, reason: string, worktree: string, log?: string): Promise<void> {
   await deps.runTaskwire(['task', 'update', taskId, '--needs', 'review'], project);
+  deps.log?.({ event: 'marked', at: new Date(deps.now()).toISOString(), project, task: taskId, needs: 'review', reason });
   const logLine = log === undefined ? '' : ` The agent log is \`${log}\`.`;
   const text = `> **Status:** waiting for a person: ${reason}\n> **Next:** check the work in \`${worktree}\`, then clear \`needs\` or move the task.${logLine}`;
   await deps.runTaskwire(['comment', 'add', taskId, '--text', text], project);
@@ -145,7 +186,7 @@ async function readTask(deps: CycleDeps, project: string, taskId: string): Promi
 }
 
 // The agent runs "taskwire" from its PATH: a link in the orchestrator's bin folder makes it the configured one.
-function agentEnv(home: string, taskwireCommand: string | undefined): Record<string, string> {
+export function agentEnv(home: string, taskwireCommand: string | undefined): Record<string, string> {
   if (taskwireCommand === undefined) return {};
   const bin = join(home, 'bin');
   const link = join(bin, 'taskwire');
@@ -156,11 +197,11 @@ function agentEnv(home: string, taskwireCommand: string | undefined): Record<str
   return { PATH: `${bin}:${process.env.PATH ?? ''}` };
 }
 
-function logPath(home: string, taskId: string, startedAt: string): string {
+export function logPath(home: string, taskId: string, startedAt: string): string {
   return join(home, 'logs', `${taskId}-${startedAt.replace(/[:.]/g, '-')}.log`);
 }
 
-function writeLog(path: string, outputs: string[], failure: string | null): void {
+export function writeLog(path: string, outputs: string[], failure: string | null): void {
   mkdirSync(join(path, '..'), { recursive: true });
   writeFileSync(path, `${outputs.join('\n\n')}${failure === null ? '' : `\n\n[failure]\n${failure}`}\n`);
 }

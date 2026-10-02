@@ -1,21 +1,24 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
-import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, loadConfig, saveConfig } from './config.ts';
+import { DEFAULT_DASHBOARD_PORT, agentsOn, expandHome, loadConfig } from './config.ts';
 import { createRunControl } from './control.ts';
 import type { RunControl } from './control.ts';
 import { createActions } from './dashboard/actions.ts';
+import { createProjectActions } from './dashboard/project-actions.ts';
 import { createHandler } from './dashboard/server.ts';
 import type { Handler, RunningServer } from './dashboard/server.ts';
-import { createSnapshot } from './dashboard/snapshot.ts';
+import { createStore } from './dashboard/snapshot.ts';
+import type { Store } from './dashboard/snapshot.ts';
 import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
+import { discoverProjects, followProject, projectSearchRoots, unfollowProject } from './projects.ts';
 import type { RunCommand } from './commands.ts';
-import { closeInterruptedClaims, runCycle } from './cycle.ts';
+import { closeInterruptedClaims, nextTask, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
-import { pickTask } from './picker.ts';
+import { appendEvent, pruneOld } from './journal.ts';
+import { MAX_TASKWIRE_CALLS, limitCalls } from './limit.ts';
 import { runLoop } from './scheduler.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 
@@ -55,6 +58,7 @@ interface CommandSpec {
 export const HELP = `taskwire-orchestrator: let agents work on the tasks of your projects
 
   taskwire-orchestrator add <folder> [--test-command <command>]   follow a project set up with taskwire
+  taskwire-orchestrator remove <folder>                           stop following a project (its folder and tasks stay)
   taskwire-orchestrator list                                      the projects it follows
   taskwire-orchestrator next                                      the task each project would work on (no changes)
   taskwire-orchestrator run-once                                  one pass: an agent works on the next task of each project
@@ -66,14 +70,19 @@ Exit codes: 0 ok, 1 taskwire or agent failure, 2 usage error, 3 configuration er
 
 const COMMANDS: Record<string, CommandSpec> = {
   add: { options: { 'test-command': { type: 'string' } }, run: addProject },
+  remove: { options: {}, run: removeProject },
   list: { options: {}, run: async (deps) => loadConfig(deps.home).projects },
   next: { options: {}, run: nextTasks },
   'run-once': { options: {}, run: runOnce },
   start: { options: {}, run: start },
 };
 
+// Events go to the terminal and to the diary, so they are kept whoever started the orchestrator.
 function logTo(deps: CliDeps): (event: Record<string, unknown>) => void {
-  return (event) => deps.stdout.write(`${JSON.stringify(event)}\n`);
+  return (event) => {
+    deps.stdout.write(`${JSON.stringify(event)}\n`);
+    appendEvent(deps.home, event);
+  };
 }
 
 // Starts paused: agents take tasks only after play on the dashboard.
@@ -81,26 +90,41 @@ async function start(deps: CliDeps): Promise<undefined> {
   const log = logTo(deps);
   const control = createRunControl((working) => log({ event: working ? 'play' : 'pause', at: new Date(deps.now()).toISOString() }));
   let nextCheckAt: number | null = null;
-  const server = await openDashboard(deps, control, () => nextCheckAt);
+  const { server, store } = await openDashboard(deps, control, () => nextCheckAt);
   try {
     await runLoop({ ...deps, log, control, onWait: (until) => { nextCheckAt = until; } });
   } finally {
+    await store.idle();
     await server.close();
   }
   return undefined;
 }
 
 // A new token at every start: the page gets it, and a page from another site cannot know it.
-async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: () => number | null): Promise<RunningServer> {
+async function openDashboard(
+  deps: CliDeps,
+  control: RunControl,
+  nextCheckAt: () => number | null,
+): Promise<{ server: RunningServer; store: Store }> {
   const port = loadConfig(deps.home).dashboardPort ?? DEFAULT_DASHBOARD_PORT;
-  const snapshot = createSnapshot({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
-  const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: snapshot.clear });
+  const store = createStore({ home: deps.home, runTaskwire: deps.runTaskwire, now: deps.now, working: control.working, nextCheckAt });
+  const act = createActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: store.changed });
   const log = logTo(deps);
   const handler = createHandler({
-    snapshot,
+    // The page gets the last data at once; looking at it reads the projects again in the background when needed.
+    snapshot: async () => {
+      store.look();
+      return store.state();
+    },
+    refresh: () => { void store.refresh(); },
     token: randomBytes(24).toString('hex'),
     act,
     control,
+    projects: createProjectActions({ home: deps.home, runTaskwire: deps.runTaskwire, onChange: (project) => store.changed(project) }),
+    discover: () => {
+      const config = loadConfig(deps.home);
+      return discoverProjects({ roots: projectSearchRoots(config), followed: config.projects.map((project) => project.path) });
+    },
     onAction: (event) => log({ event: 'action', at: new Date(deps.now()).toISOString(), ...event }),
   });
   let server: RunningServer;
@@ -113,51 +137,46 @@ async function openDashboard(deps: CliDeps, control: RunControl, nextCheckAt: ()
     throw error;
   }
   log({ event: 'dashboard', at: new Date(deps.now()).toISOString(), url: server.url });
-  return server;
+  return { server, store };
 }
 
 async function runOnce(deps: CliDeps): Promise<CycleResult[]> {
   const { projects, taskwireCommand } = loadConfig(deps.home);
-  const cycleDeps = { ...deps, taskwireCommand };
+  pruneOld(deps.home, deps.now());
+  // stdout holds the result of run-once, so its events go only to the diary.
+  const cycleDeps = { ...deps, taskwireCommand, log: (event: Record<string, unknown>) => appendEvent(deps.home, event) };
   await closeInterruptedClaims(cycleDeps);
   const results: CycleResult[] = [];
-  for (const project of projects) results.push(await runCycle(cycleDeps, project));
+  for (const project of projects.filter(agentsOn)) results.push(await runCycle(cycleDeps, project));
   return results;
 }
 
 async function addProject(deps: CliDeps, input: Input): Promise<ProjectEntry> {
-  if (input.positionals.length !== 1) throw usageError('Expected exactly one project folder');
-  const path = resolve(deps.cwd, input.positionals[0]);
-  if (!existsSync(join(path, '.taskwire.json'))) {
-    throw usageError(`${path} has no .taskwire.json`, 'Set the project up first: run "taskwire setup" in it');
-  }
-  const config = loadConfig(deps.home);
-  if (config.projects.some((project) => project.path === path)) throw usageError(`${path} is already followed`);
-  try {
-    await deps.runTaskwire(['conventions'], path);
-  } catch (error) {
-    throw configError(`taskwire does not work in ${path}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const project: ProjectEntry = { path };
   const testCommand = input.values['test-command'];
-  if (typeof testCommand === 'string') {
-    if (testCommand.trim() === '') throw usageError('--test-command cannot be empty');
-    project.testCommand = testCommand;
-  }
-  config.projects.push(project);
-  saveConfig(deps.home, config);
-  return project;
+  return followProject(deps, projectFolder(deps, input), typeof testCommand === 'string' ? testCommand : undefined);
 }
 
-async function nextTasks(deps: CliDeps): Promise<{ project: string; task: TaskSummary | null }[]> {
-  const rows: { project: string; task: TaskSummary | null }[] = [];
+async function removeProject(deps: CliDeps, input: Input): Promise<{ removed: string }> {
+  const path = projectFolder(deps, input);
+  unfollowProject(deps.home, path);
+  return { removed: path };
+}
+
+function projectFolder(deps: CliDeps, input: Input): string {
+  if (input.positionals.length !== 1) throw usageError('Expected exactly one project folder');
+  return resolve(deps.cwd, expandHome(input.positionals[0]));
+}
+
+async function nextTasks(deps: CliDeps): Promise<{ project: string; agents: boolean; task: TaskSummary | null }[]> {
+  const rows: { project: string; agents: boolean; task: TaskSummary | null }[] = [];
   for (const project of loadConfig(deps.home).projects) {
-    const tasks = (await deps.runTaskwire(['tasks'], project.path)) as TaskSummary[];
-    const task = pickTask(tasks, {
-      statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
-      blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
-    });
-    rows.push({ project: project.path, task });
+    // No agent takes a task of a project with agents off, so its tasks are not read.
+    if (!agentsOn(project)) {
+      rows.push({ project: project.path, agents: false, task: null });
+      continue;
+    }
+    const { task } = await nextTask(deps.runTaskwire, project);
+    rows.push({ project: project.path, agents: true, task });
   }
   return rows;
 }
@@ -180,7 +199,9 @@ export async function main(deps: CliDeps): Promise<number> {
   try {
     const spec = COMMANDS[name];
     if (spec === undefined) throw usageError(`Unknown command "${name}"`, 'Run "taskwire-orchestrator --help"');
-    const result = await spec.run(deps, parseInput(spec, rest));
+    // Every taskwire call of the orchestrator, from the dashboard or the loop, shares one limit.
+    const limited = { ...deps, runTaskwire: limitCalls(deps.runTaskwire, MAX_TASKWIRE_CALLS) };
+    const result = await spec.run(limited, parseInput(spec, rest));
     // "start" prints its events as they happen, so it has no result.
     if (result !== undefined) deps.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return EXIT.ok;

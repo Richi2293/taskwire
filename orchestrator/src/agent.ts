@@ -10,6 +10,8 @@ export interface AgentOptions {
 }
 
 export interface AgentResult {
+  // The agent CLI that ran, as the diary and the records name it.
+  agent: string;
   ok: boolean;
   sessionId: string | null;
   costUsd: number | null;
@@ -19,6 +21,9 @@ export interface AgentResult {
   // The raw output, kept in the run log.
   output: string;
 }
+
+// Everything specific to Claude Code stays in this file; the rest of the orchestrator sees only an AgentResult.
+const AGENT = 'claude';
 
 // taskwire calls the task system API, so the sandbox must let it through.
 const SANDBOX_DOMAINS = ['api.clickup.com'];
@@ -32,7 +37,8 @@ export async function runClaude(
   request: { prompt: string; cwd: string; resume?: string },
   options: AgentOptions,
 ): Promise<AgentResult> {
-  const args = [...(request.resume === undefined ? [] : ['--resume', request.resume]), '-p', request.prompt, '--output-format', 'json'];
+  // stream-json prints every step of the session, kept whole in the run log; its last line is the result.
+  const args = [...(request.resume === undefined ? [] : ['--resume', request.resume]), '-p', request.prompt, '--output-format', 'stream-json', '--verbose'];
   if (options.sandbox) {
     const settings = {
       sandbox: {
@@ -51,9 +57,10 @@ export async function runClaude(
   const parsed = parseResult(result.stdout);
   if (result.code !== 0 || parsed === null || parsed.is_error === true) {
     const reason = (typeof parsed?.result === 'string' ? parsed.result : '') || result.stderr.trim() || `claude exited with code ${result.code}`;
-    return { ok: false, sessionId: text(parsed?.session_id), costUsd: number(parsed?.total_cost_usd), durationMs: number(parsed?.duration_ms), summary: reason, output };
+    return { agent: AGENT, ok: false, sessionId: text(parsed?.session_id), costUsd: number(parsed?.total_cost_usd), durationMs: number(parsed?.duration_ms), summary: reason, output };
   }
   return {
+    agent: AGENT,
     ok: true,
     sessionId: text(parsed.session_id),
     costUsd: number(parsed.total_cost_usd),
@@ -63,13 +70,20 @@ export async function runClaude(
   };
 }
 
+// The result line of the stream: the last one with type "result". Other lines, even broken ones, are steps.
 function parseResult(stdout: string): Record<string, unknown> | null {
-  try {
-    const data: unknown = JSON.parse(stdout);
-    return typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
-  } catch {
-    return null;
+  const lines = stdout.split('\n').filter((line) => line.trim() !== '').reverse();
+  for (const line of lines) {
+    try {
+      const data: unknown = JSON.parse(line);
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && (data as { type?: unknown }).type === 'result') {
+        return data as Record<string, unknown>;
+      }
+    } catch {
+      // Not a JSON line: a step, or noise.
+    }
   }
+  return null;
 }
 
 function text(value: unknown): string | null {
