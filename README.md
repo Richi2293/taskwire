@@ -70,6 +70,7 @@ Next session, ask your agent: *"What was I doing yesterday?"*
 | Area | Commands |
 |---|---|
 | Setup | `setup`, `whoami`, `folders`, `init`, `rules`, `conventions`, `project`, `area set` |
+| Groups and areas | `group`, `group init`, `area add`, `area remove`, `areas` |
 | Tasks | `tasks`, `task get`, `task create`, `task update`, `task delete --yes` |
 | Lists and tags | `lists`, `list create`, `tags` |
 | Comments | `comment add`, `comment update` |
@@ -83,7 +84,8 @@ Run `taskwire --help` for every option. A few things worth knowing:
 - **Due dates** (`--due YYYY-MM-DD`) are midnight in your system time zone. Set `TZ` to use another one.
 - **Descriptions and comments** are markdown.
 - **Waiting for a person:** `taskwire task update <id> --needs decision|test|review` marks why a task waits for you, with a tag (`needs-decision`, `needs-test`, `needs-review`). `taskwire tasks --needs any` lists those tasks, and every task shows it in its `needs` field. You clear it (`--needs none`, or remove the tag) as the go-ahead.
-- **Shared task lists:** when several projects (for example the backend, the frontend and the app of one product) share one task list, each project sets its `area`, a tag such as `be`, `fe` or `mobile`. `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for another one, `--all-areas` for every task) and `taskwire task create` adds the tag. Set it with `taskwire area set <tag>`, or `init --area`.
+- **Shared task lists:** when several projects (for example the backend, the frontend and the app of one product) share one task list, each project sets its `area`, a tag such as `be`, `fe` or `mobile`. `taskwire tasks` then shows only the tasks of that area (`--area <tag>` for others, `--all-areas` for every task) and `taskwire task create` adds the tag (`--area none` for a task with no area). Set it with `taskwire area set <tag>`, or `init --area`.
+- **Groups:** the projects that share a task list form a group, recorded on your machine (see [Groups of projects](#groups-of-projects)). The group knows where the code of each area is, and has areas without code too, such as `infra` or `feedback`.
 - **Exit codes:** `0` success, `1` provider or network error, `2` wrong usage, `3` configuration problem.
 
 ## Configuration
@@ -123,7 +125,7 @@ Each project has a `.taskwire.json` at its root, written by `taskwire init` (`--
 
 **Several accounts.** Give each account a name, store its token under that name, and set it in the project with `taskwire init --account <name>`. `--account <name>` also works on any command, for example `taskwire folders --account acme` before `init`. With an account, taskwire never falls back to the default token.
 
-**Environment variables:** `TASKWIRE_API_TOKEN` (the token, when the Keychain is not available), `TASKWIRE_API_TOKEN_<ACCOUNT>` (the token of a named account, uppercase with `-` as `_`), `TASKWIRE_NO_UPDATE_CHECK=1` (turns off the update check), `TZ` (time zone for due dates).
+**Environment variables:** `TASKWIRE_API_TOKEN` (the token, when the Keychain is not available), `TASKWIRE_API_TOKEN_<ACCOUNT>` (the token of a named account, uppercase with `-` as `_`), `TASKWIRE_NO_UPDATE_CHECK=1` (turns off the update check), `TASKWIRE_HOME` (the folder of the groups file), `TZ` (time zone for due dates).
 
 ### Updating
 
@@ -132,6 +134,23 @@ npm install --global @richi2293/taskwire@latest
 ```
 
 `taskwire rules` checks npm for a newer version at most once a day and reports it in its `update` field, so your agent can tell you.
+
+## Groups of projects
+
+A group records, on your machine, the projects that share one task list and the areas of that list. Each area has a description and, when it has code, the folder of its repository. Areas without code (servers, marketing, customer feedback) have no folder. Agents keep the group up to date themselves: tell them which projects belong together and they record them.
+
+```sh
+taskwire group init acme --description "API and database"     # from the backend, whose area is "backend"
+taskwire area add frontend --path ../acme-web --description "Web app"
+taskwire area add infra --description "Servers, DNS, deploy"
+taskwire areas                                                # the areas, their tasks, and the tasks with no area
+```
+
+- **Where:** `~/.config/taskwire/groups.json` (`$XDG_CONFIG_HOME/taskwire` when set, or `$TASKWIRE_HOME`). It holds local paths, so it stays out of the repositories and out of the task system.
+- **Which group:** a project belongs to the group that has its folder as the path of an area. Its `area` in `.taskwire.json` must be that area: `taskwire area set` renames it in both places.
+- **Area names:** `taskwire area add` refuses a name close to an existing area (`infrastructure` when `infra` exists), so that one kind of work keeps one tag; `--force` adds it anyway.
+- **In a group:** `--area` accepts only the areas of the group, `taskwire tasks --no-area` lists the tasks with none of them, `taskwire tags` marks the areas with `"area": true`, and `taskwire rules` lists the areas with their folders, so that an agent knows where the code of each one is.
+- **Without a group** taskwire works as before, with the `area` of the project only.
 
 ## Providers
 

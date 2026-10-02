@@ -26,6 +26,7 @@ test('project prints the project configuration without calling the provider', as
     listIds: [LIST_ID],
     defaultListId: LIST_ID,
     area: 'mobile',
+    group: null,
   });
   assert.equal(run.calls.length, 0);
   assert.doesNotMatch(run.stdout, /pk_secret/);
@@ -34,7 +35,7 @@ test('project prints the project configuration without calling the provider', as
 test('project prints null for what the config leaves out', async () => {
   const run = await runCli(['project'], { cwd: projectDir({ folderId: FOLDER_ID }) });
   assert.deepEqual(run.json(), {
-    provider: 'clickup', account: null, workspaceId: null, folderId: FOLDER_ID, listIds: null, defaultListId: null, area: null,
+    provider: 'clickup', account: null, workspaceId: null, folderId: FOLDER_ID, listIds: null, defaultListId: null, area: null, group: null,
   });
 });
 

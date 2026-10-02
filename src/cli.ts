@@ -8,6 +8,7 @@ import { ACCOUNT_NAME_HINT, CONFIG_FILE, findConfig, isAccountName, readAccount 
 import { EXIT, MISSING_CONFIG_HINT, TaskwireError, configError, usageError } from './errors.ts';
 import { printError, printResult, printWarning } from './output.ts';
 import type { Writer } from './output.ts';
+import { groupsFilePath } from './groups.ts';
 import { packageInfo } from './package-info.ts';
 import { resolveToken } from './token.ts';
 import type { KeychainReader } from './token.ts';
@@ -16,6 +17,7 @@ import type { Context } from './commands/context.ts';
 import { conventions, folders, init, whoami } from './commands/setup.ts';
 import { formatRules, rules } from './commands/rules.ts';
 import { projectInfo, setArea } from './commands/project.ts';
+import { addArea, initGroup, listAreas, removeArea, showGroup } from './commands/groups.ts';
 import { formatSetup, setup } from './commands/setup-guide.ts';
 import type { SetupOut } from './commands/setup-guide.ts';
 import type { RulesOut } from './commands/rules.ts';
@@ -65,8 +67,17 @@ Setup:
                   --area the tag of the project's tasks when several projects share the task list
   taskwire rules                  how agents must manage tasks in this project (rules and conventions)
   taskwire conventions            the project conventions only (language, instructions)
-  taskwire project                the project configuration (folder, lists, account, area)
+  taskwire project                the project configuration (folder, lists, account, area, group)
   taskwire area set <tag>|none    the area of the project in a task list shared by several projects
+
+Groups of projects (on this machine, for projects that share a task list):
+  taskwire group                  the group of this project: its areas, with the path of each repository
+  taskwire group init <name> --description <text>   records a group, with this project's area described
+  taskwire area add <name> --description <text> [--path <dir>] [--force]
+                  adds or updates an area of the group; --path for an area with code in another repository,
+                  --force for a name close to an existing area
+  taskwire area remove <name>     takes an area out of the group, its tasks keep the tag
+  taskwire areas [--include-closed]   the areas of the group with their number of tasks, and the tasks with no area
 
 Lists:
   taskwire lists [--folder <id>]      --folder shows the lists of any folder, also before init
@@ -79,14 +90,15 @@ Tasks:
                  [--top-level]        leave out subtasks
                  [--limit <n>]        the n most recently created tasks
                  [--needs decision|test|review|any]   tasks waiting for a person, for that reason
-                 [--area <tag> | --all-areas]   the tasks of another area or of every area (default: the project's area)
+                 [--area <tag>]... | --all-areas | --no-area   the tasks of other areas, of every area or of no
+                                      area of the group (default: the project's area)
   taskwire tags                       the tags used in the project, with their number of tasks
   taskwire task get <id> [--comments <n>]   n most recent comments, 0 to skip them (default: up to 500)
   taskwire task create --name <name> [--list <id>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority urgent|high|normal|low] [--tag <t>]...
                        [--assignee <id|me>]... [--due YYYY-MM-DD] [--parent <id>]
                        [--needs decision|test|review]
-                       [--area <tag>]   the area tag of the task (default: the project's area)
+                       [--area <tag>|none]...   the area tags of the task (default: the project's area)
   taskwire task update <id> [--name <name>] [--description <text> | --description-file <path>]
                        [--status <s>] [--priority <p>|none] [--add-tag <t>]... [--remove-tag <t>]...
                        [--add-assignee <id|me>]... [--remove-assignee <id|me>]... [--due YYYY-MM-DD|none]
@@ -152,6 +164,26 @@ export const COMMANDS: Record<string, CommandSpec> = {
   conventions: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => conventions(ctx) },
   project: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => projectInfo(ctx) },
   'area set': { options: {}, positionals: 1, needsConfig: true, run: async (ctx, input) => setArea(ctx, input) },
+  group: { options: {}, positionals: 0, needsConfig: true, run: async (ctx) => showGroup(ctx) },
+  'group init': {
+    options: { description: { type: 'string' } },
+    positionals: 1,
+    needsConfig: true,
+    run: async (ctx, input) => initGroup(ctx, input),
+  },
+  'area add': {
+    options: { description: { type: 'string' }, path: { type: 'string' }, force: { type: 'boolean' } },
+    positionals: 1,
+    needsConfig: true,
+    run: async (ctx, input) => addArea(ctx, input),
+  },
+  'area remove': { options: {}, positionals: 1, needsConfig: true, run: async (ctx, input) => removeArea(ctx, input) },
+  areas: {
+    options: { 'include-closed': { type: 'boolean' } },
+    positionals: 0,
+    needsConfig: true,
+    run: (ctx, input) => listAreas(ctx, input),
+  },
   lists: { options: { folder: { type: 'string' } }, positionals: 0, needsConfig: 'optional', run: (ctx, input) => listLists(ctx, input) },
   'list create': {
     options: { name: { type: 'string' } },
@@ -172,8 +204,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'top-level': { type: 'boolean' },
       limit: { type: 'string' },
       needs: { type: 'string' },
-      area: { type: 'string' },
+      area: { type: 'string', multiple: true },
       'all-areas': { type: 'boolean' },
+      'no-area': { type: 'boolean' },
     },
     positionals: 0,
     needsConfig: true,
@@ -199,7 +232,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
       due: { type: 'string' },
       parent: { type: 'string' },
       needs: { type: 'string' },
-      area: { type: 'string' },
+      area: { type: 'string', multiple: true },
     },
     positionals: 0,
     needsConfig: true,
@@ -371,6 +404,7 @@ export async function main(deps: CliDeps): Promise<number> {
       config: found?.config ?? null,
       configPath: found?.path ?? null,
       cwd: deps.cwd,
+      groupsPath: groupsFilePath(deps.env),
       account: account ?? null,
       warn,
       checkUpdate: () => checkForUpdate({ fetch: deps.fetch, now: deps.now, env: deps.env }, packageInfo()),

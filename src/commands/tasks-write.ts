@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import type { CommandInput } from '../args.ts';
 import { flag, onePositional, optString, optStrings, reqString } from '../args.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
-import { AREA_HINT, normalizeArea } from '../area.ts';
 import { localMidnightMs } from '../dates.ts';
 import { EXIT, TaskwireError, usageError } from '../errors.ts';
 import { normalizeTaskId } from '../guard.ts';
@@ -11,6 +10,7 @@ import type { TaskSummary } from '../shape.ts';
 import { NEEDS_KINDS } from '../needs.ts';
 import { loadProjectList, loadProjectTask, matchStatus, parseNeeds, parsePriority, projectConfig, projectNeedsTags, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import type { Context } from './context.ts';
+import { readAreas } from './group-context.ts';
 
 export function readDescription(input: CommandInput): string | undefined {
   const text = optString(input.values, 'description');
@@ -54,7 +54,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   const priorityValue = priority === undefined ? undefined : parsePriority(priority);
   const dueValue = due === undefined ? undefined : localMidnightMs(due);
   const needs = needsValue === undefined ? undefined : parseNeeds(needsValue);
-  const area = readArea(input, config.area);
+  const areas = readNewTaskAreas(ctx, input);
   if (listId === undefined && parentId === undefined && config.defaultListId === undefined) {
     throw usageError('No list given', 'Pass --list or set "defaultListId" in .taskwire.json');
   }
@@ -73,7 +73,7 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   const tags = tagNames(optStrings(input.values, 'tag'));
   const needsTags = projectNeedsTags(ctx);
   if (needs !== undefined && !tags.includes(needsTags[needs])) tags.push(needsTags[needs]);
-  if (area !== undefined && !tags.includes(area)) tags.push(area);
+  for (const area of areas) if (!tags.includes(area)) tags.push(area);
 
   const body: Record<string, unknown> = { name };
   if (description !== undefined) body.markdown_content = description;
@@ -91,13 +91,17 @@ export async function createTask(ctx: Context, input: CommandInput): Promise<Tas
   return toTask(created, needsTags);
 }
 
-// The area tag of a new task: --area, or the project's area.
-function readArea(input: CommandInput, projectArea: string | undefined): string | undefined {
-  const value = optString(input.values, 'area');
-  if (value === undefined) return projectArea;
-  const tag = normalizeArea(value);
-  if (tag === null) throw usageError(`Invalid --area "${value}"`, AREA_HINT);
-  return tag;
+// The area tags of a new task: --area (repeatable, "none" for no area), or the project's area.
+function readNewTaskAreas(ctx: Context, input: CommandInput): string[] {
+  const values = optStrings(input.values, 'area');
+  if (values.length === 0) {
+    const { area } = projectConfig(ctx);
+    return area === undefined ? [] : [area];
+  }
+  const none = values.filter((value) => value.trim().toLowerCase() === 'none');
+  if (none.length === 0) return readAreas(ctx, values);
+  if (none.length !== values.length) throw usageError('--area none means no area: do not pass it with other areas');
+  return [];
 }
 
 // Checks --list and --parent before any network call and returns the normalized parent id.

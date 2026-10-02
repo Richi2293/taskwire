@@ -2,8 +2,7 @@ import type { CommandInput } from '../args.ts';
 import { flag, onePositional, optString, optStrings } from '../args.ts';
 import type { QueryValue } from '../client.ts';
 import type { RawList, RawTask } from '../clickup-types.ts';
-import { AREA_HINT, normalizeArea } from '../area.ts';
-import { usageError } from '../errors.ts';
+import { configError, usageError } from '../errors.ts';
 import { localMidnightMs, nextLocalMidnightMs } from '../dates.ts';
 import { needsFromTags } from '../needs.ts';
 import type { NeedsKind, NeedsTags } from '../needs.ts';
@@ -13,6 +12,7 @@ import { loadComments } from './comments.ts';
 import { loadProjectList, loadProjectTask, parseNeeds, projectConfig, projectNeedsTags, projectWorkspaceId, resolveAssignee, tagNames } from './context.ts';
 import { loadProjectLists } from './lists.ts';
 import type { Context } from './context.ts';
+import { NO_GROUP_HINT, projectGroup, readAreas } from './group-context.ts';
 
 export const MAX_PAGES = 50;
 const PAGE_SIZE = 100;
@@ -21,8 +21,8 @@ const NARROW_HINT = 'Narrow the query with --list, --status or --tag';
 
 // truncatedHint lets commands built on this one suggest only the options they accept.
 export async function listTasks(ctx: Context, input: CommandInput, truncatedHint = NARROW_HINT): Promise<TaskSummary[]> {
-  const { folderId, listIds, area: projectArea } = projectConfig(ctx);
-  const area = readAreaFilter(input, projectArea);
+  const { folderId, listIds } = projectConfig(ctx);
+  const inArea = readAreaFilter(ctx, input);
   const listId = optString(input.values, 'list');
   const status = optString(input.values, 'status');
   const assignee = optString(input.values, 'assignee');
@@ -69,8 +69,8 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
     // list_ids may also return tasks that only show in a project list, while their home list belongs to another project.
     const owned = listIds === undefined ? response.tasks : response.tasks.filter((task) => listIds.includes(task.list.id));
     // Filtered here, so that the area adds to --tag instead of widening it.
-    const inArea = area === null ? owned : owned.filter((task) => task.tags.some((tag) => tag.name === area));
-    const matching = searchWords === undefined ? inArea : inArea.filter((task) => matchesAllWords(task, searchWords));
+    const kept = inArea === null ? owned : owned.filter((task) => inArea(task.tags.map((tag) => tag.name)));
+    const matching = searchWords === undefined ? kept : kept.filter((task) => matchesAllWords(task, searchWords));
     // Filtered here, like --search, so that "any" and --tag keep their meaning.
     found.push(...(needs === undefined ? matching : matching.filter((task) => matchesNeeds(task, needs, needsTags))));
     complete = response.last_page === true || response.tasks.length < PAGE_SIZE;
@@ -87,16 +87,28 @@ export async function listTasks(ctx: Context, input: CommandInput, truncatedHint
   return found.slice(0, limit).map((task) => toTask(task, needsTags));
 }
 
-// The area whose tasks to keep: --area, or the project's unless --all-areas; null keeps every task.
-function readAreaFilter(input: CommandInput, projectArea: string | undefined): string | null {
-  const wanted = optString(input.values, 'area');
+// Which tasks to keep by their area tags: --area (any of them), --no-area, every task with --all-areas,
+// else the project's area; null keeps every task.
+function readAreaFilter(ctx: Context, input: CommandInput): ((tags: string[]) => boolean) | null {
+  const values = optStrings(input.values, 'area');
   const all = flag(input.values, 'all-areas');
-  if (wanted !== undefined && all) throw usageError('Use either --area or --all-areas, not both');
+  const none = flag(input.values, 'no-area');
+  if ([values.length > 0, all, none].filter(Boolean).length > 1) {
+    throw usageError('Use only one of --area, --all-areas and --no-area');
+  }
   if (all) return null;
-  if (wanted === undefined) return projectArea ?? null;
-  const tag = normalizeArea(wanted);
-  if (tag === null) throw usageError(`Invalid --area "${wanted}"`, AREA_HINT);
-  return tag;
+  if (none) {
+    const located = projectGroup(ctx);
+    if (located === null) throw configError('This project is in no group, so taskwire does not know the other areas', NO_GROUP_HINT);
+    const known = Object.keys(located.group.areas);
+    return (tags) => !tags.some((tag) => known.includes(tag));
+  }
+  if (values.length === 0) {
+    const { area } = projectConfig(ctx);
+    return area === undefined ? null : (tags) => tags.includes(area);
+  }
+  const wanted = readAreas(ctx, values);
+  return (tags) => tags.some((tag) => wanted.includes(tag));
 }
 
 function matchesNeeds(task: RawTask, wanted: NeedsKind | 'any', needsTags: NeedsTags): boolean {
