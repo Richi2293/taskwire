@@ -7528,11 +7528,10 @@
                               "id": "xaV0K",
                               "name": "Label",
                               "fill": "$muted",
-                              "content": "GROUP",
+                              "content": "Group",
                               "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "600",
-                              "letterSpacing": 0.6
+                              "fontSize": 13,
+                              "fontWeight": "600"
                             },
                             {
                               "type": "frame",
@@ -7574,11 +7573,10 @@
                               "id": "fdYKB",
                               "name": "Label",
                               "fill": "$muted",
-                              "content": "AREA, FROM TASKWIRE",
+                              "content": "Area, from taskwire",
                               "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "600",
-                              "letterSpacing": 0.6
+                              "fontSize": 13,
+                              "fontWeight": "600"
                             },
                             {
                               "type": "frame",
