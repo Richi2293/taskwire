@@ -4,6 +4,15 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- The agent rules have a default status flow: `backlog` (not planned yet, where new tasks start), `todo`, `inProgress`, `review` (used with `--needs test|review`) and `closed` (merged and verified). The project `instructions` still win over it.
+- `taskwire lists` shows in `flow` which status of each list matches each step of the flow, or `null` when the list has none, so agents skip that step instead of guessing.
+
+### Changed
+
+- The agent rules point to the `inProgress` and `review` steps of the flow instead of describing those statuses in words.
+
 ## [0.1.7] - 2026-10-02
 
 ### Added
