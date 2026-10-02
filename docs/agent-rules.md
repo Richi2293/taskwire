@@ -18,18 +18,24 @@ To do it by hand, paste the block from [rules/agents-block.md](../rules/agents-b
 
 Projects set up before `taskwire rules` existed have a longer block copied from this page, projects set up with taskwire 0.1.2 lack the install line, and projects set up with taskwire 0.1.6 or earlier lack the in-progress line: replace the block with the one in [rules/agents-block.md](../rules/agents-block.md).
 
+## Status flow
+
+The default rules give every task the same flow: `backlog` (not planned yet, where new tasks start), `todo` (planned), `inProgress` (someone is working on it), `review` (a pull request or a deploy to check, used with `--needs test|review`) and `closed` (merged and verified). Lists name their statuses freely, so `taskwire lists` shows in `flow` which status of each list matches each step, or `null` when the list has none, and agents skip the steps that are `null`. How the provider finds them is on [its page](providers/clickup.md).
+
+Projects that share a list therefore read the statuses the same way. A project adds only what differs, in `instructions`: for example "close a task only after a check in production", or the status to use for a step that is `null`.
+
 ## Project overrides
 
 The defaults apply unless the project chooses otherwise, in the `conventions` of `.taskwire.json`:
 
-- `language` and `instructions` are added on top of the default rules and win when they conflict. Use `instructions` for project habits, for example a status flow or a naming rule. `taskwire init --language <l> --instructions <text>` writes them.
+- `language` and `instructions` are added on top of the default rules and win when they conflict. Use `instructions` for project habits, for example stricter conditions on the status flow or a naming rule. `taskwire init --language <l> --instructions <text>` writes them.
 - `rulesFile` replaces the default rules entirely with a markdown file, given as a path relative to `.taskwire.json`. The project then no longer gets rule updates from taskwire, so use it only when the defaults do not fit at all.
 
 ```json
 {
   "conventions": {
     "language": "Italian",
-    "instructions": "Move a task to complete only after the merge.",
+    "instructions": "Close a task only after a check in production.",
     "rulesFile": "docs/task-rules.md"
   }
 }

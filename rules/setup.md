@@ -16,7 +16,7 @@ Ask the user only for the real choices (folder, lists, language, commit of the c
    - If it is shared, run `taskwire lists --folder <id>`, show the lists and ask which ones belong to this project. These become `--scope-list`.
    - Ask which list new tasks go to by default (`--list`). With a single project list, that list is already the default.
    - Ask whether other projects (for example the backend, the frontend or the app of the same product) share this project's task list. If they do, ask the short tag of this project's tasks, such as `be`, `fe` or `mobile`: it becomes `--area`. Use the same tag the other projects already use for their tasks, if any. Skip it for a monorepo with a single `.taskwire.json`.
-5. **Conventions.** Ask the language of tasks and comments (default: English). Ask whether there are project habits for tasks, for example a status flow such as "complete only after the merge". Skip `--instructions` when there are none.
+5. **Conventions.** Ask the language of tasks and comments (default: English). Ask whether there are project habits for tasks, for example a stricter status flow such as "close a task only after a check in production". Skip `--instructions` when there are none.
 6. **Init.** Run one command with every choice:
 
    ```

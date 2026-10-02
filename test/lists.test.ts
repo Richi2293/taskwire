@@ -2,13 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FOLDER_ID, LIST_ID, rawList, runCli } from './helpers.ts';
 
-test('lists returns each list of the project folder with its statuses', async () => {
+test('lists returns each list of the project folder with its statuses and its status flow', async () => {
   const run = await runCli(['lists'], { routes: {
     [`GET /folder/${FOLDER_ID}/list`]: { body: { lists: [{ id: LIST_ID, name: 'Backlog' }] } },
     [`GET /list/${LIST_ID}`]: { body: rawList() },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), [{ id: LIST_ID, name: 'Backlog', statuses: ['to do', 'in progress', 'complete'] }]);
+  assert.deepEqual(run.json(), [{
+    id: LIST_ID,
+    name: 'Backlog',
+    statuses: ['to do', 'in progress', 'complete'],
+    flow: { backlog: 'to do', todo: null, inProgress: 'in progress', review: null, closed: 'complete' },
+  }]);
 });
 
 test('list create posts the name into the project folder', async () => {

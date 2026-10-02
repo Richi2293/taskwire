@@ -60,7 +60,7 @@ Next session, ask your agent: *"What was I doing yesterday?"*
 </p>
 
 - **Any agent.** Agents run plain shell commands and read compact JSON. No server, no SDK, no plugin: if a model can run a command, it can use taskwire.
-- **Rules built in.** `taskwire rules` tells agents how to handle tasks: search before starting, move the status as the work goes, write comments people can skim. Projects add their own language and habits on top.
+- **Rules built in.** `taskwire rules` tells agents how to handle tasks: search before starting, move the status along a default flow that adapts to each list, write comments people can skim. Projects add their own language and habits on top.
 - **Safe by default.** Every write is checked against the project in `.taskwire.json`, and anything outside it is refused. Deleting needs `--yes`.
 - **Token stays secret.** It lives in the Keychain (or an environment variable) and is never printed.
 - **Zero dependencies.** One small CLI on Node, nothing else to install or trust.

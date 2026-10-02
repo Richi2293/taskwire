@@ -32,6 +32,7 @@ taskwire lists                                     # lists of the project and th
 
 ## Behavior notes
 
+- `taskwire lists` shows in `flow` the status of each list for each step of the default flow in the rules, from the status types and names: `backlog` is the `open` status and `closed` the `closed` one; `review` is the first `done` status, or else the first `custom` status whose name contains `review`, `qa`, `test`, `verif` or `check`; `inProgress` is the `custom` status left whose name contains `progress`, `doing`, `working`, `wip` or `develop`, or the only `custom` status left; `todo` is a `custom` status before `inProgress` whose name contains `to do`, `todo`, `ready`, `planned` or `next`. Each status covers at most one step, and a step the list does not make clear is `null`.
 - Statuses are matched case-insensitively against the target list and sent with the list's exact name.
 - `taskwire tasks --status` with no result checks that the status exists in the project's lists, so a typo is an error instead of an empty list.
 - Priorities map to ClickUp's `urgent=1`, `high=2`, `normal=3`, `low=4`.
@@ -81,6 +82,7 @@ Facts checked against the live API:
 - Tag names are stored in lowercase, and a tag that does not exist yet in the space is created when it is added to a task (`POST /task/{id}/tag/{name}`) or sent in `tags` on `POST /list/{id}/task`. Removing a tag (`DELETE /task/{id}/tag/{name}`) and filtering by tag (`tags[]`) match the lowercase name exactly: `FEATURE` removes nothing and finds no task, and removing a tag the task does not have answers 200 anyway (checked on 2026-09-27). taskwire sends every tag name in lowercase.
 - `date_updated` of a task (`updatedAt` in taskwire) changes when a comment is added, not only when a field, a tag or the status changes (checked on 2026-09-28): a task whose `updatedAt` did not change has no new comment either.
 - The task list (`GET /list/{id}/task`) returns `dependencies` for every task, both the ones it waits for and the ones it blocks, each with `task_id` and `depends_on` (checked on 2026-09-29): `taskwire tasks` shows `blockedBy` without an extra call per task.
+- Each status of a list (`GET /list/{id}`) has a `type`: `open` for the first one, `closed` for the last one, `done` for the statuses of the Done group (finished but not closed, such as `qa`) and `custom` for the active ones, such as `to do` and `in progress` (checked on 2026-10-02). A task created without `status` gets the `open` status.
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` are also sent on successful responses (checked on `GET /user` and `GET /team`), although the docs mention them only for rate limit errors. `X-RateLimit-Remaining` goes down by one with each request.
 
 ## Notes for agents

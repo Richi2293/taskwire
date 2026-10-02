@@ -108,7 +108,7 @@ test('the default rules say who checks the acceptance criteria and when', () => 
 });
 
 test('the default rules ask to move a task to its in-progress status as the first step of the work', () => {
-  assert.match(DEFAULT_RULES, /When the user asks you to work on a task, move it to the status of its list that means work in progress as your first step/);
+  assert.match(DEFAULT_RULES, /When the user asks you to work on a task, move it to the `inProgress` status of its list \(see Status flow\) as your first step/);
   assert.match(DEFAULT_RULES, /before any design, plan, branch or code/);
   assert.match(DEFAULT_RULES, /If the list has no such status, leave the status as it is/);
 });
@@ -117,6 +117,21 @@ test('the default rules put the in-progress rule right after the search for a re
   const lines = DEFAULT_RULES.split('\n');
   const search = lines.findIndex((line) => line.startsWith('- Before starting a piece of work, look for a related task'));
   assert.match(lines[search + 1], /^- When the user asks you to work on a task/);
+});
+
+test('the default rules describe the status flow, read from the lists, with the project instructions on top', () => {
+  assert.match(DEFAULT_RULES, /^## Status flow$/m);
+  assert.match(DEFAULT_RULES, /`taskwire lists` shows in `flow` the status of each list for each step/);
+  assert.match(DEFAULT_RULES, /When a step is `null`, skip it: never pick or create another status in its place/);
+  assert.match(DEFAULT_RULES, /The project `instructions` win over this flow/);
+  for (const step of ['backlog', 'todo', 'inProgress', 'review', 'closed']) assert.match(DEFAULT_RULES, new RegExp(`^\\d\\. \`${step}\`: `, 'm'));
+  assert.match(DEFAULT_RULES, /never move a task back to an earlier step unless the user asks/);
+});
+
+test('the default rules send work to check to the review step of the flow', () => {
+  assert.match(DEFAULT_RULES, /`test`: the work is done but can be verified only by hand; move the task to the `review` status of its list/);
+  assert.match(DEFAULT_RULES, /This is the status to use with `--needs test` and `--needs review`/);
+  assert.doesNotMatch(DEFAULT_RULES, /the status the project uses for work to check/);
 });
 
 test('rules reports a newer version on npm with the command to install it', async () => {
