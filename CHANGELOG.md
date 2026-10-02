@@ -4,6 +4,24 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-02
+
+### Added
+
+- Groups of projects: the projects that share one task list, recorded on the machine in `~/.config/taskwire/groups.json` (or `$XDG_CONFIG_HOME/taskwire`, or `$TASKWIRE_HOME`), never in the repositories or in the task system. Each area of a group has a description and, when it has code, the folder of its repository; areas without code, such as `infra` or `feedback`, have none. Commands: `taskwire group init <name>`, `taskwire group`, `taskwire area add <name> --description <text> [--path <dir>]` and `taskwire area remove <name>`.
+- `taskwire area add` refuses a name close to an existing area of the group (`infrastructure` when `infra` exists), unless `--force`.
+- `taskwire areas` lists the areas with their number of tasks, and counts the tasks with no area of the group.
+- `taskwire tasks --no-area` lists the tasks with no area of the group, to sort them.
+- `taskwire task create --area none` creates a task with no area tag.
+- `taskwire project` and `taskwire rules` print the `group` of the project, or `null`.
+
+### Changed
+
+- `--area` can be repeated: `taskwire tasks` keeps the tasks with any of the areas, and `taskwire task create` adds every one. In a group, `--area` accepts only the areas of the group.
+- `taskwire tags` marks the tags that are areas with `"area": true`.
+- `taskwire area set` in a group renames the area in the group too, and refuses to remove it.
+- The area rules list the areas of the group with the folder of their code, tell agents to tag work without code with an area without code instead of the area of the project, allow agents to create areas on their own and report them, and accept two forms for a task that touches several areas: one task with each area tag, or a container with one subtask per area. Without a group, they explain how to record one. The setup guide records the group.
+
 ## [0.1.8] - 2026-10-02
 
 ### Added
@@ -119,7 +137,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/Richi2293/taskwire/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Richi2293/taskwire/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Richi2293/taskwire/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6

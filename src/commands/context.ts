@@ -13,6 +13,8 @@ export interface Context {
   // Where the config was found, to resolve paths written in it; null when the command reads no config.
   configPath: string | null;
   cwd: string;
+  // The groups file of this machine (see groups.ts); null when no home folder is known.
+  groupsPath: string | null;
   // The account whose token the command uses (--account, or the project's); null for the default token.
   account: string | null;
   warn: Warn;

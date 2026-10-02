@@ -1,21 +1,25 @@
 import type { Context } from './context.ts';
+import { knownAreas } from './group-context.ts';
 import { listTasks } from './tasks-read.ts';
 
 export interface TagOut {
   name: string;
   tasks: number;
+  // An area of the project's group (or the project's own area), not a type tag such as "bug".
+  area: boolean;
 }
 
 // Tags come from the project's tasks, not from the ClickUp space, whose tags also belong to other folders and projects.
 export async function listTags(ctx: Context): Promise<TagOut[]> {
   // Every area, so that an agent finds the tags of the other areas of a shared task list.
   const input = { positionals: [], values: { 'include-closed': true, 'all-areas': true } };
+  const areas = knownAreas(ctx) ?? [];
   const tasks = await listTasks(ctx, input, 'Some tags may be missing: they come from the tasks read so far');
   const counts = new Map<string, number>();
   for (const task of tasks) {
     for (const tag of task.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
   }
   return [...counts]
-    .map(([name, count]) => ({ name, tasks: count }))
+    .map(([name, count]) => ({ name, tasks: count, area: areas.includes(name) }))
     .sort((a, b) => b.tasks - a.tasks || a.name.localeCompare(b.name));
 }
