@@ -45,7 +45,11 @@ The defaults apply unless the project chooses otherwise, in the `conventions` of
 
 Several projects of one product (for example the backend, the frontend and the app) may share one task list. Each project then sets its `area` in `.taskwire.json`, a tag such as `be`, `fe` or `mobile`, with `taskwire area set <tag>` or `taskwire init --area <tag>`. The area is meant for projects in separate repositories: a monorepo with a single `.taskwire.json` leaves it out and sees every task.
 
-With an area, `taskwire tasks` shows only the tasks with its tag, `taskwire task create` adds the tag, and `taskwire rules` ends with a section ([rules/areas.md](../rules/areas.md)) that tells agents how to reach the other areas and how to split a task that touches several of them. Writes are not limited to the area: an agent may comment on a task of another area or create its subtask there.
+With an area, `taskwire tasks` shows only the tasks with its tag, `taskwire task create` adds the tag, and `taskwire rules` ends with a section ([rules/areas.md](../rules/areas.md)) that tells agents how to pick the area of a task, how to reach the other areas and how to split a task that touches several of them. Writes are not limited to the area: an agent may comment on a task of another area or create its subtask there.
+
+The projects that share a task list form a group, recorded on the machine with `taskwire group init` and `taskwire area add` (see Groups of projects in the README). The group also holds the areas without code, such as `infra` or `feedback`, so that work outside every repository gets its own tag instead of the area of the project the agent runs in. With a group, the area section lists every area with the folder of its code ([rules/areas-no-group.md](../rules/areas-no-group.md) replaces the list when there is none, and tells agents how to record the group). Agents may create areas without asking, unlike other tags: `taskwire area add` refuses a name close to an existing area, and the rules ask for a report of the areas created at the end of the session.
+
+A task that touches several areas is either one task with each area tag, for one piece of work done in one go (a decision, an analysis), or a container with one subtask per area when each repository has code to change. An agent does only the part of its repository; it leaves the other subtasks ready and, when its tool can start another agent in a folder, starts one in the folder of that area. taskwire itself never starts agents.
 
 ## Tasks waiting for a person
 

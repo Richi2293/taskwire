@@ -181,14 +181,17 @@ test('the default rules give fixed English headings to the comment of a task wai
 });
 
 const AREA_RULES = readFileSync(new URL('../rules/areas.md', import.meta.url), 'utf8');
+const NO_GROUP_RULES = readFileSync(new URL('../rules/areas-no-group.md', import.meta.url), 'utf8').trimEnd();
+// The area section of a project in no group, as taskwire fills it.
+const areaRules = (area: string) => AREA_RULES.replaceAll('{area}', area).replace('{group}', NO_GROUP_RULES.replaceAll('{area}', area));
 
 test('rules adds the area section, with the area of the project, when the project has one', async () => {
   const run = await runCli(['rules'], { config: { provider: 'clickup', folderId: FOLDER_ID, area: 'mobile' } });
   const out = run.json() as RulesOut & { area: string | null };
   assert.equal(out.area, 'mobile');
-  assert.equal(out.rules, `${DEFAULT_RULES}\n${AREA_RULES.replaceAll('{area}', 'mobile')}`);
+  assert.equal(out.rules, `${DEFAULT_RULES}\n${areaRules('mobile')}`);
   assert.match(out.rules, /`mobile` area/);
-  assert.doesNotMatch(out.rules, /\{area\}/);
+  assert.doesNotMatch(out.rules, /\{(area|group)\}/);
 });
 
 test('rules has no area section when the project has no area', async () => {
@@ -202,5 +205,5 @@ test('rules adds the area section to a project rules file too', async () => {
   writeFileSync(join(dir, '.taskwire.json'), JSON.stringify({ folderId: FOLDER_ID, area: 'be', conventions: { rulesFile: 'rules.md' } }));
   writeFileSync(join(dir, 'rules.md'), '# Our task rules\n');
   const run = await runCli(['rules', '--pretty'], { cwd: dir });
-  assert.ok(run.stdout.includes(`# Our task rules\n\n${AREA_RULES.replaceAll('{area}', 'be')}`));
+  assert.ok(run.stdout.includes(`# Our task rules\n\n${areaRules('be')}`));
 });

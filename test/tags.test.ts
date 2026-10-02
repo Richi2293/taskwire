@@ -19,9 +19,9 @@ test('tags counts the tasks of each tag, most used first, then by name', async (
   } });
   assert.equal(run.code, 0);
   assert.deepEqual(run.json(), [
-    { name: 'feature', tasks: 2 },
-    { name: 'backend', tasks: 1 },
-    { name: 'bug', tasks: 1 },
+    { name: 'feature', tasks: 2, area: false },
+    { name: 'backend', tasks: 1, area: false },
+    { name: 'bug', tasks: 1, area: false },
   ]);
 });
 
@@ -47,7 +47,7 @@ test('tags leaves out the tasks of lists outside the project lists', async () =>
     'GET /team/1/task': { body: { tasks, last_page: true } },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), [{ name: 'feature', tasks: 1 }]);
+  assert.deepEqual(run.json(), [{ name: 'feature', tasks: 1, area: false }]);
   assert.deepEqual(run.calls[0].url.searchParams.getAll('list_ids[]'), [LIST_ID]);
 });
 
@@ -60,7 +60,7 @@ test('tags follows pagination and counts every page', async () => {
   };
   const run = await runCli(['tags'], { routes: { 'GET /team/1/task': page } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), [{ name: 'feature', tasks: 101 }]);
+  assert.deepEqual(run.json(), [{ name: 'feature', tasks: 101, area: false }]);
 });
 
 test('tags rejects options it does not know', async () => {
@@ -85,11 +85,11 @@ test('tags warns that some tags may be missing when it stops before the last pag
   assert.doesNotMatch(run.stderr, /--status/);
 });
 
-test('tags in a project with an area counts the tags of every area', async () => {
+test('tags in a project with an area counts the tags of every area and marks its area', async () => {
   const config: ProjectConfig = { provider: 'clickup', workspaceId: WORKSPACE_ID, folderId: FOLDER_ID, defaultListId: LIST_ID, area: 'mobile' };
   const tasks = [rawTask({ id: 't1', tags: [tag('mobile')] }), rawTask({ id: 't2', tags: [tag('be')] })];
   const run = await runCli(['tags'], { config, routes: {
     'GET /team/1/task': { body: { tasks, last_page: true } },
   } });
-  assert.deepEqual(run.json(), [{ name: 'be', tasks: 1 }, { name: 'mobile', tasks: 1 }]);
+  assert.deepEqual(run.json(), [{ name: 'be', tasks: 1, area: false }, { name: 'mobile', tasks: 1, area: true }]);
 });
