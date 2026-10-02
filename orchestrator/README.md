@@ -74,7 +74,7 @@ For each project, `run-once`:
 
 Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
 
-The orchestrator needs a taskwire with `needs` and areas (`taskwire project`, `--all-areas`), newer than 0.1.6: set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
+The orchestrator needs a taskwire with `needs` and areas (`taskwire project`, `--all-areas`): taskwire 0.1.7 or later. `taskwireCommand` can point to a clone to try an unreleased taskwire. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
 
 ## Who merges
 
