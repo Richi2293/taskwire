@@ -87,7 +87,12 @@ test('lists --folder shows the lists of any folder without a config', async () =
     [`GET /list/${LIST_ID}`]: { body: rawList() },
   } });
   assert.equal(run.code, 0);
-  assert.deepEqual(run.json(), [{ id: LIST_ID, name: 'Backlog', statuses: ['to do', 'in progress', 'complete'] }]);
+  assert.deepEqual(run.json(), [{
+    id: LIST_ID,
+    name: 'Backlog',
+    statuses: ['to do', 'in progress', 'complete'],
+    flow: { backlog: 'to do', todo: null, inProgress: 'in progress', review: null, closed: 'complete' },
+  }]);
 });
 
 test('lists --folder rejects a non numeric folder id before calling the provider', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@richi2293/taskwire",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Agents forget. Tasks don't. A CLI-first task board for AI agents.",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toList, toTask, toTaskDetail } from '../src/shape.ts';
+import { statusFlow, toList, toTask, toTaskDetail } from '../src/shape.ts';
+import type { ListFlow } from '../src/shape.ts';
 import { rawList, rawTask } from './helpers.ts';
 
 test('toTask keeps only the useful fields, with the due date in the system time zone', () => {
@@ -71,9 +72,71 @@ test('toTaskDetail falls back to the plain description and empty collections', (
   assert.deepEqual(detail.dependencies, { blockedBy: [], blocking: [] });
 });
 
-test('toList returns status names', () => {
-  assert.deepEqual(toList(rawList()), { id: '800', name: 'Backlog', statuses: ['to do', 'in progress', 'complete'] });
-  assert.deepEqual(toList(rawList({ statuses: undefined })).statuses, []);
+test('toList returns status names and the status of each step of the flow', () => {
+  assert.deepEqual(toList(rawList()), {
+    id: '800',
+    name: 'Backlog',
+    statuses: ['to do', 'in progress', 'complete'],
+    flow: { backlog: 'to do', todo: null, inProgress: 'in progress', review: null, closed: 'complete' },
+  });
+  assert.deepEqual(toList(rawList({ statuses: undefined })), {
+    id: '800',
+    name: 'Backlog',
+    statuses: [],
+    flow: { backlog: null, todo: null, inProgress: null, review: null, closed: null },
+  });
+});
+
+// Statuses written as "name:type", in the order of the list.
+function flowOf(...statuses: string[]): ListFlow {
+  return statusFlow(statuses.map((entry) => {
+    const [status, type] = entry.split(':');
+    return { status, type };
+  }));
+}
+
+test('statusFlow maps every step of a list with the whole flow', () => {
+  assert.deepEqual(flowOf('backlog:open', 'to do:custom', 'in progress:custom', 'qa:done', 'complete:closed'), {
+    backlog: 'backlog', todo: 'to do', inProgress: 'in progress', review: 'qa', closed: 'complete',
+  });
+});
+
+test('statusFlow takes the review step from a custom status by its name when the list has no done status', () => {
+  assert.deepEqual(flowOf('open:open', 'doing:custom', 'in review:custom', 'closed:closed'), {
+    backlog: 'open', todo: null, inProgress: 'doing', review: 'in review', closed: 'closed',
+  });
+});
+
+test('statusFlow uses the first done status for review', () => {
+  assert.equal(flowOf('open:open', 'qa:done', 'ready to ship:done', 'closed:closed').review, 'qa');
+});
+
+test('statusFlow takes the only custom status left as in progress, whatever its name', () => {
+  assert.equal(flowOf('open:open', 'working on it:custom', 'closed:closed').inProgress, 'working on it');
+  assert.equal(flowOf('open:open', 'busy:custom', 'closed:closed').inProgress, 'busy');
+});
+
+test('statusFlow leaves a step null when the names do not tell which status it is', () => {
+  assert.deepEqual(flowOf('open:open', 'blocked:custom', 'busy:custom', 'closed:closed'), {
+    backlog: 'open', todo: null, inProgress: null, review: null, closed: 'closed',
+  });
+  assert.deepEqual(flowOf('open:open', 'blocked:custom', 'in progress:custom', 'closed:closed'), {
+    backlog: 'open', todo: null, inProgress: 'in progress', review: null, closed: 'closed',
+  });
+});
+
+test('statusFlow takes todo only from a status before in progress', () => {
+  assert.equal(flowOf('open:open', 'in progress:custom', 'ready:custom', 'closed:closed').todo, null);
+  assert.equal(flowOf('open:open', 'Ready for dev:custom', 'In Progress:custom', 'closed:closed').todo, 'Ready for dev');
+});
+
+test('statusFlow gives each status at most one step', () => {
+  assert.deepEqual(flowOf('to do:open', 'complete:closed'), {
+    backlog: 'to do', todo: null, inProgress: null, review: null, closed: 'complete',
+  });
+  assert.deepEqual(flowOf('open:open', 'qa:custom', 'closed:closed'), {
+    backlog: 'open', todo: null, inProgress: null, review: 'qa', closed: 'closed',
+  });
 });
 
 test('toTaskDetail accepts subtasks as ClickUp nests them, without list, folder or priority', () => {

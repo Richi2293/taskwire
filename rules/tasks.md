@@ -5,16 +5,16 @@ This project's tasks live in an external task system, managed through the `taskw
 These rules cover only task management. The project conventions that come with them (`language`, `instructions`) are added on top and win when they conflict.
 
 - Before starting a piece of work, look for a related task: `taskwire tasks --search <words>` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>` (add `--comments 0` when the comments are not needed).
-- When the user asks you to work on a task, move it to the status of its list that means work in progress as your first step, before any design, plan, branch or code, together with the assignment: `taskwire task update <id> --status "in progress" --add-assignee me`. Brainstorming or designing the work already counts as working on it; only reading, explaining or evaluating a task at the user's request does not. If the list has no such status, leave the status as it is. Never move a task back from a later status, such as a review status. The project `instructions` may name the status to use.
+- When the user asks you to work on a task, move it to the `inProgress` status of its list (see Status flow) as your first step, before any design, plan, branch or code, together with the assignment: `taskwire task update <id> --status "in progress" --add-assignee me`, with the name the list uses. Brainstorming or designing the work already counts as working on it; only reading, explaining or evaluating a task at the user's request does not. If the list has no such status, leave the status as it is.
 - Write tasks, comments and checklists in the project `language`, following its `instructions`. Existing tasks keep their text unless the user asks to rewrite them.
 - Keep each task self-contained: a person or an agent must be able to do the work reading only the task, without opening issues, pull requests, git history or other docs. When a task comes from an issue, copy into it what is needed to work, not only a summary.
-- Use only the statuses of the task's list (`taskwire lists`). Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing. Before moving a task to a closed status, check every verified acceptance criterion. If the user asks to close it anyway, leave the unverified criteria unchecked and list them in the closing comment.
+- Use only the statuses of the task's list (`taskwire lists`), following the Status flow below. Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing. Before moving a task to a closed status, check every verified acceptance criterion. If the user asks to close it anyway, leave the unverified criteria unchecked and list them in the closing comment.
 - Reuse the tags already used in the project: `taskwire tags` lists them, most used first. Create a new tag only when the user asks.
 - You may, without asking: create tasks and subtasks, move a task's status as the work progresses, add comments describing what was done (commits, PR, files touched), add checklists or dependencies, add, rename or check checklist items, and check an acceptance criterion in the description (`- [x]`) once it is verified.
 - Assign to the user (`me`, the owner of the token) every task and subtask you create (`--assignee me`), and a task you start working on when it has no assignee (`taskwire task update <id> --add-assignee me`). Do not change the assignees of a task that already has some, unless the user asks.
 - When the work stops because a person is needed, mark why with `taskwire task update <id> --needs decision|test|review` and add a comment whose **Next** line says what the person must do, with the steps in the details:
   - `decision`: a choice that changes the behaviour is not yours to make; ask before writing code and leave the status as it is;
-  - `test`: the work is done but can be verified only by hand; move the task to the status the project uses for work to check;
+  - `test`: the work is done but can be verified only by hand; move the task to the `review` status of its list;
   - `review`: the work is done and verified, only a review or a merge is missing; move the task to the same status.
 - In that comment, open the details with fixed sections that tools such as a dashboard read, so these headings stay in English whatever the project language (their content follows the project language):
   - for `decision`, `### Questions` with a numbered list of the questions, one per item, and `### Proposal` with what you would do if the person agrees, in one or two sentences;
@@ -29,6 +29,18 @@ These rules cover only task management. The project conventions that come with t
 - Exit codes: 1 task system or network error (retry later), 2 wrong command usage (fix the command), 3 configuration problem (ask the user).
 - A `warning` line on stderr means the command worked but was slowed down or returned partial results: follow its hint.
 - If `taskwire rules` reports an `update`, tell the user and ask before running its `command`: it updates taskwire for the whole machine. Until then, keep working with the installed version.
+
+## Status flow
+
+By default a task moves through these steps. `taskwire lists` shows in `flow` the status of each list for each step, or `null` when the list has none. Use the status that `flow` names. When a step is `null`, skip it: never pick or create another status in its place. The project `instructions` win over this flow: they may rename a step, skip one or set stricter conditions (for example, close a task only after a check in production).
+
+1. `backlog`: an idea or a request not planned yet. New tasks start here unless the user or the `instructions` say otherwise, so create them without `--status`.
+2. `todo`: planned work, ready to be picked up. Move a task here only when the user plans it.
+3. `inProgress`: someone is working on the task. Move it here as your first step when you start (see above).
+4. `review`: the work is done and waits for a check, such as an open pull request or a deploy to verify. This is the status to use with `--needs test` and `--needs review`.
+5. `closed`: the work is merged, when it has code, and verified. Never close a task before both.
+
+The flow only moves forward: never move a task back to an earlier step unless the user asks.
 
 ## Writing tasks and comments
 

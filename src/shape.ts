@@ -1,4 +1,4 @@
-import type { RawChecklist, RawComment, RawCommentBlock, RawList, RawTask } from './clickup-types.ts';
+import type { RawChecklist, RawComment, RawCommentBlock, RawList, RawStatus, RawTask } from './clickup-types.ts';
 import { msToIso, msToLocalIso } from './dates.ts';
 import { DEFAULT_NEEDS_TAGS, needsFromTags } from './needs.ts';
 import type { NeedsKind, NeedsTags } from './needs.ts';
@@ -42,10 +42,20 @@ export interface TaskDetail extends TaskSummary {
   }[];
 }
 
+// The status of a list for each step of the default flow in the rules, or null when the list has none.
+export interface ListFlow {
+  backlog: string | null;
+  todo: string | null;
+  inProgress: string | null;
+  review: string | null;
+  closed: string | null;
+}
+
 export interface ListOut {
   id: string;
   name: string;
   statuses: string[];
+  flow: ListFlow;
 }
 
 export function toTask(raw: RawTask, needsTags: NeedsTags = DEFAULT_NEEDS_TAGS): TaskSummary {
@@ -100,7 +110,35 @@ export function toTaskDetail(raw: RawTask, comments: RawComment[], needsTags: Ne
 }
 
 export function toList(raw: RawList): ListOut {
-  return { id: raw.id, name: raw.name, statuses: (raw.statuses ?? []).map((s) => s.status) };
+  const statuses = raw.statuses ?? [];
+  return { id: raw.id, name: raw.name, statuses: statuses.map((s) => s.status), flow: statusFlow(statuses) };
+}
+
+const REVIEW_HINTS = ['review', 'qa', 'test', 'verif', 'check'];
+const IN_PROGRESS_HINTS = ['progress', 'doing', 'working', 'wip', 'develop'];
+const TODO_HINTS = ['to do', 'todo', 'ready', 'planned', 'next'];
+
+function hasHint(status: RawStatus, hints: string[]): boolean {
+  const name = status.status.toLowerCase();
+  return hints.some((hint) => name.includes(hint));
+}
+
+// ClickUp types tell the first (open), the closed and the done statuses; the custom ones in between are told apart by
+// their names. A step stays null when the list does not say which status it is, so agents skip it instead of guessing.
+export function statusFlow(statuses: RawStatus[]): ListFlow {
+  const custom = statuses.filter((s) => s.type === 'custom');
+  const review = statuses.find((s) => s.type === 'done') ?? custom.find((s) => hasHint(s, REVIEW_HINTS));
+  const left = custom.filter((s) => s !== review);
+  const inProgress = left.find((s) => hasHint(s, IN_PROGRESS_HINTS)) ?? (left.length === 1 ? left[0] : undefined);
+  const beforeInProgress = inProgress === undefined ? [] : left.slice(0, left.indexOf(inProgress));
+  const todo = beforeInProgress.find((s) => hasHint(s, TODO_HINTS));
+  return {
+    backlog: statuses.find((s) => s.type === 'open')?.status ?? null,
+    todo: todo?.status ?? null,
+    inProgress: inProgress?.status ?? null,
+    review: review?.status ?? null,
+    closed: statuses.find((s) => s.type === 'closed')?.status ?? null,
+  };
 }
 
 type LineFormat = Record<string, unknown>;
