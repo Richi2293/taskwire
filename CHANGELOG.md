@@ -4,6 +4,8 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-02
+
 ### Added
 
 - Groups of projects: the projects that share one task list, recorded on the machine in `~/.config/taskwire/groups.json` (or `$XDG_CONFIG_HOME/taskwire`, or `$TASKWIRE_HOME`), never in the repositories or in the task system. Each area of a group has a description and, when it has code, the folder of its repository; areas without code, such as `infra` or `feedback`, have none. Commands: `taskwire group init <name>`, `taskwire group`, `taskwire area add <name> --description <text> [--path <dir>]` and `taskwire area remove <name>`.
@@ -135,7 +137,8 @@ First release. ClickUp is the only provider.
 - Due dates at midnight in the system time zone.
 - Provider-neutral agent rules in `docs/agent-rules.md`.
 
-[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/Richi2293/taskwire/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/Richi2293/taskwire/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Richi2293/taskwire/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Richi2293/taskwire/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Richi2293/taskwire/compare/v0.1.5...v0.1.6
