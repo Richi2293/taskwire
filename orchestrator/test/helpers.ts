@@ -42,13 +42,15 @@ export interface TaskwireCall {
 export type FakeReply = unknown | ((args: string[]) => unknown);
 
 // Answers each taskwire command with the reply keyed by its first words, for example "tasks" or "task get".
+// "project" answers a project with no area, unless the test gives its own reply.
 export function fakeTaskwire(replies: Record<string, FakeReply>): { run: RunTaskwire; calls: TaskwireCall[] } {
   const calls: TaskwireCall[] = [];
+  const all: Record<string, FakeReply> = { project: { area: null }, ...replies };
   const run: RunTaskwire = async (args, cwd) => {
     calls.push({ args, cwd });
-    const key = Object.keys(replies).find((prefix) => `${args.join(' ')} `.startsWith(`${prefix} `));
+    const key = Object.keys(all).find((prefix) => `${args.join(' ')} `.startsWith(`${prefix} `));
     if (key === undefined) throw new Error(`No fake reply for taskwire ${args.join(' ')}`);
-    const reply = replies[key];
+    const reply = all[key];
     return typeof reply === 'function' ? (reply as (args: string[]) => unknown)(args) : reply;
   };
   return { run, calls };

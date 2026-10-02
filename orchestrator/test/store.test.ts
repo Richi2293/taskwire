@@ -29,7 +29,8 @@ function setup(tasks: unknown[] = [task({ id: 'r1', needs: 'review', status: 'qa
     dir,
     store,
     taskwire,
-    calls: () => taskwire.calls.map((call) => call.args.join(' ')),
+    // "taskwire project" reads only the project's config file, so it is no call to the task system.
+    calls: () => taskwire.calls.map((call) => call.args.join(' ')).filter((call) => call !== 'project'),
     setTasks: (next: unknown[]) => { list = next; },
     advance: (ms: number) => { now += ms; },
   };
@@ -46,7 +47,7 @@ test('the state is ready at once, without calling the task system', () => {
 test('a read takes one task list per project, and the detail of each task waiting', async () => {
   const { store, calls } = setup();
   await store.refresh();
-  assert.deepEqual(calls(), ['tasks', 'task get r1 --comments 1']);
+  assert.deepEqual(calls(), ['tasks --all-areas', 'task get r1 --comments 1']);
   const state = store.state();
   assert.deepEqual(state.waiting.map((item) => [item.id, item.note]), [['r1', ['Next: review the branch.']]]);
   assert.equal(state.control.firstTask?.id, 'b1');
@@ -59,17 +60,17 @@ test('the detail of a waiting task is read again only when the task changed', as
   await store.refresh();
   advance(61_000);
   await store.refresh();
-  assert.deepEqual(calls(), ['tasks', 'task get r1 --comments 1', 'tasks']);
+  assert.deepEqual(calls(), ['tasks --all-areas', 'task get r1 --comments 1', 'tasks --all-areas']);
   setTasks([task({ id: 'r1', needs: 'review', status: 'qa', updatedAt: '2026-09-28T09:30:00.000Z' })]);
   await store.refresh();
-  assert.deepEqual(calls().slice(3), ['tasks', 'task get r1 --comments 1']);
+  assert.deepEqual(calls().slice(3), ['tasks --all-areas', 'task get r1 --comments 1']);
 });
 
 test('a task without updatedAt, from an older taskwire, has its detail read every time', async () => {
   const { store, calls } = setup([task({ id: 'r1', needs: 'review' })]);
   await store.refresh();
   await store.refresh();
-  assert.deepEqual(calls(), ['tasks', 'task get r1 --comments 1', 'tasks', 'task get r1 --comments 1']);
+  assert.deepEqual(calls(), ['tasks --all-areas', 'task get r1 --comments 1', 'tasks --all-areas', 'task get r1 --comments 1']);
 });
 
 test('looking at the page starts a read in the background only when the data is older than a minute', async () => {
@@ -78,7 +79,7 @@ test('looking at the page starts a read in the background only when the data is 
   assert.equal(store.state().sync.reading, true);
   store.look();
   await store.idle();
-  assert.deepEqual(calls(), ['tasks', 'task get r1 --comments 1'], 'one read, even when looked at twice');
+  assert.deepEqual(calls(), ['tasks --all-areas', 'task get r1 --comments 1'], 'one read, even when looked at twice');
   assert.equal(store.state().sync.reading, false);
   advance(30_000);
   store.look();
@@ -96,7 +97,7 @@ test('refresh of one project reads only that project', async () => {
   const taskwire = fakeTaskwire({ tasks: [] });
   const store = createStore({ home: home([website, shop]), runTaskwire: taskwire.run, now: () => NOW });
   await store.refresh(shop);
-  assert.deepEqual(taskwire.calls.map((call) => call.cwd), [shop]);
+  assert.deepEqual([...new Set(taskwire.calls.map((call) => call.cwd))], [shop]);
   assert.deepEqual(store.state().projects.map((p) => [p.projectName, p.readAt !== null]), [['website', false], ['shop', true]]);
 });
 
@@ -136,7 +137,7 @@ test('after an action, the task leaves the queue at once and its project is read
   store.changed(store.state().projects[0].project, 'r1');
   assert.deepEqual(store.state().waiting, []);
   await store.idle();
-  assert.deepEqual(calls().slice(2), ['tasks']);
+  assert.deepEqual(calls().slice(2), ['tasks --all-areas']);
 });
 
 test('a project no longer followed leaves the state', async () => {

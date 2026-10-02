@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
-import { DEFAULT_BLOCK_TAG, DEFAULT_DASHBOARD_PORT, DEFAULT_START_STATUSES, agentsOn, expandHome, loadConfig } from './config.ts';
+import { DEFAULT_DASHBOARD_PORT, agentsOn, expandHome, loadConfig } from './config.ts';
 import { createRunControl } from './control.ts';
 import type { RunControl } from './control.ts';
 import { createActions } from './dashboard/actions.ts';
@@ -15,11 +15,10 @@ import type { ProjectEntry } from './config.ts';
 import { EXIT, OrchestratorError, configError, usageError } from './errors.ts';
 import { discoverProjects, followProject, projectSearchRoots, unfollowProject } from './projects.ts';
 import type { RunCommand } from './commands.ts';
-import { closeInterruptedClaims, runCycle } from './cycle.ts';
+import { closeInterruptedClaims, nextTask, runCycle } from './cycle.ts';
 import type { CycleResult } from './cycle.ts';
 import { appendEvent, pruneOld } from './journal.ts';
 import { MAX_TASKWIRE_CALLS, limitCalls } from './limit.ts';
-import { pickTask } from './picker.ts';
 import { runLoop } from './scheduler.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 
@@ -176,12 +175,7 @@ async function nextTasks(deps: CliDeps): Promise<{ project: string; agents: bool
       rows.push({ project: project.path, agents: false, task: null });
       continue;
     }
-    const tasks = (await deps.runTaskwire(['tasks'], project.path)) as TaskSummary[];
-    const task = pickTask(tasks, {
-      statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
-      blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
-      area: project.area,
-    });
+    const { task } = await nextTask(deps.runTaskwire, project);
     rows.push({ project: project.path, agents: true, task });
   }
   return rows;

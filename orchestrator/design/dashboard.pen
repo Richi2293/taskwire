@@ -6655,7 +6655,7 @@
                     {
                       "type": "frame",
                       "id": "G9AFM9",
-                      "name": "Set area and group",
+                      "name": "Set group",
                       "width": "fill_container",
                       "cornerRadius": 6,
                       "padding": [
@@ -6668,7 +6668,7 @@
                           "id": "V3l1e",
                           "name": "Label",
                           "fill": "$ink",
-                          "content": "Set area and group",
+                          "content": "Set group",
                           "fontFamily": "$font-ui",
                           "fontSize": 13,
                           "fontWeight": "normal"
@@ -6835,6 +6835,1176 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n20BsU",
+      "x": 0,
+      "y": 3904,
+      "name": "Projects / Set group / Dark",
+      "theme": {
+        "mode": "dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 48,
+      "children": [
+        {
+          "type": "frame",
+          "id": "seH7B",
+          "name": "Projects",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "frame",
+              "id": "Np3gQ",
+              "name": "Projects header",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "end",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "IBKGD",
+                  "name": "Title",
+                  "fill": "$ink",
+                  "content": "Projects",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "LeMBp",
+                  "name": "Hint",
+                  "fill": "$muted",
+                  "content": "3 projects followed",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "oqSrH",
+              "name": "Project rows",
+              "width": "fill_container",
+              "fill": "$panel",
+              "cornerRadius": 10,
+              "stroke": "$line",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yQO0g",
+                  "name": "Project taskwire",
+                  "width": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 24,
+                  "padding": [
+                    14,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BROLT",
+                      "name": "Name",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": 140,
+                      "content": "taskwire",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xPI3P",
+                      "name": "Merge level",
+                      "width": 150,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "q77IeV",
+                          "name": "Merge pill",
+                          "fill": "#00000000",
+                          "cornerRadius": 6,
+                          "stroke": "$line-strong",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "i23KN",
+                              "name": "Merge icon",
+                              "width": 13,
+                              "height": 13,
+                              "icon": "lock",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "uL90t",
+                              "name": "Merge label",
+                              "fill": "$muted",
+                              "content": "PR only",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "biBTD",
+                      "name": "Waiting",
+                      "width": 300,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M9hiaO",
+                          "name": "to decide chip",
+                          "fill": "$decision-soft",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "XwfCW",
+                              "name": "Count",
+                              "fill": "$decision",
+                              "content": "7",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "pViDH",
+                              "name": "Label",
+                              "fill": "$decision",
+                              "content": "to decide",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "IEEQq",
+                          "name": "to try chip",
+                          "fill": "$test-soft",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bHsxu",
+                              "name": "Count",
+                              "fill": "$test",
+                              "content": "4",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "rziC4",
+                              "name": "Label",
+                              "fill": "$test",
+                              "content": "to try",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Lpttq",
+                          "name": "to review chip",
+                          "fill": "$review-soft",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "fc0ki",
+                              "name": "Count",
+                              "fill": "$review",
+                              "content": "3",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "y1zKO",
+                              "name": "Label",
+                              "fill": "$review",
+                              "content": "to review",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iGmbB",
+                      "name": "At work",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "pIqcx",
+                          "name": "Work dot",
+                          "fill": "$line-strong",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "TuWQ0",
+                          "name": "Work",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "No agent at work",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "XxC1j",
+                      "name": "Done",
+                      "fill": "$muted",
+                      "content": "Nothing done today",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "m2OVYT",
+                      "name": "Agents switch",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "cl0QD",
+                          "name": "Track",
+                          "width": 30,
+                          "height": 18,
+                          "fill": "$line-strong",
+                          "cornerRadius": 999,
+                          "padding": 2,
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "By5Sw",
+                              "name": "Knob",
+                              "fill": "$panel",
+                              "width": 14,
+                              "height": 14
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "P2OwWe",
+                          "name": "Label",
+                          "fill": "$muted",
+                          "content": "Agents off",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "f0G2N8",
+                      "name": "More",
+                      "fill": "$ink",
+                      "content": "More",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "P4fut",
+                  "name": "Project website",
+                  "width": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 24,
+                  "padding": [
+                    14,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FmLdF",
+                      "name": "Name",
+                      "width": 140,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "fA2Qo",
+                          "name": "Project name",
+                          "fill": "$ink",
+                          "content": "website",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "PuKZu",
+                          "name": "Area and group",
+                          "fill": "$muted",
+                          "content": "Area fe, Acme",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lXK3m",
+                      "name": "Merge level",
+                      "width": 150,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "bwwMs",
+                          "name": "Merge pill",
+                          "fill": "$test-soft",
+                          "cornerRadius": 6,
+                          "stroke": "$test",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "ktW7O",
+                              "name": "Merge icon",
+                              "width": 13,
+                              "height": 13,
+                              "icon": "git-merge",
+                              "library": "lucide",
+                              "fill": "$test"
+                            },
+                            {
+                              "type": "text",
+                              "id": "RVWv2",
+                              "name": "Merge label",
+                              "fill": "$test",
+                              "content": "Auto to dev",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "M7gQb",
+                      "name": "Waiting",
+                      "width": 300,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "cU69F",
+                          "x": 0,
+                          "y": 0,
+                          "name": "to decide chip",
+                          "enabled": false,
+                          "fill": "#00000000",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "iw5p3",
+                              "name": "Count",
+                              "fill": "$muted",
+                              "content": "0",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "M7j7KI",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "to decide",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "r6OX7",
+                          "x": 0,
+                          "y": 0,
+                          "name": "to try chip",
+                          "enabled": false,
+                          "fill": "#00000000",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "uduCn",
+                              "name": "Count",
+                              "fill": "$muted",
+                              "content": "0",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "nVhkj",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "to try",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "bnWzB",
+                          "name": "to review chip",
+                          "fill": "$review-soft",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AFfmc",
+                              "name": "Count",
+                              "fill": "$review",
+                              "content": "1",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "M29dT",
+                              "name": "Label",
+                              "fill": "$review",
+                              "content": "to review",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "d86Qit",
+                      "name": "At work",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "Ot43E",
+                          "name": "Work dot",
+                          "fill": "$alive",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "dL56C",
+                          "name": "Work",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Agent at work: Add the sum of the cart prices, for 12 min",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "bJ1V7",
+                      "name": "Done",
+                      "fill": "$muted",
+                      "content": "2 done today",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "M3kuFS",
+                      "name": "Agents switch",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "BStFA",
+                          "name": "Track",
+                          "width": 30,
+                          "height": 18,
+                          "fill": "$alive",
+                          "cornerRadius": 999,
+                          "padding": 2,
+                          "justifyContent": "end",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "Jp9Hw",
+                              "name": "Knob",
+                              "fill": "$panel",
+                              "width": 14,
+                              "height": 14
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "z4ewlk",
+                          "name": "Label",
+                          "fill": "$ink",
+                          "content": "Agents on",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "I0dEc",
+                      "name": "More",
+                      "fill": "$muted",
+                      "content": "More",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "IDrsz",
+                  "name": "Set group form",
+                  "width": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    4,
+                    20,
+                    18,
+                    184
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "v5jB6y",
+                      "name": "Fields",
+                      "gap": 16,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "O433yt",
+                          "name": "Group field",
+                          "width": 220,
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xaV0K",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "Group",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "aCY2x",
+                              "name": "Input",
+                              "width": "fill_container",
+                              "fill": "$bg",
+                              "cornerRadius": 6,
+                              "stroke": "$line-strong",
+                              "strokeWidth": 1,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "fO9Rq",
+                                  "name": "Value",
+                                  "fill": "$ink",
+                                  "content": "Acme",
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Hd1k7",
+                          "name": "Area read only",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "fdYKB",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "Area, from taskwire",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qMqaW",
+                              "name": "Area value",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                0
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DjXTH",
+                                  "name": "Value",
+                                  "fill": "$ink",
+                                  "content": "fe",
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "d3H1zI",
+                                  "name": "How to change",
+                                  "fill": "$muted",
+                                  "content": "To change it, run taskwire area set <tag> in the project.",
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "uLSna",
+                          "name": "Buttons",
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            0,
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "E2WUU2",
+                              "name": "Save button",
+                              "fill": "$primary-bg",
+                              "cornerRadius": 8,
+                              "padding": [
+                                8,
+                                16
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Z4CYrg",
+                                  "name": "Label",
+                                  "fill": "$primary-ink",
+                                  "content": "Save",
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "KmGeM",
+                              "name": "Cancel button",
+                              "cornerRadius": 8,
+                              "padding": [
+                                8,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "I1MrQ",
+                                  "name": "Label",
+                                  "fill": "$muted",
+                                  "content": "Cancel",
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "CxyvV",
+                      "name": "Hint",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Group: the product this project belongs to, with the other projects of its task list. One agent at a time works in a group. Leave it empty for no group. The area is the tag of the project's tasks and lives in its .taskwire.json, so every agent and the CLI see the same one.",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Yh5QK",
+                  "name": "Project shop",
+                  "width": "fill_container",
+                  "stroke": "$line",
+                  "gap": 24,
+                  "padding": [
+                    14,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "aptmK",
+                      "name": "Name",
+                      "width": 140,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "vE7TI",
+                          "name": "Project name",
+                          "fill": "$ink",
+                          "content": "shop",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "m0fMf",
+                          "name": "Area and group",
+                          "fill": "$muted",
+                          "content": "Area be, Acme",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KUhF5",
+                      "name": "Merge level",
+                      "width": 150,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "H9vm1",
+                          "name": "Merge pill",
+                          "fill": "$decision-soft",
+                          "cornerRadius": 6,
+                          "stroke": "$decision",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "AZg6g",
+                              "name": "Merge icon",
+                              "width": 13,
+                              "height": 13,
+                              "icon": "rocket",
+                              "library": "lucide",
+                              "fill": "$decision"
+                            },
+                            {
+                              "type": "text",
+                              "id": "cYlTZ",
+                              "name": "Merge label",
+                              "fill": "$decision",
+                              "content": "Auto to main",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dudY9",
+                      "name": "Waiting",
+                      "width": 300,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mjTHJ",
+                          "name": "to decide chip",
+                          "fill": "$decision-soft",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "hgXvK",
+                              "name": "Count",
+                              "fill": "$decision",
+                              "content": "1",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "hOAvl",
+                              "name": "Label",
+                              "fill": "$decision",
+                              "content": "to decide",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "T0tkA",
+                          "x": 96,
+                          "y": 0,
+                          "name": "to try chip",
+                          "enabled": false,
+                          "fill": "#00000000",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NwusN",
+                              "name": "Count",
+                              "fill": "$muted",
+                              "content": "0",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mQBLl",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "to try",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "tUe1v",
+                          "x": 96,
+                          "y": 0,
+                          "name": "to review chip",
+                          "enabled": false,
+                          "fill": "#00000000",
+                          "cornerRadius": 999,
+                          "gap": 6,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LNIEi",
+                              "name": "Count",
+                              "fill": "$muted",
+                              "content": "0",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mtaof",
+                              "name": "Label",
+                              "fill": "$muted",
+                              "content": "to review",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Kgvq2",
+                      "name": "At work",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "be2Wh",
+                          "name": "Work dot",
+                          "fill": "$decision",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y5PtV",
+                          "name": "Work",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Release to main waits: 1 task on dev still to try by hand",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "YnWSP",
+                      "name": "Done",
+                      "fill": "$muted",
+                      "content": "1 done today",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Q9eUE",
+                      "name": "Agents switch",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Cjrme",
+                          "name": "Track",
+                          "width": 30,
+                          "height": 18,
+                          "fill": "$alive",
+                          "cornerRadius": 999,
+                          "padding": 2,
+                          "justifyContent": "end",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "slmdi",
+                              "name": "Knob",
+                              "fill": "$panel",
+                              "width": 14,
+                              "height": 14
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "T4rWjP",
+                          "name": "Label",
+                          "fill": "$ink",
+                          "content": "Agents on",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "TyuVi",
+                      "name": "More",
+                      "fill": "$muted",
+                      "content": "More",
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "y8behb",
+          "name": "Caption",
+          "fill": "$muted",
+          "content": "The area comes from taskwire and is shown read only, under the project name. Set group changes only the group, which the orchestrator keeps.",
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
         }
       ]
     }

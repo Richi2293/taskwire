@@ -30,7 +30,7 @@ function taskwireFor(afterAgent: FakeReply = { ...task({ status: 'qa' }), needs:
 }
 
 function writes(calls: { args: string[] }[]): string[] {
-  return calls.map((call) => call.args.join(' ')).filter((line) => !line.startsWith('tasks') && !line.startsWith('task get'));
+  return calls.map((call) => call.args.join(' ')).filter((line) => !line.startsWith('tasks') && !line.startsWith('task get') && line !== 'project');
 }
 
 function claudeCalls(calls: CommandCall[]): CommandCall[] {
@@ -193,9 +193,18 @@ test('a task sent back to the agent continues in its existing worktree', async (
 });
 
 test('run-once on a project with an area works only on a task of that area, and tells the agent to do only its part', async () => {
-  const { home } = setup({ area: 'fe', group: 'Shop' });
+  const { home } = setup({ group: 'Shop' });
   const taskwire = fakeTaskwire({
-    tasks: [task({ id: 'b1', name: 'Add the discount API', tags: ['be'] }), task({ id: 'f1', name: 'Show the discount', tags: ['fe'] })],
+    project: { area: 'fe' },
+    // The oldest task of the area waits for an open task of another area, which only --all-areas shows.
+    tasks: (args: string[]) => (args.includes('--all-areas')
+      ? [
+        task({ id: 'f1', name: 'Show the discount', tags: ['fe'] }),
+        task({ id: 'b2', name: 'Add the coupon API', tags: ['be'], status: 'in progress' }),
+        task({ id: 'b1', name: 'Add the discount API', tags: ['be'] }),
+        task({ id: 'f2', name: 'Show the coupon', tags: ['fe'], blockedBy: ['b2'] }),
+      ]
+      : []),
     'task update': {},
     'task get': { ...task({ status: 'qa' }), needs: 'decision' },
     'comment add': { id: 'c1' },
@@ -204,7 +213,7 @@ test('run-once on a project with an area works only on a task of that area, and 
   const run = await runOrchestrator(['run-once'], { home, taskwire: taskwire.run, commands: commands.run });
   assert.equal(run.code, 0, run.stderr);
   assert.ok(taskwire.calls.some((call) => call.args.join(' ') === 'task update f1 --status in progress'));
-  assert.ok(!taskwire.calls.some((call) => call.args.includes('b1')));
+  assert.ok(!taskwire.calls.some((call) => call.args.includes('b1') || call.args.includes('f2')));
   const prompt = claudeCalls(commands.calls)[0].args[claudeCalls(commands.calls)[0].args.indexOf('-p') + 1];
   assert.match(prompt, /the `fe` area of the group "Shop"/);
   assert.match(prompt, /only the `fe` part/);

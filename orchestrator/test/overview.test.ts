@@ -136,15 +136,47 @@ test('a waiting task carries why the analysis proposed it and why it is ready to
   ]);
 });
 
-test('each project shows its area and group, and projects of a group come together', async () => {
+test('each project shows its area from taskwire and its group, and projects of a group come together', async () => {
   const { home, shop, website } = setup();
   const blog = projectDir('blog');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [
-    { path: website, area: 'fe', group: 'Shop' },
+    { path: website, group: 'Shop' },
     { path: blog },
-    { path: shop, area: 'be', group: 'Shop' },
+    { path: shop, group: 'Shop' },
   ] }));
-  const runTaskwire = async () => [];
+  const areas: Record<string, string | null> = { [website]: 'fe', [shop]: 'be', [blog]: null };
+  const runTaskwire = async (args: string[], cwd: string) => (args[0] === 'project' ? { area: areas[cwd] } : []);
   const { projects } = await reader({ home, runTaskwire, now: () => NOW })();
   assert.deepEqual(projects.map((p) => [p.projectName, p.area, p.group]), [['website', 'fe', 'Shop'], ['shop', 'be', 'Shop'], ['blog', null, null]]);
+});
+
+// taskwire shows only the tasks of the area by default, so the dashboard reads every area and keeps each task in one project.
+test('a project with an area shows its tasks, and the tasks with no area show once, in the first project of the group', async () => {
+  const { home, shop, website } = setup();
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: website, group: 'Shop' }, { path: shop, group: 'Shop' }] }));
+  writeFileSync(join(home, 'claims.json'), '{}');
+  const areas: Record<string, string> = { [website]: 'fe', [shop]: 'be' };
+  const shared = [
+    task({ id: 'f1', name: 'Show the coupon', needs: 'review', status: 'qa', tags: ['fe'] }),
+    task({ id: 'b1', name: 'Add the coupon API', needs: 'decision', tags: ['be'] }),
+    task({ id: 'n1', name: 'Which area sends the receipts', needs: 'decision' }),
+    task({ id: 'x1', name: 'Fix the date format', needs: 'test', status: 'qa', tags: ['bug'] }),
+    task({ id: 'b2', name: 'Add the receipt API', tags: ['be'] }),
+    task({ id: 'n2', name: 'Send the receipts' }),
+  ];
+  const reads: string[] = [];
+  const runTaskwire = async (args: string[], cwd: string) => {
+    if (args[0] === 'project') return { area: areas[cwd] };
+    if (args[0] === 'tasks') {
+      reads.push(args.join(' '));
+      return shared;
+    }
+    return { ...task(), description: '', comments: [] };
+  };
+  const { projects, waiting, control } = await reader({ home, runTaskwire, now: () => NOW, working: () => true })();
+  assert.deepEqual(reads, ['tasks --all-areas', 'tasks --all-areas']);
+  assert.deepEqual(waiting.map((item) => [item.projectName, item.id]).sort(), [['shop', 'b1'], ['website', 'f1'], ['website', 'n1'], ['website', 'x1']]);
+  assert.deepEqual(projects.map((p) => [p.projectName, p.waiting]), [['website', { decision: 1, test: 1, review: 1 }], ['shop', { decision: 1, test: 0, review: 0 }]]);
+  // The task that would start first is one of the area: a task with no area is taken by no agent.
+  assert.equal(control.firstTask?.id, 'b2');
 });

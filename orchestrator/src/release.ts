@@ -36,8 +36,8 @@ export async function processRelease(deps: CycleDeps, project: ProjectEntry): Pr
   if (!(await fetchRemote(run, cwd))) return;
   if ((await aheadBy(run, cwd, production, staging)) === 0) return set(null);
 
-  const waiting = ((await deps.runTaskwire(['tasks', '--needs', 'test'], cwd)) as TaskSummary[])
-    .filter((task) => task.needs === 'test' && (project.area === undefined || task.tags.includes(project.area)));
+  // taskwire shows only the tasks of the project's area, so the tasks of other areas do not hold the release.
+  const waiting = ((await deps.runTaskwire(['tasks', '--needs', 'test'], cwd)) as TaskSummary[]).filter((task) => task.needs === 'test');
   if (waiting.length > 0) {
     return set('waiting-test', waiting.length === 1 ? '1 task waits for a test by hand' : `${waiting.length} tasks wait for a test by hand`);
   }

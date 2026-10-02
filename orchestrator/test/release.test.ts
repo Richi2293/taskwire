@@ -78,16 +78,14 @@ test('nothing to release, or a remote that cannot be reached, opens no pull requ
   }
 });
 
-test('a task of the project waiting for a test by hand holds the release; tasks of other areas do not', async () => {
+// taskwire shows only the tasks of the project's area, so the tasks of other areas never hold the release.
+test('a task of the project waiting for a test by hand holds the release', async () => {
   const home = tempDir('home');
   const waiting = world(home, { waitingTests: [task({ id: 'b1', needs: 'test', tags: ['be'] })], pr: releasePr() });
-  await processRelease(waiting.deps, { ...shop, area: 'be' });
+  await processRelease(waiting.deps, shop);
   assert.deepEqual(ghCalls(waiting.commands.calls), []);
   assert.deepEqual([readReleases(home)['/p/shop'].state, readReleases(home)['/p/shop'].reason], ['waiting-test', '1 task waits for a test by hand']);
-  const other = world(tempDir('home'), { waitingTests: [task({ id: 'f1', needs: 'test', tags: ['fe'] })], pr: releasePr() });
-  await processRelease({ ...other.deps, now: () => NOW - 5 * 60_000 }, { ...shop, area: 'be' });
-  await processRelease(other.deps, { ...shop, area: 'be' });
-  assert.ok(ghCalls(other.commands.calls).includes('pr merge'));
+  assert.deepEqual(waiting.taskwire.calls.map((call) => call.args.join(' ')), ['tasks --needs test']);
 });
 
 test('without a release pull request, one is opened from staging to production', async () => {

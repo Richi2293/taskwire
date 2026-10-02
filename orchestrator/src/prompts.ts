@@ -13,8 +13,8 @@ export const PROPOSED_TAG = 'agent-proposed';
 
 // The instructions for the periodic analysis of a project: it tidies the tasks and proposes work, but writes no code
 // and leaves every decision to the person. The fixed headings are read by the dashboard (see dashboard/sections.ts).
-// groupAreas are the areas of the other projects of the group, as the config knows them.
-export function analysisPrompt(project: ProjectEntry, groupAreas: string[] = []): string {
+// area is the project's own, from taskwire (null without one); groupAreas are the areas of the other projects of its group.
+export function analysisPrompt(project: ProjectEntry, area: string | null, groupAreas: string[] = []): string {
   const blockTag = project.blockTag ?? DEFAULT_BLOCK_TAG;
   const startStatuses = (project.startStatuses ?? DEFAULT_START_STATUSES).join(', ');
   const workStatus = project.workStatus ?? DEFAULT_WORK_STATUS;
@@ -27,7 +27,7 @@ Every comment you write in this session gets, under its \`### Details\`, the lin
 In the whole session, mark at most ${MAX_DECISIONS} tasks with \`needs decision\`, the most important first: the next analysis goes on with the others.
 
 1. Run \`taskwire rules\` and follow them, together with the project's AGENTS.md. Read the README, the AGENTS.md, the recent history (\`git log --oneline -30\`) and the tests, to understand where the project stands.
-2. Read the open tasks with \`taskwire tasks\`. Leave alone the tasks with the tag \`${blockTag}\` and the tasks in the status "${workStatus}": a person or an agent is on them.${areaRules(project, groupAreas)}
+2. Read the open tasks with \`taskwire tasks${area === null ? '' : ' --all-areas'}\`. Leave alone the tasks with the tag \`${blockTag}\` and the tasks in the status "${workStatus}": a person or an agent is on them.${areaRules(project, area, groupAreas)}
 3. Review the tasks an agent could take next (status ${startStatuses}, no \`needs\` mark). For each one that is not ready, mark it with \`taskwire task update <id> --needs decision\` and comment with \`### Questions\` and \`### Proposal\`, as the rules say:
    - too vague to do without guessing: ask what is missing;
    - too big for one pull request: propose the subtasks under \`### Proposal\`, without creating them;
@@ -43,42 +43,42 @@ In the whole session, mark at most ${MAX_DECISIONS} tasks with \`needs decision\
 Your final answer is for the person, in the project language: at most 3 short lines on what you found and what you changed, with counts, not lists.`;
 }
 
-// Where the project stands among the projects that share its task list; empty without an area.
-function areaIntro(project: ProjectEntry): string {
-  if (project.area === undefined) return '';
+// Where the project stands among the projects that share its task list.
+function areaIntro(project: ProjectEntry, area: string): string {
   const group = project.group === undefined ? '' : ` of the group "${project.group}"`;
-  return `This project is the \`${project.area}\` area${group}: other projects share its task list, and a tag on each task tells its area.`;
+  return `This project is the \`${area}\` area${group}: other projects share its task list, and a tag on each task tells its area.`;
 }
 
 // The part of step 2 of the analysis for a project with an area.
-function areaRules(project: ProjectEntry, groupAreas: string[]): string {
-  if (project.area === undefined) return '';
+function areaRules(project: ProjectEntry, area: string | null, groupAreas: string[]): string {
+  if (area === null) return '';
   const others = groupAreas.length > 0
-    ? `The other area tags are ${groupAreas.map((area) => `\`${area}\``).join(', ')}; reuse the tags already in use (\`taskwire tags\`) before making up a new one.`
+    ? `The other area tags are ${groupAreas.map((tag) => `\`${tag}\``).join(', ')}; reuse the tags already in use (\`taskwire tags\`) before making up a new one.`
     : 'Reuse the area tags already in use (`taskwire tags`), for example `be`, `fe` or `mobile`.';
   return `
 
-   ${areaIntro(project)} ${others} Before the next steps:
+   ${areaIntro(project, area)} ${others} Before the next steps:
    - a task with another area tag: leave it alone, even when it looks vague;
    - a task with no area tag and a \`needs\` mark waits for the person: leave it alone;
    - a task with no area tag whose text clearly says its area: add that tag with \`taskwire task update <id> --add-tag <area>\`, and change nothing else;
    - a task with no area tag that touches several areas: mark it \`needs decision\` and propose under \`### Proposal\` one subtask per area, each with its area tag and, when one must come first, a dependency (\`taskwire dependency add\`);
    - a task with no area tag whose area is unclear: mark it \`needs decision\` and ask which area it belongs to;
    - a task with no area tag where the person accepted your proposal (no mark any more, and the last comment is the person's answer): carry it out, adding the tag or creating the subtasks with their area tags and dependencies, unless another analysis already did.
-   From here on, only the tasks with the tag \`${project.area}\` are yours, and every task you create gets that tag too.`;
+   From here on, only the tasks with the tag \`${area}\` are yours, and every task you create gets that tag too.`;
 }
 
 // The instructions for an agent working on one task unattended. The task itself, the project rules
 // and the writing format come from taskwire and the project's AGENTS.md, so they stay in one place.
-export function workPrompt(task: TaskSummary, project: ProjectEntry): string {
-  const area = project.area === undefined
+// area is the project's own, from taskwire; null without one.
+export function workPrompt(task: TaskSummary, project: ProjectEntry, area: string | null): string {
+  const areaPart = area === null
     ? ''
-    : `\n${areaIntro(project)} Do only the \`${project.area}\` part of this task. If it also needs changes in another area, do not make them here: say in your comment what the other areas must do.\n`;
+    : `\n${areaIntro(project, area)} Do only the \`${area}\` part of this task. If it also needs changes in another area, do not make them here: say in your comment what the other areas must do.\n`;
   const merge = mergeLevel(project) === 'none'
     ? 'open a pull request if the project rules ask for one'
     : `open a pull request to \`${project.stagingBranch ?? DEFAULT_STAGING_BRANCH}\`: the orchestrator merges it once its checks pass`;
   return `You are working unattended: nobody will answer questions during this session.
-${area}
+${areaPart}
 Work only on task ${task.id} (${task.url}), "${task.name}". This folder is a git worktree created for this task, on a detached HEAD.
 
 1. Run \`taskwire rules\` and \`taskwire task get ${task.id}\`, and follow them together with the project's AGENTS.md.

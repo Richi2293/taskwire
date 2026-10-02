@@ -72,7 +72,7 @@ test('an analysis runs the agent in a fresh worktree of the project and records 
   assert.deepEqual(git, ['worktree remove --force', 'worktree prune', 'fetch --quiet', 'rev-parse --verify --quiet', `worktree add --detach`]);
   const agent = commands.calls.find((call) => call.command === 'claude');
   assert.equal(agent?.cwd, worktree);
-  assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: project, blockTag: 'manual' }));
+  assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: project, blockTag: 'manual' }, null));
   assert.ok(existsSync(join(worktree, '.taskwire.json')));
 
   // While it runs, the dashboard shows the analysis as the agent at work on the project.
@@ -98,7 +98,7 @@ test('a failed analysis is recorded too, so it is tried again only after the hou
 });
 
 test('the analysis prompt names the block tag, the statuses and the limits', () => {
-  const prompt = analysisPrompt({ path: '/p/shop', blockTag: 'manual', startStatuses: ['ready'], workStatus: 'doing' });
+  const prompt = analysisPrompt({ path: '/p/shop', blockTag: 'manual', startStatuses: ['ready'], workStatus: 'doing' }, null);
   assert.match(prompt, /`manual`/);
   assert.match(prompt, /ready/);
   assert.match(prompt, /doing/);
@@ -110,7 +110,7 @@ test('the analysis prompt names the block tag, the statuses and the limits', () 
   assert.match(prompt, /\*\*Source:\*\* automatic analysis by the orchestrator, <today's date>/);
   assert.match(prompt, /### Ready to close/);
   assert.match(prompt, /Never write code.*move a task to a closed status/);
-  const defaults = analysisPrompt({ path: '/p/shop' });
+  const defaults = analysisPrompt({ path: '/p/shop' }, null);
   assert.match(defaults, /`no-agent`/);
   assert.match(defaults, /backlog, to do/);
 });
@@ -127,46 +127,62 @@ test('the config takes analysisHours and a closedStatus per project, and refuses
   }
 });
 
-test('the config takes an area and a group per project', () => {
+test('the config takes a group per project', () => {
   const home = tempDir('home');
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/p/a', area: 'FE', group: 'Shop' }] }));
-  assert.deepEqual(loadConfig(home).projects[0], { path: '/p/a', area: 'fe', group: 'Shop' });
-  for (const broken of [{ path: '/p/a', area: 'front end' }, { path: '/p/a', area: '' }, { path: '/p/a', group: 3 }]) {
-    writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [broken] }));
-    assert.throws(() => loadConfig(home), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 3, JSON.stringify(broken));
-  }
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/p/a', group: 'Shop' }] }));
+  assert.deepEqual(loadConfig(home).projects[0], { path: '/p/a', group: 'Shop' });
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/p/a', group: 3 }] }));
+  assert.throws(() => loadConfig(home), (error: unknown) => error instanceof OrchestratorError && error.exitCode === 3);
+});
+
+// The area lives in the project's .taskwire.json since taskwire has it: an old config must be moved by hand, in the project.
+test('a config with an area stops with the taskwire command that moves it', () => {
+  const home = tempDir('home');
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [{ path: '/p/web', area: 'FE', group: 'Shop' }] }));
+  assert.throws(
+    () => loadConfig(home),
+    (error: unknown) => error instanceof OrchestratorError && error.exitCode === 3 && /taskwire area set fe/.test(error.message) && /\/p\/web/.test(error.message),
+  );
 });
 
 test('the analysis of a project with an area keeps to its tasks and tags the others only when it is clear', () => {
-  const prompt = analysisPrompt({ path: '/p/web', area: 'fe', group: 'Shop' }, ['be', 'mobile']);
+  const prompt = analysisPrompt({ path: '/p/web', group: 'Shop' }, 'fe', ['be', 'mobile']);
   assert.match(prompt, /the `fe` area of the group "Shop"/);
   assert.match(prompt, /`be`, `mobile`/);
+  // taskwire shows only the tasks of the area by default: the analysis needs the others too.
+  assert.match(prompt, /`taskwire tasks --all-areas`/);
   assert.match(prompt, /another area tag: leave it alone/);
   assert.match(prompt, /--add-tag/);
   assert.match(prompt, /one subtask per area/);
   // A person must never get dozens of questions from one analysis.
   assert.match(prompt, /at most 10 tasks/);
   // Without an area the prompt says nothing about areas.
-  assert.doesNotMatch(analysisPrompt({ path: '/p/web' }), /area tag/);
+  const plain = analysisPrompt({ path: '/p/web' }, null);
+  assert.doesNotMatch(plain, /area tag/);
+  assert.doesNotMatch(plain, /--all-areas/);
 });
 
 test('the summary of the analysis stays short, with counts instead of lists', () => {
-  assert.match(analysisPrompt({ path: '/p/web' }), /at most 3 short lines.*counts, not lists/s);
+  assert.match(analysisPrompt({ path: '/p/web' }, null), /at most 3 short lines.*counts, not lists/s);
 });
 
-test('the analysis gets the areas of the other projects of its group', async () => {
+test('the analysis reads its area and the areas of the other projects of its group from taskwire', async () => {
   const home = tempDir('home');
   const web = projectDir('web');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ projects: [
-    { path: web, area: 'fe', group: 'Shop' },
-    { path: '/p/api', area: 'be', group: 'Shop' },
-    { path: '/p/app', area: 'mobile', group: 'Shop' },
-    { path: '/p/other', area: 'docs', group: 'Blog' },
+    { path: web, group: 'Shop' },
+    { path: '/p/api', group: 'Shop' },
+    { path: '/p/app', group: 'Shop' },
+    { path: '/p/admin', group: 'Shop' },
+    { path: '/p/other', group: 'Blog' },
   ] }));
+  const areas: Record<string, string | null> = { [web]: 'fe', '/p/api': 'be', '/p/app': 'mobile', '/p/admin': null, '/p/other': 'docs' };
+  const taskwire = fakeTaskwire({});
+  const runTaskwire = async (args: string[], cwd: string) => (args[0] === 'project' ? { area: areas[cwd] } : taskwire.run(args, cwd));
   const commands = fakeCommands({ claude: () => claudeResult() });
-  await runAnalysis({ home, runTaskwire: fakeTaskwire({}).run, runCommand: commands.run, now: () => NOW }, loadConfig(home).projects[0]);
+  await runAnalysis({ home, runTaskwire, runCommand: commands.run, now: () => NOW }, loadConfig(home).projects[0]);
   const agent = commands.calls.find((call) => call.command === 'claude');
-  assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: web, area: 'fe', group: 'Shop' }, ['be', 'mobile']));
+  assert.equal(agent?.args[agent.args.indexOf('-p') + 1], analysisPrompt({ path: web, group: 'Shop' }, 'fe', ['be', 'mobile']));
 });
 
 test('the analysis tells the diary about its agent session, and records it', async () => {

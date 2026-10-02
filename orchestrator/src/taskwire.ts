@@ -41,6 +41,14 @@ export function createTaskwire(command: string): RunTaskwire {
     });
 }
 
+// The area of the project in a task list shared by several projects, from its .taskwire.json; null without one.
+// "taskwire project" reads only the config file, so it costs no call to the task system.
+export async function readArea(runTaskwire: RunTaskwire, path: string): Promise<string | null> {
+  const info = await runTaskwire(['project'], path);
+  if (typeof info === 'object' && info !== null && 'area' in info && typeof info.area === 'string') return info.area;
+  return null;
+}
+
 // taskwire prints errors as a JSON line with "error" and an optional "hint".
 function describeFailure(stderr: string, fallback: string): string {
   const line = stderr.trim().split('\n').at(-1) ?? '';

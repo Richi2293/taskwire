@@ -198,7 +198,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--test); outline-offse
 .done { font-size: 13px; color: var(--muted); text-align: right; }
 .projects .row.off .name, .projects .row.off .at-work, .projects .row.off .done { opacity: 0.55; }
 .projects .name small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
-.projects .place-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 260px) auto; gap: 12px; align-items: end; }
+.projects .place-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 240px) auto auto; gap: 12px 24px; align-items: end; justify-content: start; }
+.projects .place-form .field { max-width: none; }
+.projects .place-form .area-value { margin: 0; padding: 8px 0; font-size: 13px; color: var(--muted); }
+.projects .place-form .area-value code { margin-right: 6px; color: var(--ink); }
 .projects .place-form .main { display: flex; align-items: center; gap: 12px; }
 .projects .place-form .hint { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); }
 .projects .row .analysis { grid-column: 1 / -1; margin: -12px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
@@ -595,7 +598,7 @@ function renderProjects(state) {
       agents,
       el('details', { className: 'menu' }, el('summary', { text: 'More' }),
         el('div', {},
-          el('button', { type: 'button', text: 'Set area and group', onclick: () => { ui.placing = p.project; renderProjects(ui.state); } }),
+          el('button', { type: 'button', text: 'Set group', onclick: () => { ui.placing = p.project; renderProjects(ui.state); } }),
           el('button', { type: 'button', className: 'danger', text: 'Remove project', onclick: () => unfollow(p) }))),
       ui.placing === p.project ? placeForm(p) : null,
       releaseLine(p),
@@ -612,25 +615,26 @@ function placeText(p) {
   return (p.area ? 'Area ' + p.area : 'No area') + (p.group ? ', ' + p.group : '');
 }
 
-// Sets the area tag and the group of a project; empty fields remove them.
+// Sets the group of a project; an empty field removes it. The area lives in the project's .taskwire.json, so it is only shown.
 function placeForm(p) {
-  const area = el('input', { type: 'text', value: p.area || '', placeholder: 'fe', 'aria-label': 'Area tag', autocomplete: 'off', spellcheck: false });
-  const group = el('input', { type: 'text', value: p.group || '', placeholder: 'Shop', 'aria-label': 'Group', autocomplete: 'off', spellcheck: false });
+  const group = el('input', { type: 'text', value: p.group || '', placeholder: 'Acme', 'aria-label': 'Group', autocomplete: 'off', spellcheck: false });
   const form = el('div', { className: 'place-form' },
-    el('label', { className: 'field' }, el('span', { className: 'section-label', text: 'Area tag' }), area),
     el('label', { className: 'field' }, el('span', { className: 'section-label', text: 'Group' }), group),
+    el('div', { className: 'field' },
+      el('span', { className: 'section-label', text: 'Area, from taskwire' }),
+      el('p', { className: 'area-value' }, el('code', { text: p.area || 'none' }), ' To change it, run taskwire area set <tag> in the project.')),
     el('div', { className: 'main' },
-      el('button', { type: 'button', className: 'btn primary', text: 'Save', onclick: () => savePlace(p, area.value, group.value, form) }),
+      el('button', { type: 'button', className: 'btn primary', text: 'Save', onclick: () => saveGroup(p, group.value, form) }),
       el('button', { type: 'button', className: 'quiet', text: 'Cancel', onclick: () => { ui.placing = null; renderProjects(ui.state); } })),
-    el('p', { className: 'hint', text: 'Area: the tag of the tasks of this project, when it shares its task list with other projects, for example fe, be or mobile. Agents here take only tasks with this tag. Group: the product the projects of that list belong to. Leave both empty to take every task.' }));
+    el('p', { className: 'hint', text: "Group: the product this project belongs to, with the other projects of its task list. One agent at a time works in a group. Leave it empty for no group. The area is the tag of the project's tasks and lives in its .taskwire.json, so every agent and the CLI see the same one." }));
   return form;
 }
 
-async function savePlace(p, area, group, form) {
+async function saveGroup(p, group, form) {
   const result = document.getElementById('projects-result');
   for (const control of form.querySelectorAll('button, input')) control.disabled = true;
   try {
-    await post('/api/projects', { action: 'place', project: p.project, area, group });
+    await post('/api/projects', { action: 'group', project: p.project, group });
     ui.placing = null;
     result.className = 'result';
     result.textContent = '';
