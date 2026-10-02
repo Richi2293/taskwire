@@ -29,7 +29,7 @@ Projects can also be added and removed from the dashboard (see below).
 Open http://127.0.0.1:4777 (`dashboardPort` to change it) while `start` runs. One page, refreshed every 30 seconds, and every 3 seconds while the task system is being read:
 
 - **Control bar:** a light bar under the name of the page. On the left, paused or working with a short hint; on the right, when the data was read from the task system ("Updated 2 minutes ago", or "Updating from ClickUp" with a spinner while a read runs), **Refresh**, **Details** and the Start agents or Pause button. Details opens what happens: which task an agent takes first, when the next check for new tasks is, and how many agents are in use out of `maxAgents`.
-- **Projects:** one row per project, the projects of a group together, with its area and group, what waits for you (to decide, to try, to review), the agent at work, how many tasks ended today and what the last analysis found, or why the project could not be read. The **Agents** switch turns agents on or off for the project: off, no agent takes a new task there, an agent at work finishes its task, and what waits for you still shows in the queue. The choice is saved in the config (`agents`), so it stays after a restart. **Remove project**, under More, stops following the project, like `remove`, after a confirmation in a modal. Under the name, a pill says who merges the project (**PR only**, **Auto to dev**, **Auto to main**, see Who merges); pressing it opens the choice in a modal, and **Auto to main** asks to type the project name, which the server checks too. With level `"main"`, a line says when the release to production waits or is blocked, and why.
+- **Projects:** one row per project, the projects of a group together, with its area (from taskwire, read only) and group, what waits for you (to decide, to try, to review), the agent at work, how many tasks ended today and what the last analysis found, or why the project could not be read. The **Agents** switch turns agents on or off for the project: off, no agent takes a new task there, an agent at work finishes its task, and what waits for you still shows in the queue. The choice is saved in the config (`agents`), so it stays after a restart. **Set group**, under More, changes the group of the project (see Projects that share a task list). **Remove project**, under More, stops following the project, like `remove`, after a confirmation in a modal. Under the name, a pill says who merges the project (**PR only**, **Auto to dev**, **Auto to main**, see Who merges); pressing it opens the choice in a modal, and **Auto to main** asks to type the project name, which the server checks too. With level `"main"`, a line says when the release to production waits or is blocked, and why.
 - **Add project:** lists the taskwire projects (folders with a `.taskwire.json`) found in `projectRoots`, or, without it, in the folders that hold the projects already followed, up to three levels down. Hidden folders and `node_modules` are skipped, and the search never covers the whole home folder, since macOS would ask for access to Documents, Desktop and Downloads. **Add** follows a project with the same checks as `add`; a project that is not in the list can be added by pasting its path (`~/` works). The optional test command applies to the project you follow.
 - **Waiting for you:** a compact queue grouped by kind, with filters. The project buttons above it narrow the queue to one or more projects (All projects shows them all again); the choice is kept in the browser, so it stays after a reload. A waiting chip in a project row, such as "2 to decide", shows only those tasks of that project. Select a task to see its detail next to the queue: the questions and the proposal of the agent for a decision, what the agents already checked and the steps by hand for a test, or the agent's note. These come from the fixed sections of the agent's comment (see `taskwire rules`); without them the page shows the part for people of the comment. After them, the group **Live, close it** (filter **To close**) lists the open tasks whose work reached production (see Live tasks), each with **Close the task** in its row.
 - **Done recently:** the runs of `runs.jsonl`, by day.
@@ -74,7 +74,7 @@ For each project, `run-once`:
 
 Before the first project, tasks left `in progress` by a pass that was cut short are marked `needs-review`. The worktrees stay after the run, so you can look at the work; the agent's branch lives in the project repository.
 
-The orchestrator needs a taskwire with `needs` (newer than 0.1.6): set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
+The orchestrator needs a taskwire with `needs` and areas (`taskwire project`, `--all-areas`), newer than 0.1.6: set `taskwireCommand` to a clone until it is released. The agent gets the same taskwire: the orchestrator links it in `~/.config/taskwire-orchestrator/bin/` and puts that folder first on the agent's `PATH`.
 
 ## Who merges
 
@@ -150,12 +150,18 @@ Each analysis is appended to `analyses.jsonl` (times, outcome, summary, cost, lo
 
 ## Projects that share a task list
 
-Several projects (for example the backend, the frontend and the app of one product) may share one task list. Each of them then gets an **area**, the tag of its tasks (`fe`, `be`, `mobile`), and a **group**, the product they belong to. Both are set in the config or with **Set area and group**, under More in the project row.
+Several projects (for example the backend, the frontend and the app of one product) may share one task list. Each of them then gets an **area**, the tag of its tasks (`fe`, `be`, `mobile`), and a **group**, the product they belong to.
+
+- The area lives in the project's `.taskwire.json`, so the agents and the CLI see the same one: set it with `taskwire area set <tag>` in the project. The orchestrator reads it with `taskwire project` and the dashboard shows it, read only.
+- The group lives in the config of the orchestrator, since only the turns between agents need it: set it there or with **Set group**, under More in the project row.
+- An `area` left in the config of the orchestrator, from before, stops it with the command to run in the project.
 
 - An agent of a project with an area takes only the tasks with that tag. A task with no area tag is taken by no agent of the group, so no work lands in the wrong repository.
 - A task that touches several areas becomes a container with one subtask per area, each with its tag. A dependency (`blocked by`) sets their order: a task that waits for an open task is not taken.
 - The analysis leaves alone the tasks of the other areas. It adds the area tag to a task whose area is clear, asks when it is not, and proposes the subtasks of a task that touches several areas; once the person accepts, the next analysis creates them.
 - The agent working on a task does only the part of its area, and says in its comment what the other areas must do.
+- The orchestrator reads the tasks of every area (`taskwire tasks --all-areas`), so a task that waits for an open task of another area is not taken too early.
+- On the dashboard, a project shows the tasks of its area. A task with none of the areas of the projects followed shows once, in the first project with an area of its group: no agent takes it, but it may wait for you, for example to say its area.
 - One agent at a time works in a group, on a task or an analysis, even when `maxAgents` leaves room: the projects of a product often share local ports, databases and services, so two agents at once would get in each other's way when they run the tests. The projects of the group take turns; projects of other groups, or with no group, still work at the same time.
 
 A project without an area takes every task, as before.
@@ -170,7 +176,7 @@ A task is picked when:
 - it does not have the block tag (`no-agent` by default), which keeps agents away from a task;
 - it has no open subtasks, since the work is in the subtasks;
 - it does not wait for an open task (`blocked by`);
-- when the project has an area, it has the area tag.
+- when the project has an area (see Projects that share a task list), it has the area tag.
 
 Among those, the highest priority comes first, then the oldest task.
 
@@ -205,8 +211,7 @@ The config lives in `~/.config/taskwire-orchestrator/config.json` (set `TASKWIRE
 | `projects[].closedStatus` | status Close the task and Reject move a task to (default: the last status of the task's list) |
 | `projects[].sandbox` | `true` to run agents in the Claude Code sandbox |
 | `projects[].allowedDomains` | extra domains a sandboxed agent may reach |
-| `projects[].area` | tag of the tasks of the project, when it shares its task list with other projects (for example `fe`) |
-| `projects[].group` | the product the project belongs to, with the other projects of its task list |
+| `projects[].group` | the product the project belongs to, with the other projects of its task list; the area of the project is in its `.taskwire.json` |
 | `projects[].merge` | who merges: `"none"` a person (default), `"dev"` the orchestrator into staging, `"main"` staging and later production |
 | `projects[].stagingBranch` | the staging branch the orchestrator merges into (default `dev`) |
 | `projects[].productionBranch` | the production branch releases go to (default: the default branch of the remote) |

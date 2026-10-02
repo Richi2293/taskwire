@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { expandHome, loadConfig, normalizeArea, saveConfig } from './config.ts';
+import { expandHome, loadConfig, saveConfig } from './config.ts';
 import type { MergeLevel, OrchestratorConfig, ProjectEntry } from './config.ts';
 import { configError, usageError } from './errors.ts';
 import { readClaims } from './state.ts';
@@ -61,27 +61,17 @@ export function setProjectAgents(home: string, folder: string, on: boolean): voi
   saveConfig(home, config);
 }
 
-// Sets where a followed project stands among the projects that share its task list: its area tag and its group.
-// An empty value removes the field, so the project takes every task again.
-export function setProjectPlace(home: string, folder: string, place: { area?: string; group?: string }): void {
+// Sets the group of a followed project: the product it belongs to, with the other projects of its task list.
+// An empty value removes it. The area is not here: it lives in the project's .taskwire.json.
+export function setProjectGroup(home: string, folder: string, value: string): void {
   const path = resolve(expandHome(folder));
   const config = loadConfig(home);
   const project = config.projects.find((entry) => entry.path === path);
   if (project === undefined) throw usageError(`${path} is not followed`);
-  if (place.area !== undefined) {
-    if (place.area.trim() === '') delete project.area;
-    else {
-      const area = normalizeArea(place.area);
-      if (area === null) throw usageError('The area must be one word, a tag such as "fe"');
-      project.area = area;
-    }
-  }
-  if (place.group !== undefined) {
-    const group = place.group.trim();
-    if (group.length > MAX_GROUP) throw usageError(`The group must be at most ${MAX_GROUP} characters`);
-    if (group === '') delete project.group;
-    else project.group = group;
-  }
+  const group = value.trim();
+  if (group.length > MAX_GROUP) throw usageError(`The group must be at most ${MAX_GROUP} characters`);
+  if (group === '') delete project.group;
+  else project.group = group;
   saveConfig(home, config);
 }
 

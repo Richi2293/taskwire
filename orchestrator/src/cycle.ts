@@ -13,6 +13,7 @@ import { pickTask } from './picker.ts';
 import { markPrompt, workPrompt } from './prompts.ts';
 import { appendRun, readClaims, writeClaims } from './state.ts';
 import type { RunRecord } from './state.ts';
+import { readArea } from './taskwire.ts';
 import type { RunTaskwire, TaskSummary } from './taskwire.ts';
 import { addCost, verifyWork } from './verify.ts';
 import type { Verification } from './verify.ts';
@@ -34,15 +35,23 @@ export interface CycleResult {
   task: { id: string; name: string; needs: string | null; status: string | null } | null;
 }
 
-// One pass on a project: pick a task, let an agent work on it in its own worktree, and make sure it ends marked for a person.
-export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<CycleResult> {
-  const tasks = (await deps.runTaskwire(['tasks'], project.path)) as TaskSummary[];
+// The task an agent would take next in the project, and the project's area from taskwire. It reads every area:
+// a task may wait for an open task of another area, which taskwire leaves out by default.
+export async function nextTask(runTaskwire: RunTaskwire, project: ProjectEntry): Promise<{ task: TaskSummary | null; area: string | null }> {
+  const tasks = (await runTaskwire(['tasks', '--all-areas'], project.path)) as TaskSummary[];
   assertNeedsSupport(tasks);
+  const area = await readArea(runTaskwire, project.path);
   const task = pickTask(tasks, {
     statuses: project.startStatuses ?? DEFAULT_START_STATUSES,
     blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG,
-    area: project.area,
+    area: area ?? undefined,
   });
+  return { task, area };
+}
+
+// One pass on a project: pick a task, let an agent work on it in its own worktree, and make sure it ends marked for a person.
+export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<CycleResult> {
+  const { task, area } = await nextTask(deps.runTaskwire, project);
   if (task === null) return { project: project.path, task: null };
 
   const startedAt = new Date(deps.now()).toISOString();
@@ -70,7 +79,7 @@ export async function runCycle(deps: CycleDeps, project: ProjectEntry): Promise<
   let failure: string | null = null;
   try {
     await createWorktree(deps.runCommand, project.path, worktree);
-    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task, project), cwd: worktree }, agentOptions);
+    agent = await runClaude(deps.runCommand, { prompt: workPrompt(task, project, area), cwd: worktree }, agentOptions);
     track('author', agent);
     if (!agent.ok) failure = agent.summary;
   } catch (error) {

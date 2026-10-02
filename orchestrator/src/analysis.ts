@@ -10,6 +10,7 @@ import { logSection, sessionRecord } from './journal.ts';
 import type { SessionRecord } from './journal.ts';
 import { analysisPrompt } from './prompts.ts';
 import { readClaims, writeClaims } from './state.ts';
+import { readArea } from './taskwire.ts';
 import { createWorktree, worktreePath } from './worktree.ts';
 
 // One analysis of a project, appended to analyses.jsonl: when it ran and what the agent told the person.
@@ -73,9 +74,10 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
   const sessions: SessionRecord[] = [];
   try {
     await freshWorktree(deps, project.path, worktree);
+    const area = await readArea(deps.runTaskwire, project.path);
     agent = await runClaude(
       deps.runCommand,
-      { prompt: analysisPrompt(project, groupAreas(deps.home, project)), cwd: worktree },
+      { prompt: analysisPrompt(project, area, await groupAreas(deps, project, area)), cwd: worktree },
       { sandbox: project.sandbox ?? false, allowedDomains: project.allowedDomains ?? [], env: agentEnv(deps.home, deps.taskwireCommand) },
     );
     if (!agent.ok) failure = agent.summary;
@@ -107,13 +109,13 @@ export async function runAnalysis(deps: CycleDeps, project: ProjectEntry): Promi
   return record;
 }
 
-// The areas of the other projects of the group, so the agent knows which tags belong to them.
-function groupAreas(home: string, project: ProjectEntry): string[] {
+// The areas of the other projects of the group, so the agent knows which tags belong to them. Each comes from the
+// project's taskwire; a project whose taskwire cannot be read is left out, since the agent can still see the tags in use.
+async function groupAreas(deps: CycleDeps, project: ProjectEntry, own: string | null): Promise<string[]> {
   if (project.group === undefined) return [];
-  const areas = loadConfig(home).projects
-    .filter((entry) => entry.path !== project.path && entry.group === project.group && entry.area !== undefined && entry.area !== project.area)
-    .map((entry) => entry.area ?? '');
-  return [...new Set(areas)];
+  const others = loadConfig(deps.home).projects.filter((entry) => entry.path !== project.path && entry.group === project.group);
+  const areas = await Promise.all(others.map((entry) => readArea(deps.runTaskwire, entry.path).catch(() => null)));
+  return [...new Set(areas.filter((area): area is string => area !== null && area !== own))];
 }
 
 // Every analysis starts from the latest code: the worktree of the previous one is removed first.

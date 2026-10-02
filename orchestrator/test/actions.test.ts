@@ -40,6 +40,13 @@ test('answer adds the person answer as a comment, then clears the decision mark'
   assert.equal(changes(), 1);
 });
 
+// The dashboard shows the tasks with no area too, which taskwire leaves out by default in a project with an area.
+test('an action reads the task among every area', async () => {
+  const { project, taskwire, act } = setup();
+  await act({ project, task: 'd1', action: 'accept-proposal' });
+  assert.deepEqual(taskwire.calls.filter((call) => call.args[0] === 'tasks').map((call) => call.args.join(' ')), ['tasks --needs any --all-areas']);
+});
+
 test('approve clears the mark of a task to review or to test', async () => {
   const { project, taskwire, act } = setup();
   await act({ project, task: 'r1', action: 'approve' });
@@ -213,5 +220,6 @@ test('a live task is closed from the dashboard, and a task that is not live is r
     ['task', 'update', 'l1', '--needs', 'none', '--status', 'complete'],
   ]);
   assert.deepEqual(JSON.parse(readFileSync(join(home, 'live.json'), 'utf8')).live, []);
+  assert.ok(taskwire.calls.filter((call) => call.args[0] === 'tasks').every((call) => call.args.join(' ') === 'tasks --all-areas'));
   await assert.rejects(act({ project, task: 'o1', action: 'close-live' }), (error: unknown) => error instanceof OrchestratorError && /is not live/.test(error.message));
 });

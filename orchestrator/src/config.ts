@@ -25,8 +25,6 @@ export interface ProjectEntry {
   allowedDomains?: string[];
   // False keeps agents away from the project while it stays followed; defaults to true.
   agents?: boolean;
-  // The tag of the tasks that belong to this project, when it shares its task list with others (for example "fe"). Without it, every task is the project's.
-  area?: string;
   // The product the project is part of, with the other projects that share its task list (for example the backend and the app).
   group?: string;
   // Who merges the work of the project: "none" a person (the default), "dev" the orchestrator into the staging branch,
@@ -138,10 +136,10 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
   if (blockTag !== undefined) project.blockTag = text(blockTag, `"blockTag" of ${path}`, invalid).toLowerCase();
   if (workStatus !== undefined) project.workStatus = text(workStatus, `"workStatus" of ${path}`, invalid);
   if (closedStatus !== undefined) project.closedStatus = text(closedStatus, `"closedStatus" of ${path}`, invalid);
+  // The area moved to the project's .taskwire.json, where the CLI sees it too; the orchestrator never writes in a project.
   if (area !== undefined) {
-    const tag = typeof area === 'string' ? normalizeArea(area) : null;
-    if (tag === null) throw invalid(`"area" of ${path} must be one word, a tag such as "fe"`);
-    project.area = tag;
+    const command = typeof area === 'string' ? `taskwire area set ${area.trim().toLowerCase()}` : 'taskwire area set <tag>';
+    throw invalid(`"area" of ${path} now lives in taskwire: run "${command}" in ${path}, then remove "area" from the config`);
   }
   if (group !== undefined) project.group = text(group, `"group" of ${path}`, invalid);
   if (sandbox !== undefined) {
@@ -168,12 +166,6 @@ function parseProject(entry: unknown, invalid: (reason: string) => Error): Proje
   if (stagingBranch !== undefined) project.stagingBranch = text(stagingBranch, `"stagingBranch" of ${path}`, invalid);
   if (productionBranch !== undefined) project.productionBranch = text(productionBranch, `"productionBranch" of ${path}`, invalid);
   return project;
-}
-
-// An area is a task tag: one word, compared in lower case like every tag. Null when the value cannot be one.
-export function normalizeArea(value: string): string | null {
-  const tag = value.trim().toLowerCase();
-  return /^[a-z0-9][a-z0-9_-]{0,29}$/.test(tag) ? tag : null;
 }
 
 function text(value: unknown, what: string, invalid: (reason: string) => Error): string {

@@ -2,13 +2,14 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { analysisDue, lastAnalysis } from '../analysis.ts';
 import { DEFAULT_ANALYSIS_HOURS, DEFAULT_BLOCK_TAG, DEFAULT_INTERVAL_MINUTES, DEFAULT_MAX_AGENTS, DEFAULT_STAGING_BRANCH, DEFAULT_START_STATUSES, agentsOn, loadConfig, mergeLevel } from '../config.ts';
-import type { MergeLevel } from '../config.ts';
+import type { MergeLevel, ProjectEntry } from '../config.ts';
 import { readLive } from '../live.ts';
 import { approvalCanMerge } from '../merges.ts';
 import { readReleases } from '../releases.ts';
 import type { ReleaseState } from '../releases.ts';
 import { pickTask } from '../picker.ts';
 import { readClaims, readRuns } from '../state.ts';
+import { readArea } from '../taskwire.ts';
 import type { RunTaskwire, TaskSummary } from '../taskwire.ts';
 import { goalFrom, readSections } from './sections.ts';
 
@@ -161,8 +162,10 @@ export interface Store {
 interface ProjectCache {
   readAt: string | null;
   error: string | null;
-  // The open tasks of the project, as "taskwire tasks" lists them.
+  // The open tasks of the project's task list in every area, as "taskwire tasks --all-areas" lists them.
   tasks: TaskSummary[];
+  // The area of the project, from its taskwire; null without one. Missing in a snapshot written before areas.
+  area?: string | null;
   // The detail of each task waiting for a person, with the updatedAt it was read at.
   details: Record<string, TaskDetail>;
 }
@@ -192,9 +195,13 @@ export function createStore(deps: StoreDeps): Store {
     triedAt.set(path, deps.now());
     const previous = cache.get(path) ?? emptyCache();
     try {
-      const tasks = (await deps.runTaskwire(['tasks'], path)) as TaskSummary[];
+      const tasks = (await deps.runTaskwire(['tasks', '--all-areas'], path)) as TaskSummary[];
+      const area = await readArea(deps.runTaskwire, path);
+      const areas = followedAreas();
+      areas.set(path, area);
       const details: Record<string, TaskDetail> = {};
-      await Promise.all(tasks.filter((task) => task.needs !== null).map(async (task) => {
+      // Only the tasks the project shows: the others belong to another project of the group.
+      await Promise.all(shownTasks(path, tasks, areas, loadConfig(deps.home).projects).filter((task) => task.needs !== null).map(async (task) => {
         const known = previous.details[task.id];
         // A comment changes updatedAt too, so an unchanged task has nothing new to read.
         if (known !== undefined && task.updatedAt !== undefined && known.updatedAt === task.updatedAt) {
@@ -203,7 +210,7 @@ export function createStore(deps: StoreDeps): Store {
         }
         details[task.id] = await readDetail(task, path);
       }));
-      cache.set(path, { readAt: new Date(deps.now()).toISOString(), error: null, tasks, details });
+      cache.set(path, { readAt: new Date(deps.now()).toISOString(), error: null, tasks, area, details });
     } catch (error) {
       cache.set(path, { ...previous, error: error instanceof Error ? error.message : String(error) });
     }
@@ -238,6 +245,8 @@ export function createStore(deps: StoreDeps): Store {
   };
 
   const followed = (): string[] => loadConfig(deps.home).projects.map((project) => project.path);
+  // The area of each project read so far.
+  const followedAreas = (): Map<string, string | null> => new Map([...cache].map(([path, entry]) => [path, entry.area ?? null]));
 
   const state = (): DashboardState => {
     const config = loadConfig(deps.home);
@@ -273,6 +282,7 @@ export function createStore(deps: StoreDeps): Store {
     const runs = readRuns(deps.home, RUNS_FOR_APPROVALS);
     const releases = readReleases(deps.home);
     let firstTask: ControlInfo['firstTask'] = null;
+    const areas = followedAreas();
     for (const project of config.projects) {
       const projectName = basename(project.path);
       const busy = working.find((item) => item.project === project.path) ?? null;
@@ -288,7 +298,7 @@ export function createStore(deps: StoreDeps): Store {
         reading: reading.has(project.path),
         agents: agentsOn(project),
         analysis: null,
-        area: project.area ?? null,
+        area: known.area ?? null,
         group: project.group ?? null,
         merge: mergeLevel(project),
         stagingBranch: project.stagingBranch ?? DEFAULT_STAGING_BRANCH,
@@ -300,7 +310,7 @@ export function createStore(deps: StoreDeps): Store {
       const analysis = lastAnalysis(deps.home, project.path);
       if (analysis !== null) summary.analysis = { at: analysis.finishedAt, ok: analysis.ok, summary: analysis.summary };
       projects.push(summary);
-      for (const task of known.tasks) {
+      for (const task of shownTasks(project.path, known.tasks, areas, config.projects)) {
         if (task.needs === null) continue;
         summary.waiting[task.needs] += 1;
         const autoMerge = mergeLevel(project) !== 'none' && approvalCanMerge(runs.find((run) => run.project === project.path && run.task === task.id));
@@ -314,7 +324,7 @@ export function createStore(deps: StoreDeps): Store {
         }
       }
       if (firstTask === null && busy === null && summary.agents) {
-        const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG, area: project.area });
+        const next = pickTask(known.tasks, { statuses: project.startStatuses ?? DEFAULT_START_STATUSES, blockTag: project.blockTag ?? DEFAULT_BLOCK_TAG, area: known.area ?? undefined });
         if (next !== null) firstTask = { project: project.path, projectName, id: next.id, name: next.name, status: next.status };
       }
     }
@@ -398,7 +408,19 @@ function waitingItem(task: TaskSummary, detail: TaskDetail | undefined, project:
 }
 
 function emptyCache(): ProjectCache {
-  return { readAt: null, error: null, tasks: [], details: {} };
+  return { readAt: null, error: null, tasks: [], area: null, details: {} };
+}
+
+// The tasks a project shows on the dashboard. Without an area, every task of its list. With one, the tasks of its area,
+// and the tasks with none of the areas the orchestrator knows, these only in the first project with an area of its group,
+// so a task with no area shows once. No agent takes those: they wait for the person, for example to say their area.
+function shownTasks(path: string, tasks: TaskSummary[], areas: Map<string, string | null>, projects: ProjectEntry[]): TaskSummary[] {
+  const area = areas.get(path) ?? null;
+  if (area === null) return tasks;
+  const known = new Set([...areas.values()].filter((tag): tag is string => tag !== null));
+  const group = projects.find((project) => project.path === path)?.group;
+  const first = group === undefined ? path : projects.find((project) => project.group === group && (areas.get(project.path) ?? null) !== null)?.path;
+  return tasks.filter((task) => task.tags.includes(area) || (first === path && !task.tags.some((tag) => known.has(tag))));
 }
 
 // The last data read, so that the page has something to show at once after a restart. A missing or broken file means no data yet.
@@ -421,10 +443,11 @@ function loadSnapshot(home: string): Map<string, ProjectCache> {
 
 function isProjectCache(value: unknown): value is ProjectCache {
   if (typeof value !== 'object' || value === null) return false;
-  const { readAt, error, tasks, details } = value as Record<string, unknown>;
+  const { readAt, error, tasks, area, details } = value as Record<string, unknown>;
   return (readAt === null || typeof readAt === 'string')
     && (error === null || typeof error === 'string')
     && Array.isArray(tasks)
+    && (area === undefined || area === null || typeof area === 'string')
     && typeof details === 'object' && details !== null;
 }
 

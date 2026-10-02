@@ -179,3 +179,17 @@ test('Remove project looks dangerous and asks in the confirm modal, not the brow
   nodes(dialog, (node) => node.tag === 'button' && text(node).trim() === 'Cancel')[0].click();
   assert.equal(dialog.open, false);
 });
+
+// The area comes from the project's .taskwire.json: the dashboard shows it and changes only the group.
+test('Set group opens a form with the group only, and the area shown with the taskwire command that changes it', () => {
+  const get = renderScript(state({ projects: [project({ area: 'fe', group: 'Acme' })] }));
+  assert.match(text(get('projects')), /Area fe, Acme/);
+  const menu = nodes(get('projects'), (node) => node.tag === 'button' && /Set /.test(text(node)));
+  assert.deepEqual(menu.map((node) => text(node).trim()), ['Set group']);
+  menu[0].click();
+  const form = nodes(get('projects'), (node) => node.className === 'place-form')[0];
+  const inputs = nodes(form, (node) => node.tag === 'input');
+  assert.deepEqual(inputs.map((node) => node.attrs['aria-label']), ['Group']);
+  assert.match(text(form), /fe/);
+  assert.match(text(form), /taskwire area set <tag>/);
+});

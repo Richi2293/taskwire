@@ -56,7 +56,8 @@ export function createActions(deps: ActionDeps): (body: unknown) => Promise<void
       return;
     }
     // A fresh read, not the dashboard cache: the task may have changed since the page showed it.
-    const waiting = (await deps.runTaskwire(['tasks', '--needs', 'any'], project.path)) as TaskSummary[];
+    // Every area, since the dashboard shows the tasks with no area too.
+    const waiting = (await deps.runTaskwire(['tasks', '--needs', 'any', '--all-areas'], project.path)) as TaskSummary[];
     const task = waiting.find((entry) => entry.id === request.task);
     if (task === undefined || task.needs === null) throw usageError(`Task ${request.task} does not wait for a person any more`, 'Reload the dashboard');
     if (!FITS[request.action].includes(task.needs)) {
@@ -105,7 +106,7 @@ async function closeLive(deps: ActionDeps, project: ProjectEntry, taskId: string
   }
   const run = (args: string[]) => deps.runTaskwire(args, project.path);
   // A fresh read: the task may have been closed in the task system meanwhile.
-  const task = ((await run(['tasks'])) as TaskSummary[]).find((entry) => entry.id === taskId);
+  const task = ((await run(['tasks', '--all-areas'])) as TaskSummary[]).find((entry) => entry.id === taskId);
   if (task === undefined) {
     removeLive(deps.home, project.path, taskId);
     throw usageError(`Task ${taskId} is already closed`, 'Reload the dashboard');
