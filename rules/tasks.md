@@ -5,7 +5,7 @@ This project's tasks live in an external task system, managed through the `taskw
 These rules cover only task management. The project conventions that come with them (`language`, `instructions`) are added on top and win when they conflict.
 
 - Before starting a piece of work, look for a related task: `taskwire tasks --search <words>` (add `--status`, `--tag` or `--list` to narrow it) and `taskwire task get <id>` (add `--comments 0` when the comments are not needed).
-- When the user asks you to work on a task, move it to the `inProgress` status of its list (see Status flow) as your first step, before any design, plan, branch or code, together with the assignment: `taskwire task update <id> --status "in progress" --add-assignee me`, with the name the list uses. Brainstorming or designing the work already counts as working on it; only reading, explaining or evaluating a task at the user's request does not. If the list has no such status, leave the status as it is.
+- When the user asks you to work on a task, move it to the `inProgress` status of its list (see Status flow) as your first step, before any design, plan, branch or code, together with the assignment: `taskwire task update <id> --status "in progress" --add-assignee me`, with the name the list uses. Brainstorming or designing the work already counts as working on it; only reading, explaining or evaluating a task at the user's request does not. If the list has no such status, leave the status as it is. For a subtask, also follow Parent tasks and subtasks below.
 - Write tasks, comments and checklists in the project `language`, following its `instructions`. Existing tasks keep their text unless the user asks to rewrite them.
 - Keep each task self-contained: a person or an agent must be able to do the work reading only the task, without opening issues, pull requests, git history or other docs. When a task comes from an issue, copy into it what is needed to work, not only a summary.
 - Use only the statuses of the task's list (`taskwire lists`), following the Status flow below. Move a task to a closed status only when the work is done and verified; otherwise leave it open and say in a comment what is missing. Before moving a task to a closed status, check every verified acceptance criterion. If the user asks to close it anyway, leave the unverified criteria unchecked and list them in the closing comment.
@@ -41,6 +41,18 @@ By default a task moves through these steps. `taskwire lists` shows in `flow` th
 5. `closed`: the work is merged, when it has code, and verified. Never close a task before both.
 
 The flow only moves forward: never move a task back to an earlier step unless the user asks.
+
+## Parent tasks and subtasks
+
+A parent's status represents the whole task, including every subtask. Updating a subtask with the CLI does not update its parent: you must check and align it separately.
+
+- Whenever you start working on a subtask or change its status, check its parent. Read the parent with `taskwire task get <parent-id>` and consider all its subtasks, including those in other areas. Use the parent's list `flow` from `taskwire lists`, following the Status flow rules for missing steps and project instructions.
+- As soon as any subtask has started, move the parent to at least `inProgress`. A parent must not stay in `backlog` or `todo` when a subtask is in `inProgress`, `review` or `closed`.
+- Keep the parent in `inProgress` while any subtask still needs work, including subtasks in `backlog` or `todo`. One subtask in `review` does not mean the whole task is ready for review.
+- Move the parent to `review` only when all subtasks are in `review` or `closed` and the parent's own work is ready for review. If all subtasks are closed but the parent still needs verification, keep it open and mark `--needs test` when appropriate.
+- Move the parent to `closed` only when all subtasks are `closed` and the parent's own acceptance criteria are verified. Follow the usual checks before closing; closed subtasks alone are not enough.
+- Repeat the check for each ancestor. Never move a parent back to an earlier step unless the user asks. If its status is already ahead of unfinished work, report the inconsistency to the user.
+- Never clear a parent's `needs` mark unless the user asks. If the parent waits for a person, report any inconsistent status without changing it until the user gives the go-ahead.
 
 ## Writing tasks and comments
 
