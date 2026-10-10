@@ -4,6 +4,12 @@ All notable changes to taskwire are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-10
+
+### Fixed
+
+- The agent rules require checking and aligning parent statuses whenever a subtask starts or changes status, considering all siblings across areas and each ancestor. Parents move to in progress when work starts, reach review only when all subtasks and their own work are ready, and close only when every subtask is closed and their own acceptance criteria are verified. Project overrides, forward-only transitions and human approval marks still apply.
+
 ## [0.1.9] - 2026-10-02
 
 ### Added
