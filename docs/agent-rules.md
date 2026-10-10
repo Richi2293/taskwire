@@ -24,6 +24,17 @@ The default rules give every task the same flow: `backlog` (not planned yet, whe
 
 Projects that share a list therefore read the statuses the same way. A project adds only what differs, in `instructions`: for example "close a task only after a check in production", or the status to use for a step that is `null`.
 
+### Parent tasks and subtasks
+
+The default rules ask agents to check the parent whenever they start a subtask or change its status. They read all siblings, including those in other areas, and repeat the check for each ancestor using its list's `flow`.
+
+- A parent moves to at least `inProgress` as soon as any subtask starts, even when other subtasks are still in `backlog` or `todo`.
+- It stays in `inProgress` while any subtask or the parent's own work still needs work.
+- It moves to `review` only when every subtask is in `review` or `closed` and its own work is ready for review.
+- It closes only when every subtask is closed and its own acceptance criteria are verified.
+
+The CLI updates only the task named in the command. Agents align parent statuses with separate commands; this is not automatic synchronisation. The existing rules still apply: no backward moves without the user's request, no clearing `needs` without permission, and no changes to a parent waiting for a person without their go-ahead. Agents report inconsistencies they cannot resolve under those rules.
+
 ## Project overrides
 
 The defaults apply unless the project chooses otherwise, in the `conventions` of `.taskwire.json`:

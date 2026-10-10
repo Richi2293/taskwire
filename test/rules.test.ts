@@ -134,6 +134,21 @@ test('the default rules send work to check to the review step of the flow', () =
   assert.doesNotMatch(DEFAULT_RULES, /the status the project uses for work to check/);
 });
 
+test('the default rules keep parent statuses aligned with all subtasks', async () => {
+  const run = await runCli(['rules']);
+  assert.equal(run.code, 0);
+  const rules = (run.json() as RulesOut).rules;
+  assert.match(rules, /^## Parent tasks and subtasks$/m);
+  assert.match(rules, /Whenever you start working on a subtask or change its status, check its parent/);
+  assert.match(rules, /Read the parent with `taskwire task get <parent-id>` and consider all its subtasks, including those in other areas/);
+  assert.match(rules, /As soon as any subtask has started, move the parent to at least `inProgress`/);
+  assert.match(rules, /Keep the parent in `inProgress` while any subtask still needs work/);
+  assert.match(rules, /Move the parent to `review` only when all subtasks are in `review` or `closed`/);
+  assert.match(rules, /Move the parent to `closed` only when all subtasks are `closed` and the parent's own acceptance criteria are verified/);
+  assert.match(rules, /Repeat the check for each ancestor/);
+  assert.match(rules, /Never clear a parent's `needs` mark/);
+});
+
 test('rules reports a newer version on npm with the command to install it', async () => {
   const run = await runCli(['rules'], { env: cacheEnv(), routes: latest('99.0.0') });
   assert.equal(run.code, 0);
